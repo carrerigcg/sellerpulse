@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
+import platform
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -45,8 +48,10 @@ class TokenStore:
 
     def save(self, tokens: TokenSet) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        self._path.write_text(json.dumps(tokens.to_dict()), encoding="utf-8")
-        _apply_user_only_acl(self._path)
+        tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+        tmp.write_text(json.dumps(tokens.to_dict()), encoding="utf-8")
+        _apply_user_only_acl(tmp)
+        tmp.replace(self._path)
 
     def load(self) -> TokenSet:
         if not self._path.exists():
@@ -64,10 +69,6 @@ def _apply_user_only_acl(path: Path) -> None:
     Em Windows usa icacls. Em outros sistemas usa chmod 600.
     Falhas são silenciosas — a próxima execução tenta de novo.
     """
-    import os
-    import platform
-    import subprocess
-
     try:
         if platform.system() == "Windows":
             user = os.environ.get("USERNAME", "")

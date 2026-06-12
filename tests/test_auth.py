@@ -57,3 +57,16 @@ def test_token_set_is_expired_uses_safety_margin(tmp_tokens_file):
         expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
     )
     assert almost.is_expired() is True
+
+
+def test_save_uses_atomic_write_no_tmp_left_behind(tmp_tokens_file):
+    """Save should not leave a .tmp file behind after success."""
+    store = TokenStore(tmp_tokens_file)
+    tokens = TokenSet(
+        access_token="a", refresh_token="r",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    store.save(tokens)
+    tmp_path = tmp_tokens_file.with_suffix(tmp_tokens_file.suffix + ".tmp")
+    assert tmp_tokens_file.exists()
+    assert not tmp_path.exists()
