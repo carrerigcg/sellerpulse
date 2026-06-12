@@ -134,3 +134,18 @@ def test_get_valid_access_token_refreshes_when_expired(tmp_tokens_file):
     oauth = OAuthClient(client_id="c", client_secret="s", store=store)
     token = get_valid_access_token(oauth)
     assert token == "refreshed"
+
+
+@responses.activate
+def test_oauth_exchange_code_persists_tokens(tmp_tokens_file):
+    responses.add(
+        responses.POST, ML_OAUTH_URL,
+        json={"access_token": "first-acc", "refresh_token": "first-ref",
+              "expires_in": 21600},
+        status=200,
+    )
+    store = TokenStore(tmp_tokens_file)
+    oauth = OAuthClient(client_id="cid", client_secret="csec", store=store)
+    tokens = oauth.exchange_code(code="abc123", redirect_uri="http://localhost:8080/callback")
+    assert tokens.access_token == "first-acc"
+    assert store.load().refresh_token == "first-ref"
