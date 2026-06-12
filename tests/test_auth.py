@@ -70,3 +70,67 @@ def test_save_uses_atomic_write_no_tmp_left_behind(tmp_tokens_file):
     tmp_path = tmp_tokens_file.with_suffix(tmp_tokens_file.suffix + ".tmp")
     assert tmp_tokens_file.exists()
     assert not tmp_path.exists()
+
+
+import responses
+
+from src.auth import OAuthClient, get_valid_access_token
+
+ML_OAUTH_URL = "https://api.mercadolibre.com/oauth/token"
+
+
+@responses.activate
+def test_refresh_rotates_tokens(tmp_tokens_file):
+    responses.add(
+        responses.POST, ML_OAUTH_URL,
+        json={
+            "access_token": "new-acc",
+            "refresh_token": "new-ref",
+            "expires_in": 21600,
+            "token_type": "bearer",
+        },
+        status=200,
+    )
+    store = TokenStore(tmp_tokens_file)
+    old = TokenSet(
+        access_token="old-acc", refresh_token="old-ref",
+        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+    )
+    store.save(old)
+    oauth = OAuthClient(client_id="cid", client_secret="csec", store=store)
+    new_tokens = oauth.refresh()
+    assert new_tokens.access_token == "new-acc"
+    # Tokens persistidos
+    on_disk = store.load()
+    assert on_disk.refresh_token == "new-ref"
+
+
+@responses.activate
+def test_get_valid_access_token_returns_cached_when_fresh(tmp_tokens_file):
+    store = TokenStore(tmp_tokens_file)
+    store.save(TokenSet(
+        access_token="cached", refresh_token="r",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
+    ))
+    oauth = OAuthClient(client_id="c", client_secret="s", store=store)
+    token = get_valid_access_token(oauth)
+    assert token == "cached"
+    assert len(responses.calls) == 0  # não chamou refresh
+
+
+@responses.activate
+def test_get_valid_access_token_refreshes_when_expired(tmp_tokens_file):
+    responses.add(
+        responses.POST, ML_OAUTH_URL,
+        json={"access_token": "refreshed", "refresh_token": "newref",
+              "expires_in": 21600},
+        status=200,
+    )
+    store = TokenStore(tmp_tokens_file)
+    store.save(TokenSet(
+        access_token="old", refresh_token="oldref",
+        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+    ))
+    oauth = OAuthClient(client_id="c", client_secret="s", store=store)
+    token = get_valid_access_token(oauth)
+    assert token == "refreshed"

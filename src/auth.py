@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import requests
+
 EXPIRY_SAFETY_MARGIN = timedelta(minutes=10)
 
 
@@ -81,3 +83,83 @@ def _apply_user_only_acl(path: Path) -> None:
             os.chmod(path, 0o600)
     except (OSError, subprocess.TimeoutExpired):
         pass
+
+
+ML_TOKEN_URL = "https://api.mercadolibre.com/oauth/token"
+
+
+class OAuthError(Exception):
+    """Falha no fluxo OAuth — refresh inválido ou erro de rede."""
+
+
+class OAuthClient:
+    """Coordena o ciclo de vida dos tokens (refresh + load + save)."""
+
+    def __init__(self, *, client_id: str, client_secret: str, store: TokenStore) -> None:
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._store = store
+
+    def refresh(self) -> TokenSet:
+        """Troca o refresh_token atual por um par novo. Persiste antes de retornar."""
+        current = self._store.load()
+        response = requests.post(
+            ML_TOKEN_URL,
+            data={
+                "grant_type": "refresh_token",
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "refresh_token": current.refresh_token,
+            },
+            timeout=30,
+        )
+        if response.status_code != 200:
+            raise OAuthError(
+                f"Falha no refresh ({response.status_code}): {response.text[:200]}. "
+                "Re-rodar `python -m src.setup_auth` para reautorizar."
+            )
+        data = response.json()
+        new_tokens = TokenSet(
+            access_token=data["access_token"],
+            refresh_token=data["refresh_token"],
+            expires_at=datetime.now(timezone.utc)
+            + timedelta(seconds=int(data["expires_in"])),
+        )
+        # CRÍTICO: persistir antes de retornar.
+        self._store.save(new_tokens)
+        return new_tokens
+
+    def exchange_code(self, *, code: str, redirect_uri: str) -> TokenSet:
+        """Troca o `code` da autorização inicial por um par de tokens."""
+        response = requests.post(
+            ML_TOKEN_URL,
+            data={
+                "grant_type": "authorization_code",
+                "client_id": self._client_id,
+                "client_secret": self._client_secret,
+                "code": code,
+                "redirect_uri": redirect_uri,
+            },
+            timeout=30,
+        )
+        if response.status_code != 200:
+            raise OAuthError(
+                f"Falha no exchange ({response.status_code}): {response.text[:200]}"
+            )
+        data = response.json()
+        tokens = TokenSet(
+            access_token=data["access_token"],
+            refresh_token=data["refresh_token"],
+            expires_at=datetime.now(timezone.utc)
+            + timedelta(seconds=int(data["expires_in"])),
+        )
+        self._store.save(tokens)
+        return tokens
+
+
+def get_valid_access_token(oauth: OAuthClient) -> str:
+    """Devolve um access_token sempre válido. Renova se necessário."""
+    tokens = oauth._store.load()
+    if tokens.is_expired():
+        tokens = oauth.refresh()
+    return tokens.access_token
