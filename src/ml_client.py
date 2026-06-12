@@ -49,3 +49,45 @@ class MLClient:
         if last_response is None:
             last_response = response
         raise MLAPIError(last_response.status_code, last_response.text[:200])
+
+    def get_orders(
+        self,
+        *,
+        seller_id: int,
+        status: str | None,
+        date_from: str,
+        date_to: str,
+        page_size: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Busca pedidos com paginação automática.
+
+        Args:
+            seller_id: ID do vendedor (USER_ID).
+            status: 'paid', 'cancelled', ou None para todos.
+            date_from: ISO8601, inclusive.
+            date_to: ISO8601, exclusive.
+            page_size: pedidos por página (max 50).
+        """
+        params_base: dict[str, Any] = {
+            "seller": seller_id,
+            "order.date_created.from": date_from,
+            "order.date_created.to": date_to,
+            "sort": "date_desc",
+            "limit": page_size,
+        }
+        if status is not None:
+            params_base["order.status"] = status
+
+        all_orders: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            params = {**params_base, "offset": offset}
+            data = self.get("/orders/search", params=params)
+            results = data.get("results", [])
+            all_orders.extend(results)
+            paging = data.get("paging", {})
+            total = paging.get("total", 0)
+            if offset + page_size >= total or not results:
+                break
+            offset += page_size
+        return all_orders

@@ -57,3 +57,47 @@ def test_get_raises_on_401(client):
     with pytest.raises(MLAPIError) as exc:
         client.get("/users/me")
     assert exc.value.status_code == 401
+
+
+@responses.activate
+def test_get_orders_single_page(client):
+    responses.add(
+        responses.GET, f"{BASE_URL}/orders/search",
+        json={
+            "paging": {"total": 2, "offset": 0, "limit": 50},
+            "results": [
+                {"id": 1, "total_amount": 100.0},
+                {"id": 2, "total_amount": 200.0},
+            ],
+        },
+        status=200,
+    )
+    orders = client.get_orders(
+        seller_id=999, status="paid",
+        date_from="2026-06-08T00:00:00", date_to="2026-06-15T00:00:00",
+    )
+    assert [o["id"] for o in orders] == [1, 2]
+
+
+@responses.activate
+def test_get_orders_multiple_pages(client):
+    # Página 1
+    responses.add(
+        responses.GET, f"{BASE_URL}/orders/search",
+        json={"paging": {"total": 3, "offset": 0, "limit": 2},
+              "results": [{"id": 1}, {"id": 2}]},
+        status=200,
+    )
+    # Página 2
+    responses.add(
+        responses.GET, f"{BASE_URL}/orders/search",
+        json={"paging": {"total": 3, "offset": 2, "limit": 2},
+              "results": [{"id": 3}]},
+        status=200,
+    )
+    orders = client.get_orders(
+        seller_id=999, status="paid",
+        date_from="2026-06-08T00:00:00", date_to="2026-06-15T00:00:00",
+        page_size=2,
+    )
+    assert [o["id"] for o in orders] == [1, 2, 3]
