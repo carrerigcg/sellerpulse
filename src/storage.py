@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -139,3 +139,106 @@ def get_orders_in_range(
         (start_iso, end_iso),
     )
     return cursor.fetchall()
+
+
+def upsert_item_cache(conn: sqlite3.Connection, item_id: str, title: str, category_id: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO items_cache (item_id, title, category_id, fetched_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(item_id) DO UPDATE SET
+            title = excluded.title,
+            category_id = excluded.category_id,
+            fetched_at = excluded.fetched_at
+        """,
+        (item_id, title, category_id, now),
+    )
+    conn.commit()
+
+
+def get_item_cache(conn: sqlite3.Connection, item_id: str, ttl_days: int = 30) -> sqlite3.Row | None:
+    row = conn.execute(
+        "SELECT * FROM items_cache WHERE item_id = ?", (item_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    fetched = datetime.fromisoformat(row["fetched_at"])
+    if datetime.now(timezone.utc) - fetched > timedelta(days=ttl_days):
+        return None
+    return row
+
+
+def upsert_category_cache(conn: sqlite3.Connection, category_id: str, name: str) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO categories_cache (category_id, name, fetched_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(category_id) DO UPDATE SET
+            name = excluded.name,
+            fetched_at = excluded.fetched_at
+        """,
+        (category_id, name, now),
+    )
+    conn.commit()
+
+
+def get_category_cache(conn: sqlite3.Connection, category_id: str) -> str | None:
+    row = conn.execute(
+        "SELECT name FROM categories_cache WHERE category_id = ?", (category_id,)
+    ).fetchone()
+    return row["name"] if row else None
+
+
+def upsert_claim(conn: sqlite3.Connection, claim: dict[str, Any]) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO claims (claim_id, order_id, status, date_created, raw_json, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(claim_id) DO UPDATE SET
+            order_id = excluded.order_id,
+            status = excluded.status,
+            date_created = excluded.date_created,
+            raw_json = excluded.raw_json,
+            fetched_at = excluded.fetched_at
+        """,
+        (claim["claim_id"], claim["order_id"], claim["status"],
+         claim["date_created"], claim["raw_json"], now),
+    )
+    conn.commit()
+
+
+def get_claims_in_range(conn: sqlite3.Connection, start_iso: str, end_iso: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM claims WHERE date_created >= ? AND date_created < ? ORDER BY date_created",
+        (start_iso, end_iso),
+    ).fetchall()
+
+
+def log_run(
+    conn: sqlite3.Connection,
+    *,
+    week_start: str,
+    week_end: str,
+    pdf_path: str | None,
+    status: str,
+    error_message: str | None,
+) -> int:
+    cursor = conn.execute(
+        """
+        INSERT INTO runs (run_at, week_start, week_end, pdf_path, status, error_message)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (datetime.now(timezone.utc).isoformat(), week_start, week_end,
+         pdf_path, status, error_message),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def get_last_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM runs ORDER BY run_id DESC LIMIT 1"
+    ).fetchone()
