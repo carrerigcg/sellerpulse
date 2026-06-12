@@ -101,3 +101,50 @@ def test_get_orders_multiple_pages(client):
         page_size=2,
     )
     assert [o["id"] for o in orders] == [1, 2, 3]
+
+
+@responses.activate
+def test_get_item(client):
+    responses.add(
+        responses.GET, f"{BASE_URL}/items/MLB123",
+        json={"id": "MLB123", "title": "Lanterna CG 150",
+              "category_id": "MLB-cat-lights"},
+        status=200,
+    )
+    item = client.get_item("MLB123")
+    assert item["title"] == "Lanterna CG 150"
+
+
+@responses.activate
+def test_get_category(client):
+    responses.add(
+        responses.GET, f"{BASE_URL}/categories/MLB-cat-1",
+        json={"id": "MLB-cat-1", "name": "Iluminação"}, status=200,
+    )
+    assert client.get_category("MLB-cat-1")["name"] == "Iluminação"
+
+
+@responses.activate
+def test_get_user(client):
+    responses.add(
+        responses.GET, f"{BASE_URL}/users/999",
+        json={"id": 999,
+              "seller_reputation": {
+                  "level_id": "5_green",
+                  "metrics": {"claims": {"value": 0}}}},
+        status=200,
+    )
+    user = client.get_user(999)
+    assert user["seller_reputation"]["level_id"] == "5_green"
+
+
+@responses.activate
+def test_get_claims(client):
+    responses.add(
+        responses.GET, f"{BASE_URL}/post-purchase/v1/claims/search",
+        json={"data": [{"id": 1, "status": "opened"}], "paging": {"total": 1}},
+        status=200,
+    )
+    claims = client.get_claims(seller_id=999, date_from="2026-06-01T00:00:00")
+    assert len(claims) == 1
+    assert claims[0]["status"] == "opened"

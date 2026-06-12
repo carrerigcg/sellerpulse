@@ -91,3 +91,26 @@ class MLClient:
                 break
             offset += page_size
         return all_orders
+
+    def get_item(self, item_id: str) -> dict[str, Any]:
+        """Detalhe de um item (title + category_id)."""
+        return self.get(f"/items/{item_id}")
+
+    def get_category(self, category_id: str) -> dict[str, Any]:
+        """Detalhe de uma categoria ML (nome em português)."""
+        return self.get(f"/categories/{category_id}")
+
+    def get_user(self, user_id: int) -> dict[str, Any]:
+        """Dados do usuário, incluindo seller_reputation."""
+        return self.get(f"/users/{user_id}")
+
+    def get_claims(
+        self, *, seller_id: int, date_from: str
+    ) -> list[dict[str, Any]]:
+        """Reclamações/claims pós-compra do vendedor a partir de date_from."""
+        params = {
+            "seller_id": seller_id,
+            "date_created.from": date_from,
+        }
+        data = self.get("/post-purchase/v1/claims/search", params=params)
+        return data.get("data", [])
