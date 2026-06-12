@@ -4,6 +4,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 SCHEMA_VERSION = 1
 
@@ -92,3 +93,49 @@ def init_schema(conn: sqlite3.Connection) -> None:
             (SCHEMA_VERSION, datetime.now(timezone.utc).isoformat()),
         )
     conn.commit()
+
+
+def upsert_order(conn: sqlite3.Connection, order: dict[str, Any]) -> None:
+    """Insere ou atualiza um pedido + seus itens. Idempotente."""
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO orders (
+            order_id, date_closed, status, total_amount,
+            marketplace_fee, shipping_cost, buyer_id, raw_json, fetched_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(order_id) DO UPDATE SET
+            date_closed = excluded.date_closed,
+            status = excluded.status,
+            total_amount = excluded.total_amount,
+            marketplace_fee = excluded.marketplace_fee,
+            shipping_cost = excluded.shipping_cost,
+            buyer_id = excluded.buyer_id,
+            raw_json = excluded.raw_json,
+            fetched_at = excluded.fetched_at
+        """,
+        (
+            order["order_id"], order["date_closed"], order["status"],
+            order["total_amount"], order["marketplace_fee"],
+            order["shipping_cost"], order["buyer_id"],
+            order["raw_json"], now,
+        ),
+    )
+    conn.execute("DELETE FROM order_items WHERE order_id = ?", (order["order_id"],))
+    for item in order.get("items", []):
+        conn.execute(
+            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
+            (order["order_id"], item["item_id"], item["quantity"], item["unit_price"]),
+        )
+    conn.commit()
+
+
+def get_orders_in_range(
+    conn: sqlite3.Connection, start_iso: str, end_iso: str
+) -> list[sqlite3.Row]:
+    """Devolve pedidos com date_closed >= start e < end (ISO8601 strings)."""
+    cursor = conn.execute(
+        "SELECT * FROM orders WHERE date_closed >= ? AND date_closed < ? ORDER BY date_closed",
+        (start_iso, end_iso),
+    )
+    return cursor.fetchall()
