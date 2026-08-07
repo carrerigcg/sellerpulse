@@ -21,3 +21,6 @@ Thumbs.db
 
 # Claude Code local config
 .claude/
+
+# Working notes (implementation plans stay local)
+docs/plans/
