@@ -43,7 +43,7 @@ Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos vi
 ## 🚀 Quick start
 
 ```bash
-git clone https://github.com/carreri-gui/sellerpulse.git
+git clone https://github.com/carrerigcg/sellerpulse.git
 cd sellerpulse
 python -m venv .venv && source .venv/bin/activate   # ou .venv\Scripts\activate no Windows
 pip install -r requirements.txt
