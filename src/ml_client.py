@@ -1,4 +1,5 @@
 """Cliente HTTP para a API do Mercado Livre."""
+
 from __future__ import annotations
 
 import time
@@ -41,7 +42,7 @@ class MLClient:
                 time.sleep(retry_after)
                 continue
             if 500 <= response.status_code < 600 and attempt < MAX_RETRIES:
-                time.sleep(BACKOFF_BASE * (2 ** attempt))
+                time.sleep(BACKOFF_BASE * (2**attempt))
                 continue
             last_response = response
             break
@@ -104,9 +105,7 @@ class MLClient:
         """Dados do usuário, incluindo seller_reputation."""
         return self.get(f"/users/{user_id}")
 
-    def get_claims(
-        self, *, seller_id: int, date_from: str
-    ) -> list[dict[str, Any]]:
+    def get_claims(self, *, seller_id: int, date_from: str) -> list[dict[str, Any]]:
         """Reclamações/claims pós-compra do vendedor a partir de date_from."""
         params = {
             "seller_id": seller_id,

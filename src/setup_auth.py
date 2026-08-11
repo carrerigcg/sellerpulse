@@ -3,6 +3,7 @@
 Executar UMA VEZ na configuração inicial:
     python -m src.setup_auth
 """
+
 from __future__ import annotations
 
 import os
@@ -46,10 +47,7 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
-        msg = (
-            "<h1>Autorização concluída.</h1>"
-            "<p>Pode fechar essa aba e voltar ao terminal.</p>"
-        )
+        msg = "<h1>Autorização concluída.</h1><p>Pode fechar essa aba e voltar ao terminal.</p>"
         self.wfile.write(msg.encode("utf-8"))
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
@@ -91,14 +89,14 @@ def main() -> int:
         return 1
     redirect_uri = os.environ.get("ML_REDIRECT_URI", DEFAULT_REDIRECT_URI)
 
-    auth_url = ML_AUTH_URL_TEMPLATE.format(
-        client_id=client_id, redirect_uri=redirect_uri
-    )
+    auth_url = ML_AUTH_URL_TEMPLATE.format(client_id=client_id, redirect_uri=redirect_uri)
     print("Abrindo o navegador para autorização do app no Mercado Livre...")
     print(f"Se não abrir, acesse manualmente: {auth_url}")
     webbrowser.open(auth_url)
-    print(f"Aguardando callback em http://{LOCAL_HOST}:{LOCAL_PORT}{REDIRECT_PATH} "
-          f"(público via {redirect_uri}) ...")
+    print(
+        f"Aguardando callback em http://{LOCAL_HOST}:{LOCAL_PORT}{REDIRECT_PATH} "
+        f"(público via {redirect_uri}) ..."
+    )
     code = _capture_code()
     print("Código recebido. Trocando por tokens...")
 

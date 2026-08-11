@@ -1,4 +1,5 @@
 """OAuth do Mercado Livre — persistência e renovação de tokens."""
+
 from __future__ import annotations
 
 import json
@@ -6,7 +7,7 @@ import os
 import platform
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -24,7 +25,7 @@ class TokenSet:
 
     def is_expired(self) -> bool:
         """True se o token expirou OU está dentro da margem de segurança."""
-        return datetime.now(timezone.utc) + EXPIRY_SAFETY_MARGIN >= self.expires_at
+        return datetime.now(UTC) + EXPIRY_SAFETY_MARGIN >= self.expires_at
 
     def to_dict(self) -> dict[str, str]:
         return {
@@ -34,7 +35,7 @@ class TokenSet:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, str]) -> "TokenSet":
+    def from_dict(cls, data: dict[str, str]) -> TokenSet:
         return cls(
             access_token=data["access_token"],
             refresh_token=data["refresh_token"],
@@ -77,7 +78,9 @@ def _apply_user_only_acl(path: Path) -> None:
             if user:
                 subprocess.run(
                     ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
-                    check=False, capture_output=True, timeout=5,
+                    check=False,
+                    capture_output=True,
+                    timeout=5,
                 )
         else:
             os.chmod(path, 0o600)
@@ -122,8 +125,7 @@ class OAuthClient:
         new_tokens = TokenSet(
             access_token=data["access_token"],
             refresh_token=data["refresh_token"],
-            expires_at=datetime.now(timezone.utc)
-            + timedelta(seconds=int(data["expires_in"])),
+            expires_at=datetime.now(UTC) + timedelta(seconds=int(data["expires_in"])),
         )
         # CRÍTICO: persistir antes de retornar.
         self._store.save(new_tokens)
@@ -143,15 +145,12 @@ class OAuthClient:
             timeout=30,
         )
         if response.status_code != 200:
-            raise OAuthError(
-                f"Falha no exchange ({response.status_code}): {response.text[:200]}"
-            )
+            raise OAuthError(f"Falha no exchange ({response.status_code}): {response.text[:200]}")
         data = response.json()
         tokens = TokenSet(
             access_token=data["access_token"],
             refresh_token=data["refresh_token"],
-            expires_at=datetime.now(timezone.utc)
-            + timedelta(seconds=int(data["expires_in"])),
+            expires_at=datetime.now(UTC) + timedelta(seconds=int(data["expires_in"])),
         )
         self._store.save(tokens)
         return tokens

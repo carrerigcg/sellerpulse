@@ -1,10 +1,11 @@
 """Testes do módulo de OAuth/tokens."""
+
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.auth import TokenStore, TokenSet
+from src.auth import TokenSet, TokenStore
 
 
 def test_save_then_load_roundtrip(tmp_tokens_file):
@@ -12,7 +13,7 @@ def test_save_then_load_roundtrip(tmp_tokens_file):
     tokens = TokenSet(
         access_token="acc-1",
         refresh_token="ref-1",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=6),
+        expires_at=datetime.now(UTC) + timedelta(hours=6),
     )
     store.save(tokens)
     loaded = store.load()
@@ -29,8 +30,9 @@ def test_load_raises_when_file_missing(tmp_tokens_file):
 def test_save_persists_iso_format(tmp_tokens_file):
     store = TokenStore(tmp_tokens_file)
     tokens = TokenSet(
-        access_token="a", refresh_token="r",
-        expires_at=datetime(2026, 6, 12, 14, 30, tzinfo=timezone.utc),
+        access_token="a",
+        refresh_token="r",
+        expires_at=datetime(2026, 6, 12, 14, 30, tzinfo=UTC),
     )
     store.save(tokens)
     data = json.loads(tmp_tokens_file.read_text(encoding="utf-8"))
@@ -39,12 +41,14 @@ def test_save_persists_iso_format(tmp_tokens_file):
 
 def test_token_set_is_expired(tmp_tokens_file):
     expired = TokenSet(
-        access_token="a", refresh_token="r",
-        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        access_token="a",
+        refresh_token="r",
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
     )
     fresh = TokenSet(
-        access_token="a", refresh_token="r",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        access_token="a",
+        refresh_token="r",
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     assert expired.is_expired() is True
     assert fresh.is_expired() is False
@@ -53,8 +57,9 @@ def test_token_set_is_expired(tmp_tokens_file):
 def test_token_set_is_expired_uses_safety_margin(tmp_tokens_file):
     """Tokens próximos de expirar devem contar como expirados (margem de 10min)."""
     almost = TokenSet(
-        access_token="a", refresh_token="r",
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        access_token="a",
+        refresh_token="r",
+        expires_at=datetime.now(UTC) + timedelta(minutes=5),
     )
     assert almost.is_expired() is True
 
@@ -63,8 +68,9 @@ def test_save_uses_atomic_write_no_tmp_left_behind(tmp_tokens_file):
     """Save should not leave a .tmp file behind after success."""
     store = TokenStore(tmp_tokens_file)
     tokens = TokenSet(
-        access_token="a", refresh_token="r",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        access_token="a",
+        refresh_token="r",
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
     )
     store.save(tokens)
     tmp_path = tmp_tokens_file.with_suffix(tmp_tokens_file.suffix + ".tmp")
@@ -82,7 +88,8 @@ ML_OAUTH_URL = "https://api.mercadolibre.com/oauth/token"
 @responses.activate
 def test_refresh_rotates_tokens(tmp_tokens_file):
     responses.add(
-        responses.POST, ML_OAUTH_URL,
+        responses.POST,
+        ML_OAUTH_URL,
         json={
             "access_token": "new-acc",
             "refresh_token": "new-ref",
@@ -93,8 +100,9 @@ def test_refresh_rotates_tokens(tmp_tokens_file):
     )
     store = TokenStore(tmp_tokens_file)
     old = TokenSet(
-        access_token="old-acc", refresh_token="old-ref",
-        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        access_token="old-acc",
+        refresh_token="old-ref",
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
     )
     store.save(old)
     oauth = OAuthClient(client_id="cid", client_secret="csec", store=store)
@@ -108,10 +116,13 @@ def test_refresh_rotates_tokens(tmp_tokens_file):
 @responses.activate
 def test_get_valid_access_token_returns_cached_when_fresh(tmp_tokens_file):
     store = TokenStore(tmp_tokens_file)
-    store.save(TokenSet(
-        access_token="cached", refresh_token="r",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
-    ))
+    store.save(
+        TokenSet(
+            access_token="cached",
+            refresh_token="r",
+            expires_at=datetime.now(UTC) + timedelta(hours=2),
+        )
+    )
     oauth = OAuthClient(client_id="c", client_secret="s", store=store)
     token = get_valid_access_token(oauth)
     assert token == "cached"
@@ -121,16 +132,19 @@ def test_get_valid_access_token_returns_cached_when_fresh(tmp_tokens_file):
 @responses.activate
 def test_get_valid_access_token_refreshes_when_expired(tmp_tokens_file):
     responses.add(
-        responses.POST, ML_OAUTH_URL,
-        json={"access_token": "refreshed", "refresh_token": "newref",
-              "expires_in": 21600},
+        responses.POST,
+        ML_OAUTH_URL,
+        json={"access_token": "refreshed", "refresh_token": "newref", "expires_in": 21600},
         status=200,
     )
     store = TokenStore(tmp_tokens_file)
-    store.save(TokenSet(
-        access_token="old", refresh_token="oldref",
-        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
-    ))
+    store.save(
+        TokenSet(
+            access_token="old",
+            refresh_token="oldref",
+            expires_at=datetime.now(UTC) - timedelta(seconds=1),
+        )
+    )
     oauth = OAuthClient(client_id="c", client_secret="s", store=store)
     token = get_valid_access_token(oauth)
     assert token == "refreshed"
@@ -139,9 +153,9 @@ def test_get_valid_access_token_refreshes_when_expired(tmp_tokens_file):
 @responses.activate
 def test_oauth_exchange_code_persists_tokens(tmp_tokens_file):
     responses.add(
-        responses.POST, ML_OAUTH_URL,
-        json={"access_token": "first-acc", "refresh_token": "first-ref",
-              "expires_in": 21600},
+        responses.POST,
+        ML_OAUTH_URL,
+        json={"access_token": "first-acc", "refresh_token": "first-ref", "expires_in": 21600},
         status=200,
     )
     store = TokenStore(tmp_tokens_file)

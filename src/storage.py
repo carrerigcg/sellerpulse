@@ -1,8 +1,9 @@
 """Camada de persistência SQLite — schema, conexão, repositories."""
+
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -90,14 +91,14 @@ def init_schema(conn: sqlite3.Connection) -> None:
     if existing is None:
         conn.execute(
             "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
-            (SCHEMA_VERSION, datetime.now(timezone.utc).isoformat()),
+            (SCHEMA_VERSION, datetime.now(UTC).isoformat()),
         )
     conn.commit()
 
 
 def upsert_order(conn: sqlite3.Connection, order: dict[str, Any]) -> None:
     """Insere ou atualiza um pedido + seus itens. Idempotente."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn.execute(
         """
         INSERT INTO orders (
@@ -115,10 +116,15 @@ def upsert_order(conn: sqlite3.Connection, order: dict[str, Any]) -> None:
             fetched_at = excluded.fetched_at
         """,
         (
-            order["order_id"], order["date_closed"], order["status"],
-            order["total_amount"], order["marketplace_fee"],
-            order["shipping_cost"], order["buyer_id"],
-            order["raw_json"], now,
+            order["order_id"],
+            order["date_closed"],
+            order["status"],
+            order["total_amount"],
+            order["marketplace_fee"],
+            order["shipping_cost"],
+            order["buyer_id"],
+            order["raw_json"],
+            now,
         ),
     )
     conn.execute("DELETE FROM order_items WHERE order_id = ?", (order["order_id"],))
@@ -142,7 +148,7 @@ def get_orders_in_range(
 
 
 def upsert_item_cache(conn: sqlite3.Connection, item_id: str, title: str, category_id: str) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn.execute(
         """
         INSERT INTO items_cache (item_id, title, category_id, fetched_at)
@@ -157,20 +163,20 @@ def upsert_item_cache(conn: sqlite3.Connection, item_id: str, title: str, catego
     conn.commit()
 
 
-def get_item_cache(conn: sqlite3.Connection, item_id: str, ttl_days: int = 30) -> sqlite3.Row | None:
-    row = conn.execute(
-        "SELECT * FROM items_cache WHERE item_id = ?", (item_id,)
-    ).fetchone()
+def get_item_cache(
+    conn: sqlite3.Connection, item_id: str, ttl_days: int = 30
+) -> sqlite3.Row | None:
+    row = conn.execute("SELECT * FROM items_cache WHERE item_id = ?", (item_id,)).fetchone()
     if row is None:
         return None
     fetched = datetime.fromisoformat(row["fetched_at"])
-    if datetime.now(timezone.utc) - fetched > timedelta(days=ttl_days):
+    if datetime.now(UTC) - fetched > timedelta(days=ttl_days):
         return None
     return row
 
 
 def upsert_category_cache(conn: sqlite3.Connection, category_id: str, name: str) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn.execute(
         """
         INSERT INTO categories_cache (category_id, name, fetched_at)
@@ -192,7 +198,7 @@ def get_category_cache(conn: sqlite3.Connection, category_id: str) -> str | None
 
 
 def upsert_claim(conn: sqlite3.Connection, claim: dict[str, Any]) -> None:
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     conn.execute(
         """
         INSERT INTO claims (claim_id, order_id, status, date_created, raw_json, fetched_at)
@@ -204,13 +210,21 @@ def upsert_claim(conn: sqlite3.Connection, claim: dict[str, Any]) -> None:
             raw_json = excluded.raw_json,
             fetched_at = excluded.fetched_at
         """,
-        (claim["claim_id"], claim["order_id"], claim["status"],
-         claim["date_created"], claim["raw_json"], now),
+        (
+            claim["claim_id"],
+            claim["order_id"],
+            claim["status"],
+            claim["date_created"],
+            claim["raw_json"],
+            now,
+        ),
     )
     conn.commit()
 
 
-def get_claims_in_range(conn: sqlite3.Connection, start_iso: str, end_iso: str) -> list[sqlite3.Row]:
+def get_claims_in_range(
+    conn: sqlite3.Connection, start_iso: str, end_iso: str
+) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT * FROM claims WHERE date_created >= ? AND date_created < ? ORDER BY date_created",
         (start_iso, end_iso),
@@ -231,14 +245,11 @@ def log_run(
         INSERT INTO runs (run_at, week_start, week_end, pdf_path, status, error_message)
         VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (datetime.now(timezone.utc).isoformat(), week_start, week_end,
-         pdf_path, status, error_message),
+        (datetime.now(UTC).isoformat(), week_start, week_end, pdf_path, status, error_message),
     )
     conn.commit()
     return cursor.lastrowid
 
 
 def get_last_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
-    return conn.execute(
-        "SELECT * FROM runs ORDER BY run_id DESC LIMIT 1"
-    ).fetchone()
+    return conn.execute("SELECT * FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()

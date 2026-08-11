@@ -1,3 +1,29 @@
+[project]
+name = "sellerpulse"
+version = "0.1.0-alpha"
+description = "Full-stack analytics pipeline for Mercado Livre sellers."
+requires-python = ">=3.11"
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+addopts = "--cov=src --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/__init__.py", "src/setup_auth.py"]
+
+[tool.coverage.report]
+skip_covered = false
+show_missing = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]  # line-length is enforced by formatter
+
+[tool.ruff.lint.per-file-ignores]
+"tests/test_auth.py" = ["E402"]  # imports after test functions (existing structure)

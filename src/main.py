@@ -5,13 +5,14 @@ Modos:
     python -m src.main --week=2026-W23              # semana ISO específica
     python -m src.main --from=YYYY-MM-DD --to=YYYY-MM-DD  # janela explícita
 """
+
 from __future__ import annotations
 
 import argparse
 import json
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,9 +20,14 @@ from dotenv import load_dotenv
 from src.auth import OAuthClient, OAuthError, TokenStore, get_valid_access_token
 from src.ml_client import MLAPIError, MLClient
 from src.storage import (
-    connect, get_category_cache, get_item_cache,
-    log_run, upsert_category_cache, upsert_claim,
-    upsert_item_cache, upsert_order,
+    connect,
+    get_category_cache,
+    get_item_cache,
+    log_run,
+    upsert_category_cache,
+    upsert_claim,
+    upsert_item_cache,
+    upsert_order,
 )
 
 DEFAULT_TOKENS_PATH = Path("data/tokens.json")
@@ -49,12 +55,16 @@ def ingest_window(
 
     try:
         orders_paid = ml.get_orders(
-            seller_id=user_id, status="paid",
-            date_from=date_from, date_to=date_to,
+            seller_id=user_id,
+            status="paid",
+            date_from=date_from,
+            date_to=date_to,
         )
         orders_cancelled = ml.get_orders(
-            seller_id=user_id, status="cancelled",
-            date_from=date_from, date_to=date_to,
+            seller_id=user_id,
+            status="cancelled",
+            date_from=date_from,
+            date_to=date_to,
         )
         all_orders = orders_paid + orders_cancelled
 
@@ -63,13 +73,16 @@ def ingest_window(
 
         claims = ml.get_claims(seller_id=user_id, date_from=date_from)
         for c in claims:
-            upsert_claim(conn, {
-                "claim_id": c.get("id") or c.get("claim_id"),
-                "order_id": c.get("resource_id") or c.get("order_id"),
-                "status": c.get("status", "unknown"),
-                "date_created": c.get("date_created", date_from),
-                "raw_json": json.dumps(c),
-            })
+            upsert_claim(
+                conn,
+                {
+                    "claim_id": c.get("id") or c.get("claim_id"),
+                    "order_id": c.get("resource_id") or c.get("order_id"),
+                    "status": c.get("status", "unknown"),
+                    "date_created": c.get("date_created", date_from),
+                    "raw_json": json.dumps(c),
+                },
+            )
 
         # Reputação — armazenada como singleton em users/{user_id}.
         # Por ora não persistimos separado; Setor 5 (cálculos) busca direto.
@@ -77,8 +90,12 @@ def ingest_window(
         ml.get_user(user_id)
 
         log_run(
-            conn, week_start=date_from[:10], week_end=date_to[:10],
-            pdf_path=None, status="ok", error_message=None,
+            conn,
+            week_start=date_from[:10],
+            week_end=date_to[:10],
+            pdf_path=None,
+            status="ok",
+            error_message=None,
         )
         return {
             "orders_fetched": len(all_orders),
@@ -86,8 +103,12 @@ def ingest_window(
         }
     except (MLAPIError, OAuthError) as exc:
         log_run(
-            conn, week_start=date_from[:10], week_end=date_to[:10],
-            pdf_path=None, status="error", error_message=str(exc),
+            conn,
+            week_start=date_from[:10],
+            week_end=date_to[:10],
+            pdf_path=None,
+            status="error",
+            error_message=str(exc),
         )
         raise
 
@@ -105,24 +126,29 @@ def _persist_order(conn, ml: MLClient, raw: dict) -> None:
         item_id = item.get("id")
         if not item_id:
             continue
-        order_items.append({
-            "item_id": item_id,
-            "quantity": oi.get("quantity", 1),
-            "unit_price": oi.get("unit_price", 0.0),
-        })
+        order_items.append(
+            {
+                "item_id": item_id,
+                "quantity": oi.get("quantity", 1),
+                "unit_price": oi.get("unit_price", 0.0),
+            }
+        )
         _ensure_item_cache(conn, ml, item_id)
 
-    upsert_order(conn, {
-        "order_id": raw["id"],
-        "date_closed": raw.get("date_closed") or raw.get("date_created"),
-        "status": raw["status"],
-        "total_amount": raw.get("total_amount", 0.0),
-        "marketplace_fee": marketplace_fee,
-        "shipping_cost": shipping_cost,
-        "buyer_id": (raw.get("buyer") or {}).get("id"),
-        "raw_json": json.dumps(raw),
-        "items": order_items,
-    })
+    upsert_order(
+        conn,
+        {
+            "order_id": raw["id"],
+            "date_closed": raw.get("date_closed") or raw.get("date_created"),
+            "status": raw["status"],
+            "total_amount": raw.get("total_amount", 0.0),
+            "marketplace_fee": marketplace_fee,
+            "shipping_cost": shipping_cost,
+            "buyer_id": (raw.get("buyer") or {}).get("id"),
+            "raw_json": json.dumps(raw),
+            "items": order_items,
+        },
+    )
 
 
 def _ensure_item_cache(conn, ml: MLClient, item_id: str) -> None:
@@ -155,7 +181,7 @@ def _resolve_window(args: argparse.Namespace) -> tuple[str, str]:
         start = datetime.fromisoformat(args.date_from)
         end = datetime.fromisoformat(args.date_to)
     else:
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=7)
     return start.isoformat(), end.isoformat()
 
@@ -165,11 +191,12 @@ def main(argv: list[str] | None = None) -> int:
     date_from, date_to = _resolve_window(args)
     try:
         result = ingest_window(
-            tokens_path=DEFAULT_TOKENS_PATH, db_path=DEFAULT_DB_PATH,
-            date_from=date_from, date_to=date_to,
+            tokens_path=DEFAULT_TOKENS_PATH,
+            db_path=DEFAULT_DB_PATH,
+            date_from=date_from,
+            date_to=date_to,
         )
-        print(f"OK — {result['orders_fetched']} pedidos, "
-              f"{result['claims_fetched']} reclamações.")
+        print(f"OK — {result['orders_fetched']} pedidos, {result['claims_fetched']} reclamações.")
         return 0
     except Exception as exc:
         print(f"ERRO: {exc}", file=sys.stderr)
