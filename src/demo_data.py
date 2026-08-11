@@ -7,14 +7,20 @@ Gera `data/demo.db` byte-identical entre execuções (mesma seed, mesmo timestam
 
 from __future__ import annotations
 
+import json
 import random
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from faker import Faker
 
 ANCHOR_TIMESTAMP = "2026-08-01T00:00:00+00:00"
 DEFAULT_SEED = 42
+
+ANCHOR_DATE = datetime(2026, 8, 1, tzinfo=UTC)
+CANCELLATION_RATE = 0.05
+ORDERS_PER_WEEK_MEAN = 30
 
 # Nichos realistas de vendedor ML. Faker pt_BR não tem provider de categoria
 # de e-commerce, e `fake.bs()` retorna inglês (herda do en_US). Lista curada
@@ -84,3 +90,85 @@ def generate_catalog(
             }
         )
     return {"categories": categories, "products": products}
+
+
+def generate_orders(
+    *,
+    catalog: dict[str, list[dict[str, Any]]],
+    seed: int,
+    weeks_back: int,
+) -> list[dict[str, Any]]:
+    """Gera lista de pedidos determinística para as `weeks_back` semanas
+    anteriores a `ANCHOR_DATE`.
+
+    Volume: Poisson-like via `rng.gauss` clampado. ~5% cancelamento.
+    Cada pedido tem 1-3 itens amostrados do catálogo com peso decrescente
+    (produtos com índice menor vendem mais → gera curva ABC natural).
+    """
+    rng = random.Random(seed)
+    products = catalog["products"]
+    n_products = len(products)
+    weights = [1.0 / (i + 1) for i in range(n_products)]  # zipf-like
+
+    orders: list[dict[str, Any]] = []
+    order_id_counter = 1_000_000
+    for week_offset in range(weeks_back):
+        week_start = ANCHOR_DATE - timedelta(days=(weeks_back - week_offset) * 7)
+        n_orders_this_week = max(
+            5, int(rng.gauss(ORDERS_PER_WEEK_MEAN, ORDERS_PER_WEEK_MEAN * 0.2))
+        )
+        for _ in range(n_orders_this_week):
+            order_id_counter += 1
+            day_offset = rng.randint(0, 6)
+            hour = rng.randint(9, 22)
+            minute = rng.randint(0, 59)
+            date_closed = (
+                week_start + timedelta(days=day_offset, hours=hour, minutes=minute)
+            ).isoformat()
+
+            n_items = rng.choices([1, 2, 3], weights=[0.7, 0.2, 0.1], k=1)[0]
+            selected = rng.choices(products, weights=weights, k=n_items)
+            items = [
+                {
+                    "item_id": p["item_id"],
+                    "quantity": rng.randint(1, 3),
+                    "unit_price": p["unit_price"],
+                }
+                for p in selected
+            ]
+            total = sum(it["quantity"] * it["unit_price"] for it in items)
+            marketplace_fee = round(total * 0.12, 2)
+            shipping_cost = round(rng.uniform(0.0, 25.0), 2)
+            status = "cancelled" if rng.random() < CANCELLATION_RATE else "paid"
+
+            raw = {
+                "id": order_id_counter,
+                "date_closed": date_closed,
+                "status": status,
+                "total_amount": round(total, 2),
+                "payments": [{"marketplace_fee": marketplace_fee}],
+                "shipping": {"list_cost": shipping_cost},
+                "buyer": {"id": rng.randint(10_000_000, 99_999_999)},
+                "order_items": [
+                    {
+                        "item": {"id": it["item_id"]},
+                        "quantity": it["quantity"],
+                        "unit_price": it["unit_price"],
+                    }
+                    for it in items
+                ],
+            }
+            orders.append(
+                {
+                    "order_id": order_id_counter,
+                    "date_closed": date_closed,
+                    "status": status,
+                    "total_amount": round(total, 2),
+                    "marketplace_fee": marketplace_fee,
+                    "shipping_cost": shipping_cost,
+                    "buyer_id": raw["buyer"]["id"],
+                    "raw_json": json.dumps(raw, sort_keys=True),
+                    "items": items,
+                }
+            )
+    return orders

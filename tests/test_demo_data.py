@@ -5,7 +5,13 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 
-from src.demo_data import ANCHOR_TIMESTAMP, DEFAULT_SEED, generate_catalog, write_row
+from src.demo_data import (
+    ANCHOR_TIMESTAMP,
+    DEFAULT_SEED,
+    generate_catalog,
+    generate_orders,
+    write_row,
+)
 
 
 def test_write_row_uses_anchor_timestamp_for_fetched_at(memory_db: sqlite3.Connection) -> None:
@@ -68,3 +74,44 @@ def test_generate_catalog_different_seeds_produce_different_output() -> None:
     # semeados → devem diferir.
     assert a["categories"] == b["categories"]
     assert a["products"] != b["products"]
+
+
+def test_generate_orders_is_deterministic() -> None:
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    a = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    b = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    assert a == b
+
+
+def test_generate_orders_volume_in_expected_range() -> None:
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    # 12 semanas × ~30 orders = ~360, com variação Poisson
+    assert 300 <= len(orders) <= 420
+
+
+def test_generate_orders_have_required_fields() -> None:
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    required = {
+        "order_id",
+        "date_closed",
+        "status",
+        "total_amount",
+        "marketplace_fee",
+        "shipping_cost",
+        "buyer_id",
+        "raw_json",
+        "items",
+    }
+    assert required.issubset(orders[0].keys())
+    assert orders[0]["items"], "each order must have at least one item"
+    assert {"item_id", "quantity", "unit_price"}.issubset(orders[0]["items"][0].keys())
+
+
+def test_generate_orders_cancellation_rate_approx_5pct() -> None:
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    cancelled = sum(1 for o in orders if o["status"] == "cancelled")
+    ratio = cancelled / len(orders)
+    assert 0.02 <= ratio <= 0.10  # ~5% ± tolerância pra amostra pequena
