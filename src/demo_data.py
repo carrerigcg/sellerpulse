@@ -11,9 +11,12 @@ import json
 import random
 import sqlite3
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from faker import Faker
+
+from src.storage import connect
 
 ANCHOR_TIMESTAMP = "2026-08-01T00:00:00+00:00"
 DEFAULT_SEED = 42
@@ -215,3 +218,110 @@ def generate_claims(
             }
         )
     return claims
+
+
+def generate_demo_db(db_path: Path | str) -> None:
+    """Gera SQLite completo em `db_path`. Byte-identical entre execuções.
+
+    Ordem determinística:
+    1. Deleta o arquivo se existir (garante inserção sequencial idêntica).
+    2. Inicializa schema via `storage.connect` (que também aplica PRAGMAs).
+    3. Insere categorias → items_cache → orders + order_items → claims.
+    4. Grava `runs` sintético "ok" com timestamp âncora.
+    """
+    db_path = Path(db_path)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    if db_path.exists():
+        db_path.unlink()
+
+    conn = connect(db_path)
+    try:
+        # `init_schema` stores `datetime.now()` in schema_version.applied_at.
+        # Overwrite it with the anchor so the entire file is content-deterministic.
+        conn.execute(
+            "UPDATE schema_version SET applied_at = ? WHERE version = ?",
+            (ANCHOR_TIMESTAMP, 1),
+        )
+        conn.commit()
+
+        catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+        orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+        claims = generate_claims(orders=orders, seed=DEFAULT_SEED, rate=0.04)
+
+        for cat in catalog["categories"]:
+            write_row(
+                conn,
+                "categories_cache",
+                {
+                    "category_id": cat["category_id"],
+                    "name": cat["name"],
+                },
+            )
+        for prod in catalog["products"]:
+            write_row(
+                conn,
+                "items_cache",
+                {
+                    "item_id": prod["item_id"],
+                    "title": prod["title"],
+                    "category_id": prod["category_id"],
+                },
+            )
+        for order in orders:
+            write_row(
+                conn,
+                "orders",
+                {
+                    "order_id": order["order_id"],
+                    "date_closed": order["date_closed"],
+                    "status": order["status"],
+                    "total_amount": order["total_amount"],
+                    "marketplace_fee": order["marketplace_fee"],
+                    "shipping_cost": order["shipping_cost"],
+                    "buyer_id": order["buyer_id"],
+                    "raw_json": order["raw_json"],
+                },
+            )
+            # Collapse duplicate item_ids within the same order (rng.choices can
+            # pick the same product twice). The schema enforces UNIQUE (order_id,
+            # item_id) so we merge by summing quantities; unit_price is identical
+            # for the same product.
+            seen_items: dict[str, dict] = {}
+            for item in order["items"]:
+                if item["item_id"] in seen_items:
+                    seen_items[item["item_id"]]["quantity"] += item["quantity"]
+                else:
+                    seen_items[item["item_id"]] = dict(item)
+            for item in seen_items.values():
+                conn.execute(
+                    "INSERT INTO order_items (order_id, item_id, quantity, unit_price) "
+                    "VALUES (?, ?, ?, ?)",
+                    (order["order_id"], item["item_id"], item["quantity"], item["unit_price"]),
+                )
+        for c in claims:
+            write_row(
+                conn,
+                "claims",
+                {
+                    "claim_id": c["claim_id"],
+                    "order_id": c["order_id"],
+                    "status": c["status"],
+                    "date_created": c["date_created"],
+                    "raw_json": c["raw_json"],
+                },
+            )
+        # runs sintético
+        conn.execute(
+            "INSERT INTO runs (run_at, week_start, week_end, pdf_path, status, error_message) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (ANCHOR_TIMESTAMP, "2026-07-25", "2026-08-01", None, "ok", None),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    # SQLite grava metadata mutável (change_counter, etc.) — vacuum reset
+    # produz arquivo byte-idêntico entre runs.
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("VACUUM")
+    conn.close()
