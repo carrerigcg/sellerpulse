@@ -4,8 +4,9 @@ import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
+import responses
 
-from src.auth import TokenSet, TokenStore
+from src.auth import OAuthClient, TokenSet, TokenStore, get_valid_access_token
 
 
 def test_save_then_load_roundtrip(tmp_tokens_file):
@@ -77,10 +78,6 @@ def test_save_uses_atomic_write_no_tmp_left_behind(tmp_tokens_file):
     assert tmp_tokens_file.exists()
     assert not tmp_path.exists()
 
-
-import responses
-
-from src.auth import OAuthClient, get_valid_access_token
 
 ML_OAUTH_URL = "https://api.mercadolibre.com/oauth/token"
 
