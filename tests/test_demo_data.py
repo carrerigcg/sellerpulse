@@ -174,3 +174,57 @@ def test_generate_demo_db_populates_all_tables(tmp_path) -> None:
     assert categories_count == 10
     assert claims_count >= 1
     conn.close()
+
+
+def test_generate_demo_db_anchor_values_in_metadata_rows(tmp_path) -> None:
+    """schema_version.applied_at e runs.run_at devem ser o ANCHOR_TIMESTAMP.
+
+    Regressão nessas duas colunas quebra byte-determinismo silenciosamente
+    (o binário versionado em data/demo.db diverge do gerador).
+    """
+    db_path = tmp_path / "demo.db"
+    generate_demo_db(db_path)
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+
+    sv = conn.execute("SELECT applied_at FROM schema_version").fetchone()
+    assert sv["applied_at"] == ANCHOR_TIMESTAMP
+
+    run = conn.execute("SELECT run_at, status FROM runs").fetchone()
+    assert run["run_at"] == ANCHOR_TIMESTAMP
+    assert run["status"] == "ok"
+    conn.close()
+
+
+def test_generate_demo_db_produces_byte_identical_file_cross_process(tmp_path) -> None:
+    """Byte-determinismo cross-process — protege contra Task 8's git diff.
+
+    Se este teste falhar, o commit de data/demo.db vira "always dirty"
+    porque `regerar-dados` num novo processo produziria bytes diferentes.
+    """
+    import subprocess
+    import sys
+
+    script = (
+        "import hashlib, sys; sys.path.insert(0, '.'); "
+        "from pathlib import Path; from src.demo_data import generate_demo_db; "
+        "db = Path(sys.argv[1]); "
+        "db.unlink(missing_ok=True); "
+        "generate_demo_db(db); "
+        "print(hashlib.sha256(db.read_bytes()).hexdigest())"
+    )
+    db = tmp_path / "demo.db"
+    r1 = subprocess.run(
+        [sys.executable, "-c", script, str(db)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    db.unlink()
+    r2 = subprocess.run(
+        [sys.executable, "-c", script, str(db)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert r1.stdout.strip() == r2.stdout.strip()

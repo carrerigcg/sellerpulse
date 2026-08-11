@@ -16,7 +16,7 @@ from typing import Any
 
 from faker import Faker
 
-from src.storage import connect
+from src.storage import SCHEMA_VERSION, connect
 
 ANCHOR_TIMESTAMP = "2026-08-01T00:00:00+00:00"
 DEFAULT_SEED = 42
@@ -240,7 +240,7 @@ def generate_demo_db(db_path: Path | str) -> None:
         # Overwrite it with the anchor so the entire file is content-deterministic.
         conn.execute(
             "UPDATE schema_version SET applied_at = ? WHERE version = ?",
-            (ANCHOR_TIMESTAMP, 1),
+            (ANCHOR_TIMESTAMP, SCHEMA_VERSION),
         )
         conn.commit()
 
@@ -321,7 +321,11 @@ def generate_demo_db(db_path: Path | str) -> None:
         conn.close()
 
     # SQLite grava metadata mutável (change_counter, etc.) — vacuum reset
-    # produz arquivo byte-idêntico entre runs.
+    # produz arquivo byte-idêntico entre runs. Segunda conexão pra não colidir
+    # com o try/finally acima; try/finally aqui evita lock de arquivo no
+    # Windows se VACUUM levantar.
     conn = sqlite3.connect(str(db_path))
-    conn.execute("VACUUM")
-    conn.close()
+    try:
+        conn.execute("VACUUM")
+    finally:
+        conn.close()
