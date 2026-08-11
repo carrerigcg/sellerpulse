@@ -16,6 +16,22 @@ from faker import Faker
 ANCHOR_TIMESTAMP = "2026-08-01T00:00:00+00:00"
 DEFAULT_SEED = 42
 
+# Nichos realistas de vendedor ML. Faker pt_BR não tem provider de categoria
+# de e-commerce, e `fake.bs()` retorna inglês (herda do en_US). Lista curada
+# preserva o "sabor" pt_BR do dataset no PDF/dashboard.
+_CATEGORY_NAMES = [
+    "Iluminação",
+    "Peças de Moto",
+    "Ferramentas Manuais",
+    "Eletrônicos",
+    "Cosméticos",
+    "Casa e Cozinha",
+    "Esportes e Fitness",
+    "Pet Shop",
+    "Escritório",
+    "Roupas e Acessórios",
+]
+
 
 def write_row(conn: sqlite3.Connection, table: str, row: dict[str, Any]) -> None:
     """Insere uma linha em `table` com `fetched_at = ANCHOR_TIMESTAMP` fixo.
@@ -38,15 +54,23 @@ def generate_catalog(
 ) -> dict[str, list[dict[str, Any]]]:
     """Gera catálogo determinístico de categorias + produtos.
 
-    Nomes vem do Faker (locale pt_BR) com seed fixa. Cada produto é
-    associado a uma categoria via módulo do índice.
+    Categorias vêm de lista curada pt_BR (_CATEGORY_NAMES). Títulos dos
+    produtos vêm de `Faker.catch_phrase()` (pt_BR-localizado). Preços via
+    `random.Random(seed)` — RNG isolado do Faker (class-level RNG do Faker
+    é semeado à parte via `Faker.seed`).
     """
-    rng = random.Random(seed)
-    fake = Faker("pt_BR")
+    if n_categories > len(_CATEGORY_NAMES):
+        raise ValueError(
+            f"n_categories={n_categories} excede a lista curada "
+            f"({len(_CATEGORY_NAMES)} nomes disponíveis)"
+        )
+
     Faker.seed(seed)
+    fake = Faker("pt_BR")
+    rng = random.Random(seed)
 
     categories = [
-        {"category_id": f"MLB-CAT-{i:03d}", "name": fake.bs().title()} for i in range(n_categories)
+        {"category_id": f"MLB-CAT-{i:03d}", "name": _CATEGORY_NAMES[i]} for i in range(n_categories)
     ]
     products = []
     for i in range(n_products):

@@ -53,7 +53,18 @@ def test_generate_catalog_shapes() -> None:
     assert all("item_id" in p for p in result["products"])
     assert all("title" in p for p in result["products"])
     assert all("category_id" in p for p in result["products"])
+    assert all("unit_price" in p for p in result["products"])
+    assert all(50.0 <= p["unit_price"] <= 800.0 for p in result["products"])
     assert all(
         p["category_id"] in {c["category_id"] for c in result["categories"]}
         for p in result["products"]
     )
+
+
+def test_generate_catalog_different_seeds_produce_different_output() -> None:
+    a = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    b = generate_catalog(seed=DEFAULT_SEED + 1, n_categories=10, n_products=50)
+    # Categorias são hardcoded → iguais entre seeds. Produtos usam Faker + rng
+    # semeados → devem diferir.
+    assert a["categories"] == b["categories"]
+    assert a["products"] != b["products"]
