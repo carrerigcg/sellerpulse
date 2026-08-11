@@ -33,4 +33,6 @@ def test_write_row_is_deterministic_across_calls(tmp_path) -> None:
         conn.close()
         return hashlib.sha256(db_path.read_bytes()).hexdigest()
 
+    # Prova determinismo same-process. Cross-run precisa de VACUUM
+    # (adicionado no generate_demo_db da Task 6).
     assert build_and_hash() == build_and_hash()

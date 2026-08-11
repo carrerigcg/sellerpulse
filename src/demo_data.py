@@ -17,7 +17,8 @@ def write_row(conn: sqlite3.Connection, table: str, row: dict[str, Any]) -> None
     """Insere uma linha em `table` com `fetched_at = ANCHOR_TIMESTAMP` fixo.
 
     Assume que `table` tem coluna `fetched_at TEXT NOT NULL`. Não commita —
-    caller decide quando fazer commit em batch.
+    caller decide quando fazer commit em batch. Se `row` já contiver
+    `fetched_at`, o valor é descartado — o âncora sempre vence.
     """
     row_with_ts = {**row, "fetched_at": ANCHOR_TIMESTAMP}
     columns = ", ".join(row_with_ts.keys())
