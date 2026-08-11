@@ -141,6 +141,9 @@ def generate_orders(
             shipping_cost = round(rng.uniform(0.0, 25.0), 2)
             status = "cancelled" if rng.random() < CANCELLATION_RATE else "paid"
 
+            # Ordem das chamadas rng.* aqui embaixo é load-bearing pro determinismo.
+            # Inserir/reordenar campos que consomem rng (ex: buyer.id) desloca toda
+            # a sequência pra pedidos subsequentes. Alterou? Regere data/demo.db.
             raw = {
                 "id": order_id_counter,
                 "date_closed": date_closed,
