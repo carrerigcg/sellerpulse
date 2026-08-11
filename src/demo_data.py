@@ -200,11 +200,13 @@ def generate_claims(
             "status": status,
             "date_created": date_created,
         }
-        claims.append({
-            "claim_id": claim_id,
-            "order_id": order["order_id"],
-            "status": status,
-            "date_created": date_created,
-            "raw_json": json.dumps(raw, sort_keys=True),
-        })
+        claims.append(
+            {
+                "claim_id": claim_id,
+                "order_id": order["order_id"],
+                "status": status,
+                "date_created": date_created,
+                "raw_json": json.dumps(raw, sort_keys=True),
+            }
+        )
     return claims
