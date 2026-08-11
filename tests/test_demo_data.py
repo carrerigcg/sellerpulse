@@ -9,6 +9,7 @@ from src.demo_data import (
     ANCHOR_TIMESTAMP,
     DEFAULT_SEED,
     generate_catalog,
+    generate_claims,
     generate_orders,
     write_row,
 )
@@ -115,3 +116,29 @@ def test_generate_orders_cancellation_rate_approx_5pct() -> None:
     cancelled = sum(1 for o in orders if o["status"] == "cancelled")
     ratio = cancelled / len(orders)
     assert 0.02 <= ratio <= 0.10  # ~5% ± tolerância pra amostra pequena
+
+
+def test_generate_claims_is_deterministic() -> None:
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    a = generate_claims(orders=orders, seed=DEFAULT_SEED, rate=0.04)
+    b = generate_claims(orders=orders, seed=DEFAULT_SEED, rate=0.04)
+    assert a == b
+
+
+def test_generate_claims_only_references_paid_orders() -> None:
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    paid_ids = {o["order_id"] for o in orders if o["status"] == "paid"}
+    claims = generate_claims(orders=orders, seed=DEFAULT_SEED, rate=0.04)
+    assert claims, "expected at least one claim"
+    for c in claims:
+        assert c["order_id"] in paid_ids
+
+
+def test_generate_claims_have_required_fields() -> None:
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    claims = generate_claims(orders=orders, seed=DEFAULT_SEED, rate=0.04)
+    required = {"claim_id", "order_id", "status", "date_created", "raw_json"}
+    assert required.issubset(claims[0].keys())

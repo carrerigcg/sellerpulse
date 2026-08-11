@@ -21,6 +21,7 @@ DEFAULT_SEED = 42
 ANCHOR_DATE = datetime(2026, 8, 1, tzinfo=UTC)
 CANCELLATION_RATE = 0.05
 ORDERS_PER_WEEK_MEAN = 30
+CLAIM_STATUSES = ["opened", "closed", "opened", "closed", "in_dispute"]
 
 # Nichos realistas de vendedor ML. Faker pt_BR não tem provider de categoria
 # de e-commerce, e `fake.bs()` retorna inglês (herda do en_US). Lista curada
@@ -175,3 +176,35 @@ def generate_orders(
                 }
             )
     return orders
+
+
+def generate_claims(
+    *, orders: list[dict[str, Any]], seed: int, rate: float
+) -> list[dict[str, Any]]:
+    """Gera claims amostrando `rate` fração dos pedidos pagos."""
+    rng = random.Random(seed + 1)  # seed distinta pra não correlacionar
+    paid = [o for o in orders if o["status"] == "paid"]
+    n_claims = max(1, int(len(paid) * rate))
+    sampled = rng.sample(paid, k=min(n_claims, len(paid)))
+
+    claims: list[dict[str, Any]] = []
+    for i, order in enumerate(sampled):
+        claim_id = 5_000_000 + i
+        status = rng.choice(CLAIM_STATUSES)
+        # date_created = date_closed + 1-14 dias
+        base = datetime.fromisoformat(order["date_closed"])
+        date_created = (base + timedelta(days=rng.randint(1, 14))).isoformat()
+        raw = {
+            "id": claim_id,
+            "resource_id": order["order_id"],
+            "status": status,
+            "date_created": date_created,
+        }
+        claims.append({
+            "claim_id": claim_id,
+            "order_id": order["order_id"],
+            "status": status,
+            "date_created": date_created,
+            "raw_json": json.dumps(raw, sort_keys=True),
+        })
+    return claims
