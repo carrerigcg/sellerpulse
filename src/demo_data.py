@@ -182,8 +182,13 @@ def generate_claims(
     *, orders: list[dict[str, Any]], seed: int, rate: float
 ) -> list[dict[str, Any]]:
     """Gera claims amostrando `rate` fração dos pedidos pagos."""
-    rng = random.Random(seed + 1)  # seed distinta pra não correlacionar
+    # `seed + 1` é reservado pra claims — decorrelaciona do generate_orders.
+    # Novos geradores devem usar seeds fora da série `seed, seed+1`.
+    rng = random.Random(seed + 1)
     paid = [o for o in orders if o["status"] == "paid"]
+    # Floor de 1 dispara quando `paid` é não-vazio mas rate * len(paid) < 1
+    # (protege que a análise de reputação sempre tenha algo pra mostrar).
+    # Se `paid` é vazio, `min()` abaixo zera k e retornamos [].
     n_claims = max(1, int(len(paid) * rate))
     sampled = rng.sample(paid, k=min(n_claims, len(paid)))
 
