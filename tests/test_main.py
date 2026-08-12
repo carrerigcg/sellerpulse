@@ -144,4 +144,6 @@ def test_main_regerar_dados_creates_demo_db(tmp_path, monkeypatch) -> None:
     assert rc == 0
     demo_path = tmp_path / "data" / "demo.db"
     assert demo_path.exists()
-    assert demo_path.stat().st_size > 0
+    # Pin exact size: regression sentinel — if generator changes without
+    # regenerating the versioned data/demo.db, CI catches the drift.
+    assert demo_path.stat().st_size == 278528
