@@ -1,10 +1,10 @@
 # SellerPulse
-[![tests](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml/badge.svg)](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml)
 
 > **Full Analytics Suite for Mercado Livre sellers — from raw orders to executive decisions.**
 
 Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos via API oficial (OAuth 2.0), consolida em SQLite, e entrega insights em três formatos — relatório executivo em PDF, notebooks Jupyter narrativos e dashboard Streamlit interativo. Uma única camada analítica pura alimenta as três saídas.
 
+[![tests](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml/badge.svg)](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Status](https://img.shields.io/badge/status-em%20construção-yellow.svg)
