@@ -51,7 +51,7 @@ pip install -r requirements.txt
 pytest
 ```
 
-O modo **sintético** (padrão quando `demo_data.py` estiver pronto — clone e execute em segundos, sem credenciais):
+O modo **sintético** é o padrão — clone e execute em segundos, sem credenciais (o `data/demo.db` já vem versionado no repo):
 
 ```bash
 python -m src.main gerar-pdf         # gera PDF em RELATORIOS/
@@ -133,7 +133,7 @@ python -m src.main --week=2026-W32   # ingere semana ISO específica
 - **HTTP + OAuth:** `requests`, `python-dotenv`
 - **Dados sintéticos:** `faker`
 - **Testes:** `pytest`, `responses` (mock HTTP)
-- **CI:** GitHub Actions (planejado)
+- **CI:** GitHub Actions (matrix py3.11 × ubuntu/windows)
 
 ---
 
@@ -147,20 +147,20 @@ sellerpulse/
 │   ├── storage.py           # camada SQLite (schema + UPSERTs idempotentes)
 │   ├── setup_auth.py        # bootstrap OAuth one-shot
 │   ├── main.py              # CLI unificado — subcomandos
-│   ├── demo_data.py         # gerador de dados sintéticos (seed fixa)         [TODO]
+│   ├── demo_data.py         # gerador de dados sintéticos (seed fixa)
 │   ├── metrics.py           # cálculos financeiros e operacionais              [TODO]
 │   ├── segmentation.py      # ABC, RFM, cohort                                 [TODO]
 │   ├── forecasting.py       # ARIMA, detecção de anomalias                    [TODO]
 │   ├── patrimony.py         # simulador de reinvestimento                     [TODO]
 │   ├── pdf_renderer.py      # HTML + WeasyPrint → PDF                         [TODO]
 │   └── dashboard.py         # app Streamlit                                    [TODO]
-├── tests/                   # pytest — 33 testes cobrindo auth, ml_client, storage, main
+├── tests/                   # pytest — 54 testes cobrindo auth, ml_client, storage, main, demo_data
 ├── notebooks/               # 4 notebooks narrativos                          [TODO]
 ├── mockup/
 │   └── relatorio.html       # referência visual do PDF (padrão Corporate Executive)
 ├── docs/
 │   └── specs/               # design docs de cada camada
-├── data/                    # SQLite + tokens (não versionado, exceto demo.db futuro)
+├── data/                    # SQLite (demo.db versionado; tokens/historico.db ignorados)
 ├── .env.example
 ├── requirements.txt
 ├── pyproject.toml
