@@ -8,7 +8,7 @@ venv/
 
 # Project secrets and data
 .env
-data/
+data/*
 !data/demo.db
 RELATORIOS/
 

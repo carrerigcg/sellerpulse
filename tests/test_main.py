@@ -136,3 +136,12 @@ def test_main_without_subcommand_prints_help(capsys) -> None:
     assert rc == 1
     err = capsys.readouterr().err
     assert "ingerir" in err or "usage" in err.lower()
+
+
+def test_main_regerar_dados_creates_demo_db(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    rc = main(["regerar-dados"])
+    assert rc == 0
+    demo_path = tmp_path / "data" / "demo.db"
+    assert demo_path.exists()
+    assert demo_path.stat().st_size > 0
