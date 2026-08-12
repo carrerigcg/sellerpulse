@@ -2,10 +2,11 @@
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
 import responses
 
 from src.auth import TokenSet, TokenStore
-from src.main import ingest_window
+from src.main import ingest_window, main
 from src.storage import connect, get_orders_in_range
 
 BASE_URL = "https://api.mercadolibre.com"
@@ -107,3 +108,31 @@ def test_ingest_window_persists_orders_items_claims_and_logs_run(tmp_path, monke
     last_run = conn.execute("SELECT * FROM runs").fetchone()
     assert last_run["status"] == "ok"
     assert result["orders_fetched"] == 1
+
+
+def test_main_help_lists_all_subcommands(capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    for subcmd in ["ingerir", "regerar-dados", "gerar-pdf", "abrir-dashboard"]:
+        assert subcmd in out
+
+
+def test_main_gerar_pdf_returns_not_implemented(capsys) -> None:
+    rc = main(["gerar-pdf"])
+    assert rc == 0
+    assert "não implementado" in capsys.readouterr().out.lower()
+
+
+def test_main_abrir_dashboard_returns_not_implemented(capsys) -> None:
+    rc = main(["abrir-dashboard"])
+    assert rc == 0
+    assert "não implementado" in capsys.readouterr().out.lower()
+
+
+def test_main_without_subcommand_prints_help(capsys) -> None:
+    rc = main([])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "ingerir" in err or "usage" in err.lower()

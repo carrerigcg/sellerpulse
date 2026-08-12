@@ -1,9 +1,10 @@
-"""Orquestrador da ingestão semanal — busca, enriquece e persiste dados ML.
+"""CLI unificado do SellerPulse — dispatcher de subcomandos.
 
-Modos:
-    python -m src.main                              # últimos 7 dias até agora
-    python -m src.main --week=2026-W23              # semana ISO específica
-    python -m src.main --from=YYYY-MM-DD --to=YYYY-MM-DD  # janela explícita
+Subcomandos:
+    python -m src.main ingerir [--week=YYYY-WNN | --from=... --to=...]
+    python -m src.main regerar-dados     # regera data/demo.db determinístico
+    python -m src.main gerar-pdf         # [Fase 1]
+    python -m src.main abrir-dashboard   # [Fase 2]
 """
 
 from __future__ import annotations
@@ -165,10 +166,24 @@ def _ensure_item_cache(conn, ml: MLClient, item_id: str) -> None:
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Ingestão semanal Mercado Livre.")
-    parser.add_argument("--week", help="Semana ISO no formato YYYY-WNN.")
-    parser.add_argument("--from", dest="date_from", help="Início (YYYY-MM-DD).")
-    parser.add_argument("--to", dest="date_to", help="Fim exclusivo (YYYY-MM-DD).")
+    parser = argparse.ArgumentParser(
+        prog="sellerpulse",
+        description="SellerPulse — pipeline analítico para vendedores Mercado Livre.",
+    )
+    sub = parser.add_subparsers(dest="cmd", metavar="<subcomando>")
+
+    p_ing = sub.add_parser("ingerir", help="Busca e persiste dados ML (modo real).")
+    p_ing.add_argument("--week", help="Semana ISO no formato YYYY-WNN.")
+    p_ing.add_argument("--from", dest="date_from", help="Início (YYYY-MM-DD).")
+    p_ing.add_argument("--to", dest="date_to", help="Fim exclusivo (YYYY-MM-DD).")
+
+    sub.add_parser(
+        "regerar-dados",
+        help="Regenera data/demo.db determinístico (modo sintético).",
+    )
+    sub.add_parser("gerar-pdf", help="Gera o PDF executivo. [Fase 1]")
+    sub.add_parser("abrir-dashboard", help="Abre o dashboard Streamlit. [Fase 2]")
+
     return parser.parse_args(argv)
 
 
@@ -186,8 +201,7 @@ def _resolve_window(args: argparse.Namespace) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = _parse_args(argv if argv is not None else sys.argv[1:])
+def _cmd_ingerir(args: argparse.Namespace) -> int:
     date_from, date_to = _resolve_window(args)
     try:
         result = ingest_window(
@@ -201,6 +215,44 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1
+
+
+def _cmd_regerar_dados(_args: argparse.Namespace) -> int:
+    from src.demo_data import generate_demo_db
+
+    demo_path = Path("data/demo.db")
+    generate_demo_db(demo_path)
+    print(f"OK — {demo_path} regerado deterministicamente.")
+    return 0
+
+
+def _cmd_gerar_pdf(_args: argparse.Namespace) -> int:
+    print("Não implementado — chega na Fase 1 (v0.2.0).")
+    return 0
+
+
+def _cmd_abrir_dashboard(_args: argparse.Namespace) -> int:
+    print("Não implementado — chega na Fase 2 (v0.3.0).")
+    return 0
+
+
+_DISPATCH = {
+    "ingerir": _cmd_ingerir,
+    "regerar-dados": _cmd_regerar_dados,
+    "gerar-pdf": _cmd_gerar_pdf,
+    "abrir-dashboard": _cmd_abrir_dashboard,
+}
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv if argv is not None else sys.argv[1:])
+    if args.cmd is None:
+        print(
+            "usage: sellerpulse <ingerir|regerar-dados|gerar-pdf|abrir-dashboard>",
+            file=sys.stderr,
+        )
+        return 1
+    return _DISPATCH[args.cmd](args)
 
 
 if __name__ == "__main__":
