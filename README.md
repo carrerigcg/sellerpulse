@@ -1,4 +1,5 @@
 # SellerPulse
+[![tests](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml/badge.svg)](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml)
 
 > **Full Analytics Suite for Mercado Livre sellers — from raw orders to executive decisions.**
 
