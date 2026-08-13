@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.metrics import COST_ESTIMATE_RATE, fluxo_financeiro
+from src.metrics import COST_ESTIMATE_RATE, fluxo_financeiro, top_produtos
 
 
 @pytest.fixture(scope="module")
@@ -75,4 +75,66 @@ def test_fluxo_financeiro_empty_window_returns_empty_df(
         "frete",
         "custo_estimado",
         "liquido",
+    }
+
+
+def test_top_produtos_returns_dict_with_two_dataframes(
+    demo_conn: sqlite3.Connection,
+) -> None:
+    result = top_produtos(demo_conn, "2026-05-01", "2026-08-01", n=5)
+    assert set(result.keys()) == {"produtos", "categorias"}
+    assert isinstance(result["produtos"], pd.DataFrame)
+    assert isinstance(result["categorias"], pd.DataFrame)
+
+
+def test_top_produtos_respects_n_limit(demo_conn: sqlite3.Connection) -> None:
+    result = top_produtos(demo_conn, "2026-05-01", "2026-08-01", n=3)
+    assert len(result["produtos"]) == 3
+    assert len(result["categorias"]) == 3
+
+
+def test_top_produtos_ordered_by_revenue_desc(demo_conn: sqlite3.Connection) -> None:
+    result = top_produtos(demo_conn, "2026-05-01", "2026-08-01", n=10)
+    prods = result["produtos"]
+    assert prods["receita"].is_monotonic_decreasing
+    cats = result["categorias"]
+    assert cats["receita"].is_monotonic_decreasing
+
+
+def test_top_produtos_columns(demo_conn: sqlite3.Connection) -> None:
+    result = top_produtos(demo_conn, "2026-05-01", "2026-08-01", n=5)
+    assert set(result["produtos"].columns) == {
+        "item_id",
+        "title",
+        "category_name",
+        "unidades",
+        "receita",
+    }
+    assert set(result["categorias"].columns) == {
+        "category_id",
+        "category_name",
+        "unidades",
+        "receita",
+    }
+
+
+def test_top_produtos_empty_window_returns_empty_dfs(
+    demo_conn: sqlite3.Connection,
+) -> None:
+    """Janela vazia — dfs vazios preservando colunas (paridade com fluxo_financeiro)."""
+    result = top_produtos(demo_conn, "2020-01-01", "2020-01-02", n=5)
+    assert result["produtos"].empty
+    assert result["categorias"].empty
+    assert set(result["produtos"].columns) == {
+        "item_id",
+        "title",
+        "category_name",
+        "unidades",
+        "receita",
+    }
+    assert set(result["categorias"].columns) == {
+        "category_id",
+        "category_name",
+        "unidades",
+        "receita",
     }

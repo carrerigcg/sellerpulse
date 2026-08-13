@@ -47,3 +47,71 @@ def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> 
         df["receita_bruta"] - df["taxas_ml"] - df["frete"] - df["custo_estimado"]
     ).round(2)
     return df[["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]]
+
+
+def top_produtos(
+    conn: sqlite3.Connection, date_from: str, date_to: str, n: int = 10
+) -> dict[str, pd.DataFrame]:
+    """Top N produtos e top N categorias por receita.
+
+    Args:
+        conn: conexão SQLite.
+        date_from: início inclusivo (ISO 8601).
+        date_to: fim exclusivo.
+        n: número de linhas retornadas em cada ranking. Default 10.
+
+    Returns:
+        dict com chaves:
+        - "produtos": DataFrame [item_id, title, category_name, unidades, receita]
+        - "categorias": DataFrame [category_id, category_name, unidades, receita]
+        Ambos ordenados por receita desc.
+    """
+    produtos = pd.read_sql_query(
+        """
+        SELECT
+            oi.item_id                                       AS item_id,
+            ic.title                                          AS title,
+            cc.name                                           AS category_name,
+            SUM(oi.quantity)                                  AS unidades,
+            ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
+        FROM order_items oi
+        JOIN orders o        ON o.order_id     = oi.order_id
+        JOIN items_cache ic  ON ic.item_id     = oi.item_id
+        JOIN categories_cache cc ON cc.category_id = ic.category_id
+        WHERE o.status = 'paid'
+          AND o.date_closed >= ?
+          AND o.date_closed <  ?
+        GROUP BY oi.item_id, ic.title, cc.name
+        ORDER BY receita DESC
+        LIMIT ?
+        """,
+        conn,
+        params=(date_from, date_to, n),
+    )
+
+    # Segunda query separada — não dá pra reaproveitar o LIMIT do ranking de
+    # produtos aqui: filtrar por top-N produtos distorceria os totais por
+    # categoria (excluiria receita de produtos fora do top-N).
+    categorias = pd.read_sql_query(
+        """
+        SELECT
+            cc.category_id                                    AS category_id,
+            cc.name                                           AS category_name,
+            SUM(oi.quantity)                                  AS unidades,
+            ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
+        FROM order_items oi
+        JOIN orders o        ON o.order_id     = oi.order_id
+        JOIN items_cache ic  ON ic.item_id     = oi.item_id
+        JOIN categories_cache cc ON cc.category_id = ic.category_id
+        WHERE o.status = 'paid'
+          AND o.date_closed >= ?
+          AND o.date_closed <  ?
+        GROUP BY cc.category_id, cc.name
+        ORDER BY receita DESC
+        LIMIT ?
+        """,
+        conn,
+        params=(date_from, date_to, n),
+    )
+
+    return {"produtos": produtos, "categorias": categorias}
