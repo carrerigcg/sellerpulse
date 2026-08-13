@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from src.metrics import COST_ESTIMATE_RATE, fluxo_financeiro, top_produtos
+from src.metrics import COST_ESTIMATE_RATE, fluxo_financeiro, reputacao_devolucao, top_produtos
 
 
 @pytest.fixture(scope="module")
@@ -138,3 +138,53 @@ def test_top_produtos_empty_window_returns_empty_dfs(
         "unidades",
         "receita",
     }
+
+
+def test_reputacao_devolucao_returns_expected_keys(
+    demo_conn: sqlite3.Connection,
+) -> None:
+    result = reputacao_devolucao(demo_conn, "2026-05-01", "2026-08-01")
+    assert set(result.keys()) == {
+        "nivel_ml",
+        "taxa_devolucao_pct",
+        "claims_ativos",
+        "claims_total",
+        "alertas",
+    }
+
+
+def test_reputacao_devolucao_types(demo_conn: sqlite3.Connection) -> None:
+    result = reputacao_devolucao(demo_conn, "2026-05-01", "2026-08-01")
+    assert result["nivel_ml"] in {"Verde", "Amarelo", "Vermelho"}
+    assert isinstance(result["taxa_devolucao_pct"], float)
+    assert isinstance(result["claims_ativos"], int)
+    assert isinstance(result["claims_total"], int)
+    assert isinstance(result["alertas"], list)
+    assert all(isinstance(a, str) for a in result["alertas"])
+
+
+def test_reputacao_devolucao_taxa_matches_manual_calc(
+    demo_conn: sqlite3.Connection,
+) -> None:
+    result = reputacao_devolucao(demo_conn, "2026-05-01", "2026-08-01")
+    paid = demo_conn.execute(
+        "SELECT COUNT(*) FROM orders "
+        "WHERE status='paid' AND date_closed>='2026-05-01' AND date_closed<'2026-08-01'"
+    ).fetchone()[0]
+    claims = demo_conn.execute(
+        "SELECT COUNT(*) FROM claims WHERE date_created>='2026-05-01' AND date_created<'2026-08-01'"
+    ).fetchone()[0]
+    expected = round(100.0 * claims / paid, 2) if paid else 0.0
+    assert result["taxa_devolucao_pct"] == pytest.approx(expected)
+    assert result["claims_total"] == claims
+
+
+def test_reputacao_devolucao_empty_window_returns_verde_zero(
+    demo_conn: sqlite3.Connection,
+) -> None:
+    result = reputacao_devolucao(demo_conn, "2020-01-01", "2020-01-02")
+    assert result["nivel_ml"] == "Verde"
+    assert result["taxa_devolucao_pct"] == 0.0
+    assert result["claims_total"] == 0
+    assert result["claims_ativos"] == 0
+    assert result["alertas"] == []

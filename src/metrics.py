@@ -115,3 +115,66 @@ def top_produtos(
     )
 
     return {"produtos": produtos, "categorias": categorias}
+
+
+# Thresholds documentados do proxy de reputação (não vêm da API ML).
+_NIVEL_VERDE_MAX_PCT = 2.0
+_NIVEL_AMARELO_MAX_PCT = 5.0
+_ALERTA_CLAIMS_ATIVOS_MIN = 3
+_CLAIMS_ATIVOS_STATUSES = ("opened", "in_dispute")
+
+
+def reputacao_devolucao(conn: sqlite3.Connection, date_from: str, date_to: str) -> dict:
+    """KPIs de saúde operacional para a janela.
+
+    "Nível ML" é proxy calculado localmente (a API ML devolve reputação
+    agregada, não histórica-por-semana). Thresholds:
+        < 2%  → Verde
+        < 5%  → Amarelo
+        >= 5% → Vermelho
+
+    Alertas disparam quando: taxa >= 5% ou claims_ativos > 3.
+
+    Returns:
+        dict com chaves: nivel_ml, taxa_devolucao_pct, claims_ativos,
+        claims_total, alertas.
+    """
+    paid_count = conn.execute(
+        "SELECT COUNT(*) FROM orders WHERE status='paid' AND date_closed>=? AND date_closed<?",
+        (date_from, date_to),
+    ).fetchone()[0]
+
+    claims_total = conn.execute(
+        "SELECT COUNT(*) FROM claims WHERE date_created>=? AND date_created<?",
+        (date_from, date_to),
+    ).fetchone()[0]
+
+    placeholders = ",".join("?" * len(_CLAIMS_ATIVOS_STATUSES))
+    claims_ativos = conn.execute(
+        f"SELECT COUNT(*) FROM claims "
+        f"WHERE date_created>=? AND date_created<? AND status IN ({placeholders})",
+        (date_from, date_to, *_CLAIMS_ATIVOS_STATUSES),
+    ).fetchone()[0]
+
+    taxa = round(100.0 * claims_total / paid_count, 2) if paid_count else 0.0
+
+    if taxa < _NIVEL_VERDE_MAX_PCT:
+        nivel = "Verde"
+    elif taxa < _NIVEL_AMARELO_MAX_PCT:
+        nivel = "Amarelo"
+    else:
+        nivel = "Vermelho"
+
+    alertas: list[str] = []
+    if taxa >= _NIVEL_AMARELO_MAX_PCT:
+        alertas.append(f"Taxa de devolução em {taxa:.2f}% — acima do limite saudável de 5%.")
+    if claims_ativos > _ALERTA_CLAIMS_ATIVOS_MIN:
+        alertas.append(f"{claims_ativos} reclamações abertas — priorizar atendimento.")
+
+    return {
+        "nivel_ml": nivel,
+        "taxa_devolucao_pct": taxa,
+        "claims_ativos": claims_ativos,
+        "claims_total": claims_total,
+        "alertas": alertas,
+    }
