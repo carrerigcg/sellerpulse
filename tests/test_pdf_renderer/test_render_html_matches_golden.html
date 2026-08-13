@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Relatório Executivo · Edição {{ edicao.num }} — {{ edicao.ano }}</title>
+  <title>Relatório Executivo · Edição 30 — 2026</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
@@ -989,7 +989,7 @@
         <span>SELLERPULSE ANALYTICS</span>
       </div>
       <div class="strip-meta">
-        Vol. <strong>{{ edicao.vol }}</strong> · Edição <strong>{{ edicao.num }}</strong> · <strong>{{ edicao.ano }}</strong>
+        Vol. <strong>I</strong> · Edição <strong>30</strong> · <strong>2026</strong>
       </div>
     </header>
 
@@ -1001,22 +1001,22 @@
       </div>
       <h1 class="title">Performance da <em>Loja</em></h1>
       <div class="period">
-        Período analisado: <strong>{{ periodo_label }}</strong> · Mercado Livre
+        Período analisado: <strong>25 a 31 de julho de 2026</strong> · Mercado Livre
       </div>
     </section>
 
     <section class="hero">
       <div>
         <div class="hero-label">Resultado líquido da semana</div>
-        <div class="hero-number">{{ fluxo.liquido }}</div>
+        <div class="hero-number">R$ 8.686,62</div>
       </div>
       <div class="hero-side">
-        <span class="delta {{ 'up' if fluxo.delta_vs_anterior_positive else 'down' }}">
+        <span class="delta up">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <path d="M7 17 L17 7" />
             <path d="M9 7 L17 7 L17 15" />
           </svg>
-          {{ fluxo.delta_vs_anterior }}
+          +R$ 1.362,65
         </span>
         <span class="delta-context">vs. semana anterior</span>
         <span class="hero-period-pill">
@@ -1049,19 +1049,19 @@
         <div class="breakdown-card">
           <div class="breakdown-line">
             <span class="lbl">Vendas brutas</span>
-            <span class="val">{{ fluxo.receita_bruta }}</span>
+            <span class="val">R$ 27.269,86</span>
           </div>
           <div class="breakdown-line neg">
             <span class="lbl">Taxas do Mercado Livre</span>
-            <span class="val">− {{ fluxo.taxas_ml }}</span>
+            <span class="val">− R$ 3.272,37</span>
           </div>
           <div class="breakdown-line neg">
             <span class="lbl">Frete pago por você</span>
-            <span class="val">− {{ fluxo.frete }}</span>
+            <span class="val">− R$ 312,45</span>
           </div>
           <div class="breakdown-line total">
             <span class="lbl">Líquido recebido</span>
-            <span class="val">{{ fluxo.liquido }}</span>
+            <span class="val">R$ 8.686,62</span>
           </div>
         </div>
 
@@ -1069,22 +1069,22 @@
           <div class="wf-row">
             <span class="lbl">Vendas</span>
             <span class="wf-bar pos" style="width: 100%;"></span>
-            <span class="val">{{ fluxo.receita_bruta_short }}</span>
+            <span class="val">27.270</span>
           </div>
           <div class="wf-row neg">
             <span class="lbl">Taxas</span>
-            <span class="wf-bar neg" style="width: {{ fluxo.taxas_pct }}%;"></span>
-            <span class="val">−{{ fluxo.taxas_ml_short }}</span>
+            <span class="wf-bar neg" style="width: 12%;"></span>
+            <span class="val">−3.272</span>
           </div>
           <div class="wf-row neg">
             <span class="lbl">Frete</span>
-            <span class="wf-bar neg" style="width: {{ fluxo.frete_pct }}%;"></span>
-            <span class="val">−{{ fluxo.frete_short }}</span>
+            <span class="wf-bar neg" style="width: 1%;"></span>
+            <span class="val">−312</span>
           </div>
           <div class="wf-row net">
             <span class="lbl">Líquido</span>
-            <span class="wf-bar net" style="width: {{ fluxo.liquido_pct }}%;"></span>
-            <span class="val">{{ fluxo.liquido_short }}</span>
+            <span class="wf-bar net" style="width: 32%;"></span>
+            <span class="val">8.687</span>
           </div>
         </div>
       </div>
@@ -1094,7 +1094,7 @@
       <div class="footer-left">
         <span class="brand-mini">SELLERPULSE</span>
         <span class="footer-divider"></span>
-        <span>Relatório gerado em {{ generated_at_label }}</span>
+        <span>Relatório gerado em 1 de agosto de 2026 · 06h00</span>
       </div>
       <div class="footer-page">
         <span>Página</span>
@@ -1114,7 +1114,7 @@
         <span>SELLERPULSE ANALYTICS</span>
       </div>
       <div class="strip-meta">
-        Vol. <strong>{{ edicao.vol }}</strong> · Edição <strong>{{ edicao.num }}</strong> · <strong>{{ edicao.ano }}</strong>
+        Vol. <strong>I</strong> · Edição <strong>30</strong> · <strong>2026</strong>
       </div>
     </header>
 
@@ -1157,13 +1157,25 @@
             </span>
           </div>
           <div class="rank-body">
-            {% for prod in produtos_top %}
+            
             <div class="rank-item">
-              <span class="rank-pos">{{ prod.posicao }}</span>
-              <span class="rank-name">{{ prod.title }}<small>{{ prod.category_name }}</small></span>
-              <span class="rank-val">{{ prod.unidades }} un</span>
+              <span class="rank-pos">1</span>
+              <span class="rank-name">A segurança de inovar simplesmente<small>Iluminação</small></span>
+              <span class="rank-val">14 un</span>
             </div>
-            {% endfor %}
+            
+            <div class="rank-item">
+              <span class="rank-pos">2</span>
+              <span class="rank-name">A simplicidade de concretizar seus projetos com força total<small>Casa e Cozinha</small></span>
+              <span class="rank-val">6 un</span>
+            </div>
+            
+            <div class="rank-item">
+              <span class="rank-pos">3</span>
+              <span class="rank-name">A possibilidade de mudar com confiança<small>Cosméticos</small></span>
+              <span class="rank-val">5 un</span>
+            </div>
+            
           </div>
         </div>
 
@@ -1179,13 +1191,25 @@
             </span>
           </div>
           <div class="rank-body">
-            {% for prod in produtos_top %}
+            
             <div class="rank-item">
-              <span class="rank-pos">{{ prod.posicao }}</span>
-              <span class="rank-name">{{ prod.title }}<small>{{ prod.category_name }}</small></span>
-              <span class="rank-val">{{ prod.receita_fmt }}</span>
+              <span class="rank-pos">1</span>
+              <span class="rank-name">A segurança de inovar simplesmente<small>Iluminação</small></span>
+              <span class="rank-val">R$ 7.413,98</span>
             </div>
-            {% endfor %}
+            
+            <div class="rank-item">
+              <span class="rank-pos">2</span>
+              <span class="rank-name">A simplicidade de concretizar seus projetos com força total<small>Casa e Cozinha</small></span>
+              <span class="rank-val">R$ 3.345,12</span>
+            </div>
+            
+            <div class="rank-item">
+              <span class="rank-pos">3</span>
+              <span class="rank-name">A possibilidade de mudar com confiança<small>Cosméticos</small></span>
+              <span class="rank-val">R$ 3.011,75</span>
+            </div>
+            
           </div>
         </div>
       </div>
@@ -1211,26 +1235,50 @@
         <div class="rank-card">
           <div class="rank-head"><span class="rank-head-title">Por quantidade</span></div>
           <div class="rank-body">
-            {% for cat in categorias_top %}
+            
             <div class="rank-item">
-              <span class="rank-pos">{{ cat.posicao }}</span>
-              <span class="rank-name">{{ cat.title }}</span>
-              <span class="rank-val">{{ cat.unidades }} un</span>
+              <span class="rank-pos">1</span>
+              <span class="rank-name">Iluminação</span>
+              <span class="rank-val">16 un</span>
             </div>
-            {% endfor %}
+            
+            <div class="rank-item">
+              <span class="rank-pos">2</span>
+              <span class="rank-name">Cosméticos</span>
+              <span class="rank-val">11 un</span>
+            </div>
+            
+            <div class="rank-item">
+              <span class="rank-pos">3</span>
+              <span class="rank-name">Casa e Cozinha</span>
+              <span class="rank-val">14 un</span>
+            </div>
+            
           </div>
         </div>
 
         <div class="rank-card">
           <div class="rank-head"><span class="rank-head-title">Por dinheiro</span></div>
           <div class="rank-body">
-            {% for cat in categorias_top %}
+            
             <div class="rank-item">
-              <span class="rank-pos">{{ cat.posicao }}</span>
-              <span class="rank-name">{{ cat.title }}</span>
-              <span class="rank-val">{{ cat.receita_fmt }}</span>
+              <span class="rank-pos">1</span>
+              <span class="rank-name">Iluminação</span>
+              <span class="rank-val">R$ 8.646,77</span>
             </div>
-            {% endfor %}
+            
+            <div class="rank-item">
+              <span class="rank-pos">2</span>
+              <span class="rank-name">Cosméticos</span>
+              <span class="rank-val">R$ 6.290,19</span>
+            </div>
+            
+            <div class="rank-item">
+              <span class="rank-pos">3</span>
+              <span class="rank-name">Casa e Cozinha</span>
+              <span class="rank-val">R$ 5.609,54</span>
+            </div>
+            
           </div>
         </div>
       </div>
@@ -1240,7 +1288,7 @@
       <div class="footer-left">
         <span class="brand-mini">SELLERPULSE</span>
         <span class="footer-divider"></span>
-        <span>Relatório gerado em {{ generated_at_label }}</span>
+        <span>Relatório gerado em 1 de agosto de 2026 · 06h00</span>
       </div>
       <div class="footer-page">
         <span>Página</span>
@@ -1260,7 +1308,7 @@
         <span>SELLERPULSE ANALYTICS</span>
       </div>
       <div class="strip-meta">
-        Vol. <strong>{{ edicao.vol }}</strong> · Edição <strong>{{ edicao.num }}</strong> · <strong>{{ edicao.ano }}</strong>
+        Vol. <strong>I</strong> · Edição <strong>30</strong> · <strong>2026</strong>
       </div>
     </header>
 
@@ -1289,19 +1337,19 @@
             </span>
           </div>
           <div class="kpi-main">
-            <span class="num">{{ reputacao.taxa_devolucao_pct_fmt }}</span>
+            <span class="num">0,00%</span>
           </div>
           <div class="kpi-meta">
             Taxa de devolução no período
           </div>
           <div class="kpi-foot">
             <span style="font-size: 10.5pt; color: var(--gray-600);">
-              Reclamações: <strong style="color: var(--gray-900); font-weight: 700;">{{ reputacao.claims_ativos }}</strong> abertas / <strong style="color: var(--gray-900); font-weight: 700;">{{ reputacao.claims_total }}</strong> total
+              Reclamações: <strong style="color: var(--gray-900); font-weight: 700;">0</strong> abertas / <strong style="color: var(--gray-900); font-weight: 700;">0</strong> total
             </span>
           </div>
         </div>
 
-        <div class="kpi-card reputation nivel-{{ reputacao.nivel_ml | lower }}">
+        <div class="kpi-card reputation nivel-verde">
           <div class="kpi-head">
             Reputação da Loja
             <span class="icon">
@@ -1314,29 +1362,37 @@
           <div class="therm">
             <span class="therm-dot"></span>
             <div class="therm-info">
-              <span class="therm-status">{{ reputacao.nivel_ml }}</span>
+              <span class="therm-status">Verde</span>
               <span class="therm-sub">
-                {% if reputacao.nivel_ml == 'Verde' %}Sua loja está em ordem no Mercado Livre{% elif reputacao.nivel_ml == 'Amarelo' %}Atenção: reputação em nível intermediário{% else %}Alerta: reputação requer ação imediata{% endif %}
+                Sua loja está em ordem no Mercado Livre
               </span>
             </div>
           </div>
           <div>
             <div class="therm-bar">
-              {% for i in range(1, 6) %}
-              <span class="therm-seg{% if i == reputacao.therm_position %} active{% endif %}"></span>
-              {% endfor %}
+              
+              <span class="therm-seg"></span>
+              
+              <span class="therm-seg"></span>
+              
+              <span class="therm-seg"></span>
+              
+              <span class="therm-seg"></span>
+              
+              <span class="therm-seg active"></span>
+              
             </div>
             <div class="therm-scale">
-              <span{% if reputacao.therm_position == 1 %} class="current"{% endif %}>Vermelho</span>
-              <span{% if reputacao.therm_position == 2 %} class="current"{% endif %}>Laranja</span>
-              <span{% if reputacao.therm_position == 3 %} class="current"{% endif %}>Amarelo</span>
-              <span{% if reputacao.therm_position == 4 %} class="current"{% endif %}>Verde claro</span>
-              <span{% if reputacao.therm_position == 5 %} class="current"{% endif %}>Verde</span>
+              <span>Vermelho</span>
+              <span>Laranja</span>
+              <span>Amarelo</span>
+              <span>Verde claro</span>
+              <span class="current">Verde</span>
             </div>
           </div>
           <div class="kpi-foot">
             <span style="font-size: 10.5pt; color: var(--gray-600);">
-              Reclamações abertas: <strong style="color: var(--gray-900); font-weight: 700;">{{ reputacao.claims_ativos }}</strong>
+              Reclamações abertas: <strong style="color: var(--gray-900); font-weight: 700;">0</strong>
             </span>
             <span class="delta-context">termômetro atual</span>
           </div>
@@ -1387,7 +1443,7 @@
       <div class="footer-left">
         <span class="brand-mini">SELLERPULSE</span>
         <span class="footer-divider"></span>
-        <span>Relatório gerado em {{ generated_at_label }}</span>
+        <span>Relatório gerado em 1 de agosto de 2026 · 06h00</span>
       </div>
       <div class="footer-page">
         <span>Página</span>
