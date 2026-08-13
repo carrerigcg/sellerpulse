@@ -62,3 +62,25 @@ def test_fmt_brl(value: float, expected: str) -> None:
 )
 def test_fmt_periodo(date_from: str, date_to: str, expected: str) -> None:
     assert _fmt_periodo(date_from, date_to) == expected
+
+
+def test_render_pdf_produces_valid_pdf_file(tmp_path: Path) -> None:
+    """Smoke test — só verifica que WeasyPrint cospe algo com assinatura %PDF."""
+    try:
+        pytest.importorskip("weasyprint", reason="WeasyPrint não instalado (GTK ausente)")
+    except OSError as exc:
+        pytest.skip(f"WeasyPrint não funcional nesta máquina (GTK ausente): {exc}")
+    from src.pdf_renderer import render_pdf
+
+    output = tmp_path / "relatorio.pdf"
+    result = render_pdf(
+        db_path=Path("data/demo.db"),
+        output_path=output,
+        date_from="2026-07-25",
+        date_to="2026-08-01",
+        generated_at=datetime(2026, 8, 1, 6, 0, 0),
+    )
+    assert result == output
+    assert output.exists()
+    assert output.stat().st_size > 1024
+    assert output.read_bytes()[:4] == b"%PDF"

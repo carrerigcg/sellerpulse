@@ -181,3 +181,45 @@ def render_html(
     template = env.get_template(_TEMPLATE_NAME)
     ctx = _build_context(conn, date_from, date_to, when)
     return template.render(**ctx)
+
+
+def render_pdf(
+    *,
+    db_path: Path,
+    output_path: Path,
+    date_from: str,
+    date_to: str,
+    generated_at: datetime | None = None,
+) -> Path:
+    """Renderiza HTML → PDF via WeasyPrint. Escreve em `output_path`.
+
+    Import de WeasyPrint fica adiado (lazy) porque a lib puxa GTK no
+    Windows — dev machines sem GTK devem conseguir importar `pdf_renderer`
+    sem crash pra rodar `render_html` isoladamente.
+
+    Args:
+        db_path: SQLite fonte.
+        output_path: PDF de saída (diretório é criado se não existir).
+        date_from: início inclusivo (YYYY-MM-DD).
+        date_to: fim exclusivo.
+        generated_at: timestamp do rodapé. Default = now().
+
+    Returns:
+        `output_path` para encadeamento.
+    """
+    from weasyprint import HTML  # noqa: PLC0415 — lazy import (GTK optional)
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    conn.row_factory = sqlite3.Row
+    try:
+        html = render_html(
+            conn=conn,
+            date_from=date_from,
+            date_to=date_to,
+            generated_at=generated_at,
+        )
+    finally:
+        conn.close()
+    HTML(string=html).write_pdf(str(output_path))
+    return output_path
