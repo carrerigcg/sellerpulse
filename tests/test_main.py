@@ -1,12 +1,13 @@
 """Teste de integração do orquestrador de ingestão."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import responses
 
 from src.auth import TokenSet, TokenStore
-from src.main import ingest_window, main
+from src.main import _default_pdf_output, _resolve_gerar_pdf_window, ingest_window, main
 from src.storage import connect, get_orders_in_range
 
 BASE_URL = "https://api.mercadolibre.com"
@@ -119,10 +120,90 @@ def test_main_help_lists_all_subcommands(capsys) -> None:
         assert subcmd in out
 
 
-def test_main_gerar_pdf_returns_not_implemented(capsys) -> None:
+def test_resolve_gerar_pdf_window_uses_last_seven_days_of_data() -> None:
+    """Janela default = 7 dias terminando 1 dia após MAX(date_closed) do demo.db.
+
+    demo.db paid MAX = 2026-07-31 → date_to=2026-08-01, date_from=2026-07-25.
+    Bate com a janela do snapshot golden, garantindo reproducibilidade zero-arg.
+    """
+    date_from, date_to = _resolve_gerar_pdf_window(Path("data/demo.db"))
+    assert date_from == "2026-07-25"
+    assert date_to == "2026-08-01"
+
+
+def test_default_pdf_output_uses_iso_week_naming() -> None:
+    """RELATORIOS/relatorio-YYYY-WNN.pdf — WNN = ISO week de date_from."""
+    # 2026-07-25 é sábado da ISO week 30
+    assert _default_pdf_output("2026-07-25") == Path("RELATORIOS/relatorio-2026-W30.pdf")
+
+
+def test_default_pdf_output_pads_week_below_ten() -> None:
+    """Semana < 10 recebe zero à esquerda (W03, não W3)."""
+    # 2026-01-15 = ISO week 3
+    assert _default_pdf_output("2026-01-15") == Path("RELATORIOS/relatorio-2026-W03.pdf")
+
+
+def _copy_demo_db(tmp_path: Path) -> Path:
+    """Helper: copia demo.db versionado pro tmp_path/data/ (isola side effects do teste)."""
+    src = Path("data/demo.db").resolve()
+    (tmp_path / "data").mkdir(exist_ok=True)
+    dst = tmp_path / "data" / "demo.db"
+    dst.write_bytes(src.read_bytes())
+    return dst
+
+
+def test_cmd_gerar_pdf_default_invokes_render_with_derived_window(monkeypatch, tmp_path) -> None:
+    """Sem args: chama render_pdf com janela derivada + path RELATORIOS/relatorio-YYYY-WNN.pdf."""
+    _copy_demo_db(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    captured: dict = {}
+
+    def fake_render(**kwargs):
+        captured.update(kwargs)
+        return kwargs["output_path"]
+
+    monkeypatch.setattr("src.pdf_renderer.render_pdf", fake_render)
+
     rc = main(["gerar-pdf"])
     assert rc == 0
-    assert "não implementado" in capsys.readouterr().out.lower()
+    assert captured["date_from"] == "2026-07-25"
+    assert captured["date_to"] == "2026-08-01"
+    assert captured["output_path"] == Path("RELATORIOS/relatorio-2026-W30.pdf")
+    assert captured["db_path"] == Path("data/demo.db")
+
+
+def test_cmd_gerar_pdf_respects_from_to_flags(monkeypatch, tmp_path) -> None:
+    """--from/--to substituem a janela derivada."""
+    _copy_demo_db(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    captured: dict = {}
+    monkeypatch.setattr(
+        "src.pdf_renderer.render_pdf",
+        lambda **kw: captured.update(kw) or kw["output_path"],
+    )
+
+    rc = main(["gerar-pdf", "--from", "2026-06-01", "--to", "2026-06-08"])
+    assert rc == 0
+    assert captured["date_from"] == "2026-06-01"
+    assert captured["date_to"] == "2026-06-08"
+
+
+def test_cmd_gerar_pdf_respects_output_flag(monkeypatch, tmp_path) -> None:
+    """--output substitui o path default."""
+    _copy_demo_db(tmp_path)
+    monkeypatch.chdir(tmp_path)
+
+    captured: dict = {}
+    monkeypatch.setattr(
+        "src.pdf_renderer.render_pdf",
+        lambda **kw: captured.update(kw) or kw["output_path"],
+    )
+
+    rc = main(["gerar-pdf", "--output", "custom/dir/meu.pdf"])
+    assert rc == 0
+    assert captured["output_path"] == Path("custom/dir/meu.pdf")
 
 
 def test_main_abrir_dashboard_returns_not_implemented(capsys) -> None:
