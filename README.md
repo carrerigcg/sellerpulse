@@ -54,10 +54,13 @@ pytest
 O modo **sintético** é o padrão — clone e execute em segundos, sem credenciais (o `data/demo.db` já vem versionado no repo):
 
 ```bash
-python -m src.main gerar-pdf         # gera PDF em RELATORIOS/
-python -m src.main abrir-dashboard   # sobe Streamlit em localhost:8501
+python -m src.main gerar-pdf         # gera PDF em RELATORIOS/relatorio-YYYY-WNN.pdf
+python -m src.main abrir-dashboard   # sobe Streamlit em localhost:8501            [Fase 2]
 python -m src.main regerar-dados     # reconstrói data/demo.db a partir do gerador
 ```
+
+> **Windows:** `gerar-pdf` depende do WeasyPrint, que requer o runtime GTK3.
+> Instale via [GTK3 for Windows Runtime](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases) — sem isso o comando falha com `libgobject-2.0-0`. Em Linux/macOS o `pip install` já cobre as libs nativas.
 
 O modo **API real** (opcional — requer conta ML + credenciais em `.env`):
 
@@ -148,13 +151,15 @@ sellerpulse/
 │   ├── setup_auth.py        # bootstrap OAuth one-shot
 │   ├── main.py              # CLI unificado — subcomandos
 │   ├── demo_data.py         # gerador de dados sintéticos (seed fixa)
-│   ├── metrics.py           # cálculos financeiros e operacionais              [TODO]
+│   ├── metrics.py           # cálculos financeiros e operacionais
+│   ├── pdf_renderer.py      # HTML + WeasyPrint → PDF
 │   ├── segmentation.py      # ABC, RFM, cohort                                 [TODO]
 │   ├── forecasting.py       # ARIMA, detecção de anomalias                    [TODO]
 │   ├── patrimony.py         # simulador de reinvestimento                     [TODO]
-│   ├── pdf_renderer.py      # HTML + WeasyPrint → PDF                         [TODO]
 │   └── dashboard.py         # app Streamlit                                    [TODO]
-├── tests/                   # pytest — 54 testes cobrindo auth, ml_client, storage, main, demo_data
+├── templates/
+│   └── relatorio.html.j2    # template Jinja2 do PDF executivo
+├── tests/                   # pytest — 84 testes cobrindo auth, ml_client, storage, main, demo_data, metrics, pdf_renderer
 ├── notebooks/               # 4 notebooks narrativos                          [TODO]
 ├── mockup/
 │   └── relatorio.html       # referência visual do PDF (padrão Corporate Executive)

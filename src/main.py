@@ -12,8 +12,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sqlite3
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -33,6 +34,8 @@ from src.storage import (
 
 DEFAULT_TOKENS_PATH = Path("data/tokens.json")
 DEFAULT_DB_PATH = Path("data/historico.db")
+DEFAULT_DEMO_DB_PATH = Path("data/demo.db")
+DEFAULT_PDF_DIR = Path("RELATORIOS")
 
 
 def ingest_window(
@@ -181,7 +184,12 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "regerar-dados",
         help="Regenera data/demo.db determinístico (modo sintético).",
     )
-    sub.add_parser("gerar-pdf", help="Gera o PDF executivo. [Fase 1]")
+    p_pdf = sub.add_parser("gerar-pdf", help="Gera o PDF executivo. [Fase 1]")
+    p_pdf.add_argument("--from", dest="date_from", help="Início (YYYY-MM-DD).")
+    p_pdf.add_argument("--to", dest="date_to", help="Fim exclusivo (YYYY-MM-DD).")
+    p_pdf.add_argument(
+        "--output", help="Path do PDF de saída (default RELATORIOS/relatorio-YYYY-WNN.pdf)."
+    )
     sub.add_parser("abrir-dashboard", help="Abre o dashboard Streamlit. [Fase 2]")
 
     return parser.parse_args(argv)
@@ -226,8 +234,62 @@ def _cmd_regerar_dados(_args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_gerar_pdf(_args: argparse.Namespace) -> int:
-    print("Não implementado — chega na Fase 1 (v0.2.0).")
+def _resolve_gerar_pdf_window(db_path: Path) -> tuple[str, str]:
+    """Janela default: 7 dias terminando 1 dia após o MAX(date_closed) dos pagos.
+
+    Trava a saída zero-arg na última semana com dados reais no banco — quem
+    clonar o repo e rodar `gerar-pdf` obtém o mesmo PDF do golden.
+    """
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        row = conn.execute(
+            "SELECT MAX(substr(date_closed, 1, 10)) FROM orders WHERE status='paid'"
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row or not row[0]:
+        raise RuntimeError(f"{db_path} não tem pedidos pagos — rode `regerar-dados` antes.")
+    last_day = date.fromisoformat(row[0])
+    date_to = last_day + timedelta(days=1)
+    date_from = date_to - timedelta(days=7)
+    return date_from.isoformat(), date_to.isoformat()
+
+
+def _default_pdf_output(date_from: str) -> Path:
+    """RELATORIOS/relatorio-YYYY-WNN.pdf — WNN zero-padded, calendário ISO."""
+    d = date.fromisoformat(date_from)
+    iso_year, iso_week, _ = d.isocalendar()
+    return DEFAULT_PDF_DIR / f"relatorio-{iso_year}-W{iso_week:02d}.pdf"
+
+
+def _cmd_gerar_pdf(args: argparse.Namespace) -> int:
+    from src.pdf_renderer import render_pdf
+
+    db_path = DEFAULT_DEMO_DB_PATH
+    if args.date_from and args.date_to:
+        date_from, date_to = args.date_from, args.date_to
+    elif args.date_from or args.date_to:
+        print("ERRO: use --from e --to em conjunto.", file=sys.stderr)
+        return 1
+    else:
+        try:
+            date_from, date_to = _resolve_gerar_pdf_window(db_path)
+        except RuntimeError as exc:
+            print(f"ERRO: {exc}", file=sys.stderr)
+            return 1
+
+    output_path = Path(args.output) if args.output else _default_pdf_output(date_from)
+    try:
+        render_pdf(
+            db_path=db_path,
+            output_path=output_path,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except Exception as exc:  # noqa: BLE001 — CLI boundary
+        print(f"ERRO: {exc}", file=sys.stderr)
+        return 1
+    print(f"OK — PDF gerado em {output_path}")
     return 0
 
 
