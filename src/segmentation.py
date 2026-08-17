@@ -62,3 +62,104 @@ def abc_pareto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
 
     df["classe"] = df["receita_acumulada_pct"].apply(_classify)
     return df[empty_cols]
+
+
+# Ordem importa: primeiro segmento cuja condição casar vence.
+_RFM_SEGMENT_RULES: list[tuple[str, str]] = [
+    ("Champions", "r_score >= 4 and f_score >= 4 and m_score >= 4"),
+    ("Loyal", "f_score >= 4 and m_score >= 3"),
+    ("At Risk", "r_score <= 2 and (f_score >= 3 or m_score >= 3)"),
+    ("New", "r_score >= 4 and f_score <= 2"),
+    ("Hibernating", "r_score <= 2 and f_score <= 2 and m_score <= 2"),
+]
+
+_RFM_COLUMNS = [
+    "buyer_id",
+    "recency_dias",
+    "frequency",
+    "monetary",
+    "r_score",
+    "f_score",
+    "m_score",
+    "segmento",
+]
+
+
+def _score_by_quintile(series: pd.Series, ascending: bool = True) -> pd.Series:
+    """Devolve score int 1-5 via quintis. `ascending=True` = maior valor → score 5.
+
+    Trata cases com < 5 valores distintos via `duplicates="drop"` e labels
+    dinâmicos. Empates recebem o mesmo score. NaN não deve ocorrer (série
+    numérica não-nula por construção).
+    """
+    labels_asc = [1, 2, 3, 4, 5]
+    labels = labels_asc if ascending else list(reversed(labels_asc))
+    # rank(method="first") desempata sequencialmente — evita bins vazios.
+    ranks = series.rank(method="first")
+    try:
+        binned = pd.qcut(ranks, q=5, labels=labels)
+    except ValueError:
+        # Poucas amostras distintas — cai para menos bins.
+        n_bins = min(5, ranks.nunique())
+        sub_labels = labels[:n_bins] if ascending else list(reversed(labels[:n_bins]))
+        binned = pd.qcut(ranks, q=n_bins, labels=sub_labels, duplicates="drop")
+    return binned.astype(int)
+
+
+def _assign_segment(row: pd.Series) -> str:
+    r_score = int(row["r_score"])
+    f_score = int(row["f_score"])
+    m_score = int(row["m_score"])
+    scope = {"r_score": r_score, "f_score": f_score, "m_score": m_score}
+    for name, expr in _RFM_SEGMENT_RULES:
+        if eval(expr, {"__builtins__": {}}, scope):  # noqa: S307 — expr é hardcoded
+            return name
+    return "Others"
+
+
+def rfm_scores(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.DataFrame:
+    """RFM por comprador único no período + segmento textual.
+
+    Args:
+        conn: conexão SQLite aberta.
+        date_from: início inclusivo (ISO 8601).
+        date_to: fim exclusivo — usado como "hoje" no cálculo de recency.
+
+    Returns:
+        DataFrame com uma linha por buyer_id e colunas:
+        buyer_id, recency_dias, frequency, monetary, r_score, f_score,
+        m_score, segmento (Champions | Loyal | At Risk | New | Hibernating | Others).
+
+    Scores 1-5 via quintis dentro da base do período. Segmentação por regras
+    ordenadas (primeira que casar vence).
+    """
+    query = """
+        SELECT
+            buyer_id,
+            MAX(date_closed)         AS ultima_compra,
+            COUNT(*)                 AS frequency,
+            ROUND(SUM(total_amount), 2) AS monetary
+        FROM orders
+        WHERE status = 'paid'
+          AND buyer_id IS NOT NULL
+          AND date_closed >= ?
+          AND date_closed <  ?
+        GROUP BY buyer_id
+    """
+    df = pd.read_sql_query(query, conn, params=(date_from, date_to))
+    if df.empty:
+        return pd.DataFrame(columns=_RFM_COLUMNS)
+
+    # Recency em dias — usa parte de data (10 primeiros chars) de date_to como referência.
+    date_to_ts = pd.Timestamp(date_to[:10])
+    ultima_ts = pd.to_datetime(df["ultima_compra"].str[:10])
+    df["recency_dias"] = (date_to_ts - ultima_ts).dt.days.astype(int)
+
+    # Scores: recency menor = melhor → ascending=False (maior recency_dias → score 1).
+    df["r_score"] = _score_by_quintile(df["recency_dias"], ascending=False)
+    df["f_score"] = _score_by_quintile(df["frequency"], ascending=True)
+    df["m_score"] = _score_by_quintile(df["monetary"], ascending=True)
+
+    df["segmento"] = df.apply(_assign_segment, axis=1)
+
+    return df[_RFM_COLUMNS]
