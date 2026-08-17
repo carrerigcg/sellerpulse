@@ -101,7 +101,7 @@ def _score_by_quintile(series: pd.Series, ascending: bool = True) -> pd.Series:
     except ValueError:
         # Poucas amostras distintas — cai para menos bins.
         n_bins = min(5, ranks.nunique())
-        sub_labels = labels[:n_bins] if ascending else list(reversed(labels[:n_bins]))
+        sub_labels = labels[:n_bins]
         binned = pd.qcut(ranks, q=n_bins, labels=sub_labels, duplicates="drop")
     return binned.astype(int)
 

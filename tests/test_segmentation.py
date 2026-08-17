@@ -95,7 +95,7 @@ def abc_conn() -> sqlite3.Connection:
 
 @pytest.fixture
 def rfm_conn() -> sqlite3.Connection:
-    """Cenário controlado para RFM: 5 buyers com perfis distintos.
+    """Cenário controlado para RFM: 6 buyers com perfis distintos.
 
     Base: janela date_from='2026-05-01' até date_to='2026-08-01' (92 dias).
     date_to funciona como "hoje" para cálculo de recency.
@@ -105,6 +105,7 @@ def rfm_conn() -> sqlite3.Connection:
     Buyer 3 (At Risk):  3 compras alto valor, última em maio  → R baixo, F/M médios
     Buyer 4 (New):      1 compra em jul                        → R alto, F baixo
     Buyer 5 (Hibernating): 1 compra pequena em maio           → tudo baixo
+    Buyer 6 (Others):   2 compras mid-tier em jun              → R/F/M médios, sem regra nomeada
     """
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
@@ -137,6 +138,9 @@ def rfm_conn() -> sqlite3.Connection:
         (4, "2026-07-25T10:00:00", 150),
         # Buyer 5 — Hibernating (1 compra pequena, faz tempo)
         (5, "2026-05-02T10:00:00", 50),
+        # Buyer 6 — Others (mid-tier em tudo: sem regra nomeada casa)
+        (6, "2026-06-15T10:00:00", 250),
+        (6, "2026-06-25T10:00:00", 250),
     ]
     for oid, (buyer, date_closed, total) in enumerate(orders_by_buyer, start=1):
         conn.execute(
@@ -220,9 +224,9 @@ def test_rfm_returns_expected_columns(rfm_conn: sqlite3.Connection) -> None:
 
 def test_rfm_one_row_per_buyer(rfm_conn: sqlite3.Connection) -> None:
     df = rfm_scores(rfm_conn, "2026-05-01", "2026-08-01")
-    # Fixture tem 5 buyers distintos.
-    assert len(df) == 5
-    assert df["buyer_id"].nunique() == 5
+    # Fixture tem 6 buyers distintos.
+    assert len(df) == 6
+    assert df["buyer_id"].nunique() == 6
 
 
 def test_rfm_scores_are_in_range_1_to_5(rfm_conn: sqlite3.Connection) -> None:
@@ -264,6 +268,13 @@ def test_rfm_buyer4_is_new(rfm_conn: sqlite3.Connection) -> None:
     df = rfm_scores(rfm_conn, "2026-05-01", "2026-08-01")
     buyer4_seg = df.loc[df["buyer_id"] == 4, "segmento"].iloc[0]
     assert buyer4_seg == "New"
+
+
+def test_rfm_others_segment_covers_mid_tier(rfm_conn: sqlite3.Connection) -> None:
+    """Buyer com R/F/M mid-tier não casa nenhuma regra nomeada → Others."""
+    df = rfm_scores(rfm_conn, "2026-05-01", "2026-08-01")
+    buyer6_seg = df.loc[df["buyer_id"] == 6, "segmento"].iloc[0]
+    assert buyer6_seg == "Others"
 
 
 def test_rfm_empty_window_returns_empty_df(rfm_conn: sqlite3.Connection) -> None:
