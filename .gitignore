@@ -27,3 +27,6 @@ Thumbs.db
 
 # Working notes (implementation plans stay local)
 docs/plans/
+
+# Git worktrees for isolated feature work
+.worktrees/
