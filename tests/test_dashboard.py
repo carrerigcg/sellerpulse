@@ -18,9 +18,21 @@ def _demo_db_available() -> None:
     )
 
 
+def _page_path(filename: str) -> str:
+    """Resolve an absolute path to a dashboard page file."""
+    return str(Path(__file__).parent.parent / "src" / "pages" / filename)
+
+
 def test_executive_page_loads() -> None:
-    page = Path(__file__).parent.parent / "src" / "pages" / "1_executive.py"
-    at = AppTest.from_file(str(page))
+    at = AppTest.from_file(_page_path("1_executive.py"))
+    at.session_state["date_from"] = "2026-05-01"
+    at.session_state["date_to"] = "2026-08-01"
+    at.run(timeout=15)
+    assert not at.exception, f"Page raised: {at.exception}"
+
+
+def test_products_page_loads() -> None:
+    at = AppTest.from_file(_page_path("2_products.py"))
     at.session_state["date_from"] = "2026-05-01"
     at.session_state["date_to"] = "2026-08-01"
     at.run(timeout=15)
