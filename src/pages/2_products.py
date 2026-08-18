@@ -8,8 +8,11 @@ segmentation.cohort_produto.
 from __future__ import annotations
 
 import sqlite3
+import sys
 from datetime import date, timedelta
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import pandas as pd
 import plotly.express as px
