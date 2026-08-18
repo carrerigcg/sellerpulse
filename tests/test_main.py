@@ -206,12 +206,6 @@ def test_cmd_gerar_pdf_respects_output_flag(monkeypatch, tmp_path) -> None:
     assert captured["output_path"] == Path("custom/dir/meu.pdf")
 
 
-def test_main_abrir_dashboard_returns_not_implemented(capsys) -> None:
-    rc = main(["abrir-dashboard"])
-    assert rc == 0
-    assert "não implementado" in capsys.readouterr().out.lower()
-
-
 def test_main_without_subcommand_prints_help(capsys) -> None:
     rc = main([])
     assert rc == 1
@@ -228,3 +222,40 @@ def test_main_regerar_dados_creates_demo_db(tmp_path, monkeypatch) -> None:
     # Pin exact size: regression sentinel — if generator changes without
     # regenerating the versioned data/demo.db, CI catches the drift.
     assert demo_path.stat().st_size == 278528
+
+
+def test_cmd_abrir_dashboard_invokes_streamlit(monkeypatch):
+    """abrir-dashboard chama `streamlit run src/dashboard.py` via subprocess."""
+    from src import main as main_mod
+
+    captured: dict = {}
+
+    class _FakeResult:
+        returncode = 0
+
+    def _fake_run(cmd, check):
+        captured["cmd"] = cmd
+        captured["check"] = check
+        return _FakeResult()
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    exit_code = main_mod.main(["abrir-dashboard"])
+    assert exit_code == 0
+    assert captured["cmd"] == ["streamlit", "run", "src/dashboard.py"]
+    assert captured["check"] is False
+
+
+def test_cmd_abrir_dashboard_reports_missing_streamlit(monkeypatch, capsys):
+    """Quando streamlit não está no PATH, retorna 1 e imprime erro."""
+    from src import main as main_mod
+
+    def _fake_run(cmd, check):
+        raise FileNotFoundError("streamlit")
+
+    monkeypatch.setattr("subprocess.run", _fake_run)
+
+    exit_code = main_mod.main(["abrir-dashboard"])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert "streamlit" in captured.err.lower()
