@@ -37,3 +37,11 @@ def test_products_page_loads() -> None:
     at.session_state["date_to"] = "2026-08-01"
     at.run(timeout=15)
     assert not at.exception, f"Page raised: {at.exception}"
+
+
+def test_customers_page_loads() -> None:
+    at = AppTest.from_file(_page_path("3_customers.py"))
+    at.session_state["date_from"] = "2026-05-01"
+    at.session_state["date_to"] = "2026-08-01"
+    at.run(timeout=15)
+    assert not at.exception, f"Page raised: {at.exception}"
