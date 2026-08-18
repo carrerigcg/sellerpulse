@@ -35,17 +35,20 @@ def _render_sidebar() -> None:
     st.sidebar.divider()
 
     # Toggle Demo/Real — Real desabilitado nesta fase.
-    # st.radio não desabilita opções individuais; usamos captions para sinalizar.
-    modo = st.sidebar.radio(
+    # Guard roda ANTES da instanciação do widget — Streamlit >= 1.29 proíbe
+    # escrever em st.session_state[key] após o widget com aquele key ter sido
+    # criado no mesmo run (levanta StreamlitAPIException).
+    if st.session_state.get("sidebar_modo") == "Real":
+        st.session_state["sidebar_modo"] = "Demo"
+        st.sidebar.warning("Modo Real não disponível nesta versão — voltando para Demo.")
+
+    st.sidebar.radio(
         "Modo",
         options=["Demo", "Real"],
         index=0,
         captions=["Dados sintéticos versionados", "Configure data/business.db para habilitar"],
         key="sidebar_modo",
     )
-    if modo == "Real":
-        st.sidebar.warning("Modo Real não disponível nesta versão — voltando para Demo.")
-        st.session_state["sidebar_modo"] = "Demo"
 
     st.sidebar.selectbox(
         "Categoria",

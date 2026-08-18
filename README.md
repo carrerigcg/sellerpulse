@@ -11,6 +11,14 @@ Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos vi
 
 ---
 
+## Dashboard
+
+![Dashboard SellerPulse](docs/img/dashboard.png)
+
+_Screenshot capturado localmente rodando `python -m src.main abrir-dashboard`._
+
+---
+
 ## 📊 Status atual
 
 | Módulo | Estado |
@@ -155,10 +163,10 @@ sellerpulse/
 │   ├── demo_data.py         # gerador de dados sintéticos (seed fixa)
 │   ├── metrics.py           # cálculos financeiros e operacionais
 │   ├── pdf_renderer.py      # HTML + WeasyPrint → PDF
-│   ├── segmentation.py      # ABC, RFM, cohort                                 [TODO]
+│   ├── segmentation.py      # ABC, RFM, cohort                                 [✅]
 │   ├── forecasting.py       # ARIMA, detecção de anomalias                    [TODO]
 │   ├── patrimony.py         # simulador de reinvestimento                     [TODO]
-│   └── dashboard.py         # app Streamlit                                    [TODO]
+│   └── dashboard.py         # app Streamlit                                    [✅]
 ├── templates/
 │   └── relatorio.html.j2    # template Jinja2 do PDF executivo
 ├── tests/                   # pytest — 84 testes cobrindo auth, ml_client, storage, main, demo_data, metrics, pdf_renderer

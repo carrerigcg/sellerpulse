@@ -243,6 +243,20 @@ def test_rfm_buyer1_is_champion(rfm_conn: sqlite3.Connection) -> None:
     assert buyer1_seg == "Champions"
 
 
+def test_rfm_buyer2_is_loyal(rfm_conn: sqlite3.Connection) -> None:
+    """Buyer com 4 compras e gasto médio mas recente → f_score>=4 e m_score>=3 → Loyal.
+
+    Scores realizados na fixture (janela 2026-05-01..2026-08-01):
+      recency=22d → r_score=4, frequency=4 → f_score=4, monetary=1100 → m_score=3.
+    Não ativa Champions (exige m_score>=4); primeira regra que casa é Loyal.
+    """
+    df = rfm_scores(rfm_conn, "2026-05-01", "2026-08-01")
+    buyer2 = df.loc[df["buyer_id"] == 2].iloc[0]
+    assert int(buyer2["f_score"]) >= 4, f"f_score esperado >=4, obtido {buyer2['f_score']}"
+    assert int(buyer2["m_score"]) >= 3, f"m_score esperado >=3, obtido {buyer2['m_score']}"
+    assert buyer2["segmento"] == "Loyal"
+
+
 def test_rfm_buyer5_is_hibernating(rfm_conn: sqlite3.Connection) -> None:
     """Buyer com R/F/M mais baixos deve virar Hibernating."""
     df = rfm_scores(rfm_conn, "2026-05-01", "2026-08-01")
