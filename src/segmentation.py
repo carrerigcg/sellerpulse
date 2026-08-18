@@ -163,3 +163,73 @@ def rfm_scores(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
     df["segmento"] = df.apply(_assign_segment, axis=1)
 
     return df[_RFM_COLUMNS]
+
+
+def cohort_produto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.DataFrame:
+    """Cohort de produtos por mês de lançamento — agregado.
+
+    "Mês de lançamento" = menor date_closed do produto **no banco inteiro**
+    (não apenas na janela). Cada linha do resultado é um grupo de produtos que
+    tiveram primeira venda no mesmo mês.
+
+    Args:
+        conn: conexão SQLite aberta.
+        date_from: início inclusivo (ISO 8601).
+        date_to: fim exclusivo.
+
+    Returns:
+        DataFrame pivot:
+        - Index: mes_lancamento (str "YYYY-MM")
+        - Columns: mes_corrente (str "YYYY-MM"), ordenadas cronologicamente
+        - Values: soma de receita do cohort naquele mês corrente (float)
+        - NaN acima da diagonal (mes_corrente < mes_lancamento)
+        DataFrame vazio se nenhuma venda no período.
+    """
+    # 1) Mapa item_id → mês de lançamento (banco inteiro, não apenas janela).
+    launch_query = """
+        SELECT
+            oi.item_id,
+            strftime('%Y-%m', MIN(o.date_closed)) AS mes_lancamento
+        FROM order_items oi
+        JOIN orders o ON o.order_id = oi.order_id
+        WHERE o.status = 'paid'
+        GROUP BY oi.item_id
+    """
+    launches = pd.read_sql_query(launch_query, conn)
+    if launches.empty:
+        return pd.DataFrame()
+
+    # 2) Receita por item × mês corrente na janela.
+    revenue_query = """
+        SELECT
+            oi.item_id,
+            strftime('%Y-%m', o.date_closed)              AS mes_corrente,
+            ROUND(SUM(oi.quantity * oi.unit_price), 2)    AS receita
+        FROM order_items oi
+        JOIN orders o ON o.order_id = oi.order_id
+        WHERE o.status = 'paid'
+          AND o.date_closed >= ?
+          AND o.date_closed <  ?
+        GROUP BY oi.item_id, mes_corrente
+    """
+    revenue = pd.read_sql_query(revenue_query, conn, params=(date_from, date_to))
+    if revenue.empty:
+        return pd.DataFrame()
+
+    # 3) Join + agregação por (mes_lancamento, mes_corrente).
+    merged = revenue.merge(launches, on="item_id", how="left")
+    agg = (
+        merged.groupby(["mes_lancamento", "mes_corrente"], as_index=False)["receita"]
+        .sum()
+        .round(2)
+    )
+
+    # 4) Pivot para o formato triangular.
+    pivot = agg.pivot(index="mes_lancamento", columns="mes_corrente", values="receita")
+    pivot.index.name = "mes_lancamento"
+    pivot.columns.name = "mes_corrente"
+
+    # 5) Garantir ordenação cronológica e recorte "só janela para colunas".
+    pivot = pivot.sort_index(axis=0).sort_index(axis=1)
+
+    return pivot

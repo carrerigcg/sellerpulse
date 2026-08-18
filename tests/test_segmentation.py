@@ -290,3 +290,91 @@ def test_rfm_empty_window_returns_empty_df(rfm_conn: sqlite3.Connection) -> None
         "m_score",
         "segmento",
     }
+
+
+@pytest.fixture
+def cohort_conn() -> sqlite3.Connection:
+    """Cenário controlado para cohort:
+    - Produto P1 lança em jan/2026, vende em jan/fev/mar
+    - Produto P2 lança em fev/2026, vende em fev/mar
+    - Produto P3 lança em mar/2026, vende só em mar
+    Não deve haver célula acima da diagonal (cada produto só vende após o lançamento).
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seed_minimal_schema(conn)
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('C', 'Cat')")
+    for pid in ["P1", "P2", "P3"]:
+        conn.execute(
+            "INSERT INTO items_cache (item_id, title, category_id) VALUES (?, ?, 'C')",
+            (pid, f"Prod {pid}"),
+        )
+    orders: list[tuple[int, str, str, float]] = [
+        # (order_id, date_closed, item_id, unit_price)
+        (1, "2026-01-15T10:00:00", "P1", 100),
+        (2, "2026-02-10T10:00:00", "P1", 200),
+        (3, "2026-02-20T10:00:00", "P2", 300),
+        (4, "2026-03-05T10:00:00", "P1", 150),
+        (5, "2026-03-10T10:00:00", "P2", 350),
+        (6, "2026-03-20T10:00:00", "P3", 400),
+    ]
+    for oid, date_closed, item_id, unit_price in orders:
+        conn.execute(
+            "INSERT INTO orders (order_id, date_closed, status, total_amount, buyer_id) "
+            "VALUES (?, ?, 'paid', ?, 999)",
+            (oid, date_closed, unit_price),
+        )
+        conn.execute(
+            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) "
+            "VALUES (?, ?, 1, ?)",
+            (oid, item_id, unit_price),
+        )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+from src.segmentation import cohort_produto  # noqa: E402
+
+
+def test_cohort_returns_pivot_dataframe(cohort_conn: sqlite3.Connection) -> None:
+    df = cohort_produto(cohort_conn, "2026-01-01", "2026-04-01")
+    assert isinstance(df, pd.DataFrame)
+    # Index = meses de lançamento; colunas = meses correntes.
+    assert df.index.name == "mes_lancamento"
+    # 3 cohorts (jan, fev, mar) e 3 meses correntes (jan, fev, mar).
+    assert list(df.index) == ["2026-01", "2026-02", "2026-03"]
+    assert list(df.columns) == ["2026-01", "2026-02", "2026-03"]
+
+
+def test_cohort_upper_triangle_is_nan(cohort_conn: sqlite3.Connection) -> None:
+    """Produto não vende antes de existir — células acima da diagonal são NaN."""
+    df = cohort_produto(cohort_conn, "2026-01-01", "2026-04-01")
+    # Cohort fev não pode ter valor em jan; cohort mar não pode em jan/fev.
+    assert pd.isna(df.loc["2026-02", "2026-01"])
+    assert pd.isna(df.loc["2026-03", "2026-01"])
+    assert pd.isna(df.loc["2026-03", "2026-02"])
+
+
+def test_cohort_diagonal_matches_launch_month_revenue(cohort_conn: sqlite3.Connection) -> None:
+    """Célula (mes_lancamento=X, mes_corrente=X) = receita total do cohort em X."""
+    df = cohort_produto(cohort_conn, "2026-01-01", "2026-04-01")
+    # P1 lança em jan e vende 100 em jan → cohort_jan em jan = 100.
+    assert df.loc["2026-01", "2026-01"] == pytest.approx(100)
+    # P2 lança em fev com 300 → cohort_fev em fev = 300.
+    assert df.loc["2026-02", "2026-02"] == pytest.approx(300)
+    # P3 lança em mar com 400 → cohort_mar em mar = 400.
+    assert df.loc["2026-03", "2026-03"] == pytest.approx(400)
+
+
+def test_cohort_p1_receita_across_months(cohort_conn: sqlite3.Connection) -> None:
+    """Cohort jan (só P1) tem 100 em jan, 200 em fev, 150 em mar."""
+    df = cohort_produto(cohort_conn, "2026-01-01", "2026-04-01")
+    assert df.loc["2026-01", "2026-01"] == pytest.approx(100)
+    assert df.loc["2026-01", "2026-02"] == pytest.approx(200)
+    assert df.loc["2026-01", "2026-03"] == pytest.approx(150)
+
+
+def test_cohort_empty_window_returns_empty_df(cohort_conn: sqlite3.Connection) -> None:
+    df = cohort_produto(cohort_conn, "2020-01-01", "2020-01-02")
+    assert df.empty
