@@ -219,9 +219,7 @@ def cohort_produto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd
     # 3) Join + agregação por (mes_lancamento, mes_corrente).
     merged = revenue.merge(launches, on="item_id", how="left")
     agg = (
-        merged.groupby(["mes_lancamento", "mes_corrente"], as_index=False)["receita"]
-        .sum()
-        .round(2)
+        merged.groupby(["mes_lancamento", "mes_corrente"], as_index=False)["receita"].sum().round(2)
     )
 
     # 4) Pivot para o formato triangular.

@@ -58,9 +58,7 @@ def abc_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
     _seed_minimal_schema(conn)
-    conn.execute(
-        "INSERT INTO categories_cache (category_id, name) VALUES ('CAT1', 'Cat Um')"
-    )
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('CAT1', 'Cat Um')")
     for item_id, title in [
         ("A", "Prod A"),
         ("B", "Prod B"),
@@ -111,12 +109,8 @@ def rfm_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     _seed_minimal_schema(conn)
     # Um único item para simplificar (não usa items_cache aqui, mas mantém consistência).
-    conn.execute(
-        "INSERT INTO categories_cache (category_id, name) VALUES ('C', 'Cat')"
-    )
-    conn.execute(
-        "INSERT INTO items_cache (item_id, title, category_id) VALUES ('X', 'X', 'C')"
-    )
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('C', 'Cat')")
+    conn.execute("INSERT INTO items_cache (item_id, title, category_id) VALUES ('X', 'X', 'C')")
     orders_by_buyer: list[tuple[int, str, float]] = [
         # (buyer_id, date_closed, total_amount)
         # Buyer 1 — Champion (5 compras, gasto alto, recente)
@@ -325,8 +319,7 @@ def cohort_conn() -> sqlite3.Connection:
             (oid, date_closed, unit_price),
         )
         conn.execute(
-            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) "
-            "VALUES (?, ?, 1, ?)",
+            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) VALUES (?, ?, 1, ?)",
             (oid, item_id, unit_price),
         )
     conn.commit()

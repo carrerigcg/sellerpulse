@@ -27,9 +27,7 @@ def _render_sidebar() -> None:
 
     default_to = date.today()
     default_from = default_to - timedelta(days=90)
-    date_from = st.sidebar.date_input(
-        "Início", value=default_from, key="sidebar_date_from"
-    )
+    date_from = st.sidebar.date_input("Início", value=default_from, key="sidebar_date_from")
     date_to = st.sidebar.date_input("Fim", value=default_to, key="sidebar_date_to")
     st.session_state["date_from"] = date_from.isoformat()
     st.session_state["date_to"] = date_to.isoformat()

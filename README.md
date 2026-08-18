@@ -7,7 +7,7 @@ Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos vi
 [![tests](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml/badge.svg)](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-v0.1.0--alpha-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)
 
 ---
 
@@ -19,9 +19,11 @@ Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos vi
 | Persistência SQLite com UPSERTs idempotentes (`storage.py`) | ✅ Pronto |
 | Orquestrador CLI de ingestão (`main.py`) | ✅ Pronto |
 | Dados sintéticos reprodutíveis (`demo_data.py`) | ✅ Pronto — `data/demo.db` versionado, determinístico via seed 42 |
-| Camada analítica pura (`metrics.py`, `segmentation.py`, `forecasting.py`, `patrimony.py`) | 🚧 Em construção |
+| Camada de métricas (`metrics.py`) | ✅ Pronto — Fase 1 |
+| Camada de segmentação (`segmentation.py`) — ABC, RFM, cohort | ✅ Pronto — Fase 2 |
+| Camadas de forecasting + patrimony (`forecasting.py`, `patrimony.py`) | 🚧 Em construção |
 | Renderizador de PDF executivo (`pdf_renderer.py`) | 🚧 Em construção — mockup visual em `mockup/relatorio.html` |
-| Dashboard Streamlit (`dashboard.py`) | 🚧 Em construção |
+| Dashboard Streamlit (`dashboard.py`) — 3 páginas navegáveis local | ✅ Pronto — Fase 2 |
 | Notebooks Jupyter narrativos (`notebooks/`) | 🚧 Em construção |
 | CI GitHub Actions | ✅ Pronto — matrix py3.11 × ubuntu/windows, ruff + pytest |
 

@@ -13,9 +13,7 @@ from streamlit.testing.v1 import AppTest
 @pytest.fixture(scope="session", autouse=True)
 def _demo_db_available() -> None:
     """Garante que data/demo.db existe antes de rodar qualquer smoke test."""
-    assert Path("data/demo.db").exists(), (
-        "Rode `python -m src.main regerar-dados` antes."
-    )
+    assert Path("data/demo.db").exists(), "Rode `python -m src.main regerar-dados` antes."
 
 
 def _page_path(filename: str) -> str:

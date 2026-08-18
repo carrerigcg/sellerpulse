@@ -74,9 +74,7 @@ def _render_pareto(abc: pd.DataFrame) -> None:
         st.info("Sem dados no período.")
         return
     fig = go.Figure()
-    fig.add_trace(
-        go.Bar(x=abc["sku"], y=abc["receita"], name="Receita", marker_color="#1f77b4")
-    )
+    fig.add_trace(go.Bar(x=abc["sku"], y=abc["receita"], name="Receita", marker_color="#1f77b4"))
     fig.add_trace(
         go.Scatter(
             x=abc["sku"],

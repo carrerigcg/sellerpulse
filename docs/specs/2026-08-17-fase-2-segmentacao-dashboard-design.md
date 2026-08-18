@@ -236,15 +236,18 @@ Fixture compartilhada `sample_db` (segue padrão de `tests/test_metrics.py`) —
 ```python
 from streamlit.testing.v1 import AppTest
 
+
 def test_executive_page_loads():
     at = AppTest.from_file("src/pages/1_executive.py")
     at.run(timeout=10)
     assert not at.exception
 
+
 def test_products_page_loads():
     at = AppTest.from_file("src/pages/2_products.py")
     at.run(timeout=10)
     assert not at.exception
+
 
 def test_customers_page_loads():
     at = AppTest.from_file("src/pages/3_customers.py")
