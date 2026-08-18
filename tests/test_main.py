@@ -242,7 +242,7 @@ def test_cmd_abrir_dashboard_invokes_streamlit(monkeypatch):
 
     exit_code = main_mod.main(["abrir-dashboard"])
     assert exit_code == 0
-    assert captured["cmd"] == ["streamlit", "run", "src/dashboard.py"]
+    assert captured["cmd"] == ["streamlit", "run", str(main_mod._DASHBOARD_PATH)]
     assert captured["check"] is False
 
 

@@ -293,12 +293,15 @@ def _cmd_gerar_pdf(args: argparse.Namespace) -> int:
     return 0
 
 
+_DASHBOARD_PATH = Path(__file__).parent / "dashboard.py"
+
+
 def _cmd_abrir_dashboard(_args: argparse.Namespace) -> int:
     import subprocess
 
     try:
         result = subprocess.run(
-            ["streamlit", "run", "src/dashboard.py"],
+            ["streamlit", "run", str(_DASHBOARD_PATH)],
             check=False,
         )
         return result.returncode
