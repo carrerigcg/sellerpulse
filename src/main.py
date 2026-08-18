@@ -293,9 +293,24 @@ def _cmd_gerar_pdf(args: argparse.Namespace) -> int:
     return 0
 
 
+_DASHBOARD_PATH = Path(__file__).parent / "dashboard.py"
+
+
 def _cmd_abrir_dashboard(_args: argparse.Namespace) -> int:
-    print("Não implementado — chega na Fase 2 (v0.3.0).")
-    return 0
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["streamlit", "run", str(_DASHBOARD_PATH)],
+            check=False,
+        )
+        return result.returncode
+    except FileNotFoundError:
+        print(
+            "ERRO: `streamlit` não encontrado no PATH. Rode `pip install -r requirements.txt`.",
+            file=sys.stderr,
+        )
+        return 1
 
 
 _DISPATCH = {
