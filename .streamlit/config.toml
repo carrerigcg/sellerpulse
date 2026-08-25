@@ -1,0 +1,14 @@
+# Tema base do Streamlit. Cobre os widgets nativos que o CSS de src/theme.py
+# não alcança e evita o flash de tela branca antes do CSS ser injetado.
+# Os valores espelham COLORS em src/theme.py — mudou lá, muda aqui.
+
+[theme]
+base = "dark"
+primaryColor = "#3b82f6"
+backgroundColor = "#051431"
+secondaryBackgroundColor = "#0a1f3d"
+textColor = "#e8eef7"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
