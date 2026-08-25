@@ -53,3 +53,22 @@ def test_icon_html_produz_svg_com_a_cor_de_acento() -> None:
     assert markup.startswith("<svg")
     assert theme.COLORS["accent"] in markup
     assert 'viewBox="0 0 24 24"' in markup
+
+
+def test_build_css_referencia_os_tokens_principais() -> None:
+    css = theme.build_css()
+    for token in ("bg", "surface", "surface_raised", "text", "accent"):
+        assert theme.COLORS[token] in css, f"token {token} ausente do CSS"
+
+
+def test_build_css_da_cores_distintas_as_pilulas_de_delta() -> None:
+    css = theme.build_css()
+    assert ".sp-kpi__delta.is-positive" in css
+    assert ".sp-kpi__delta.is-negative" in css
+    assert theme.COLORS["positive"] in css
+    assert theme.COLORS["negative"] in css
+
+
+def test_build_css_comeca_pelo_import_da_fonte() -> None:
+    # @import só vale se for a primeira regra da folha de estilo.
+    assert theme.build_css().lstrip().startswith("@import")

@@ -12,6 +12,8 @@ Streamlit (são o que os testes exercitam); as demais renderizam.
 
 from __future__ import annotations
 
+import streamlit as st
+
 # ---------------------------------------------------------------------------
 # SELETORES FRÁGEIS DO STREAMLIT
 #
@@ -100,3 +102,127 @@ def icon_html(name: str, size: int = 20, color: str | None = None) -> str:
         f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
         f"{ICONS[name]}</svg>"
     )
+
+
+def build_css() -> str:
+    """Folha de estilo completa do dashboard, como string.
+
+    Separada de `inject_css` para poder ser testada sem runtime do Streamlit.
+    """
+    c = COLORS
+    return f"""@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {{
+  --sp-bg: {c["bg"]};
+  --sp-surface: {c["surface"]};
+  --sp-raised: {c["surface_raised"]};
+  --sp-border: {c["border"]};
+  --sp-text: {c["text"]};
+  --sp-muted: {c["text_muted"]};
+  --sp-accent: {c["accent"]};
+  --sp-gold: {c["gold"]};
+  --sp-positive: {c["positive"]};
+  --sp-negative: {c["negative"]};
+  --sp-radius: 12px;
+}}
+
+/* ---- superfícies base ---- */
+[data-testid="stAppViewContainer"] {{ background: var(--sp-bg); }}
+[data-testid="stHeader"] {{ background: transparent; }}
+/* Esconde o botão Deploy e o menu — ruído em screenshot de portfólio. */
+[data-testid="stToolbar"] {{ display: none; }}
+[data-testid="stSidebar"] {{
+  background: var(--sp-surface);
+  border-right: 1px solid var(--sp-border);
+}}
+
+html, body, [data-testid="stAppViewContainer"] {{
+  font-family: {FONT_STACK};
+  color: var(--sp-text);
+}}
+
+/* ---- cartões: st.container(border=True) ---- */
+[data-testid="stVerticalBlockBorderWrapper"] {{
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius);
+  padding: 18px 20px;
+}}
+.sp-card__head {{ display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }}
+.sp-card__title {{ font-size: .95rem; font-weight: 600; color: var(--sp-text); }}
+.sp-card__subtitle {{ font-size: .78rem; color: var(--sp-muted); }}
+
+/* ---- cabeçalho de página ---- */
+.sp-header {{ margin: 0 0 20px; }}
+.sp-header__title {{
+  font-size: 1.8rem; font-weight: 700; margin: 0;
+  color: var(--sp-text); letter-spacing: -.02em;
+}}
+.sp-header__subtitle {{ margin: 4px 0 0; font-size: .95rem; color: var(--sp-muted); }}
+.sp-pill {{
+  display: inline-block; margin-top: 10px; padding: 3px 10px;
+  font-size: .72rem; color: var(--sp-muted);
+  border: 1px solid var(--sp-border); border-radius: 999px;
+}}
+
+/* ---- tiles de KPI ---- */
+.sp-kpi-grid {{
+  display: grid; gap: 14px; margin: 2px 0 22px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}}
+.sp-kpi {{
+  background: var(--sp-raised); border: 1px solid var(--sp-border);
+  border-radius: var(--sp-radius); padding: 16px 18px;
+}}
+.sp-kpi__icon {{ line-height: 0; margin-bottom: 10px; }}
+.sp-kpi__value {{
+  font-size: 1.7rem; font-weight: 600; color: var(--sp-text);
+  letter-spacing: -.01em; font-feature-settings: "tnum";
+}}
+.sp-kpi__label {{
+  margin-top: 4px; font-size: .7rem; color: var(--sp-muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}}
+.sp-kpi__delta {{
+  display: inline-block; margin-top: 10px; padding: 2px 8px;
+  font-size: .72rem; font-weight: 600; border-radius: 999px;
+}}
+.sp-kpi__delta.is-positive {{ color: var(--sp-positive); background: rgba(52,211,153,.12); }}
+.sp-kpi__delta.is-negative {{ color: var(--sp-negative); background: rgba(248,113,113,.12); }}
+.sp-kpi__delta.is-neutral  {{ color: var(--sp-muted);    background: rgba(148,163,184,.12); }}
+
+/* ---- marca na sidebar ---- */
+.sp-brand {{ padding: 4px 0 14px; }}
+.sp-brand__name {{
+  font-size: 1.25rem; font-weight: 700;
+  color: var(--sp-text); letter-spacing: -.02em;
+}}
+.sp-brand__name em {{ font-style: normal; color: var(--sp-accent); }}
+.sp-brand__version {{
+  margin-top: 2px; font-size: .68rem; color: var(--sp-muted);
+  text-transform: uppercase; letter-spacing: .08em;
+}}
+
+/* ---- capa da home ---- */
+.sp-cover {{ padding: 26px 0 30px; }}
+.sp-cover__name {{
+  font-size: 2.6rem; font-weight: 700;
+  color: var(--sp-text); letter-spacing: -.03em;
+}}
+.sp-cover__name em {{ font-style: normal; color: var(--sp-accent); }}
+.sp-cover__tagline {{ margin: 6px 0 0; font-size: 1rem; color: var(--sp-muted); }}
+
+/* ---- cartões de navegação da home ---- */
+.sp-nav__icon {{ line-height: 0; margin-bottom: 10px; }}
+.sp-nav__title {{ font-size: 1.05rem; font-weight: 600; color: var(--sp-text); }}
+.sp-nav__desc {{ margin-top: 4px; min-height: 40px; font-size: .85rem; color: var(--sp-muted); }}
+"""
+
+
+def inject_css() -> None:
+    """Injeta a folha de estilo. Chamar UMA vez, no topo de cada página.
+
+    Chamar duas vezes no mesmo run só emite um segundo bloco <style> idêntico
+    — inofensivo (as regras são as mesmas), mas desnecessário.
+    """
+    st.markdown(f"<style>{build_css()}</style>", unsafe_allow_html=True)
