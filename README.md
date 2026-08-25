@@ -13,9 +13,29 @@ Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos vi
 
 ## Dashboard
 
-![Dashboard SellerPulse](docs/img/dashboard.png)
+![Home do SellerPulse](docs/img/dashboard-home.png)
 
 _Screenshot capturado localmente rodando `python -m src.main abrir-dashboard`._
+
+<details>
+<summary>Mais telas</summary>
+
+**Executive Summary** — receita, custos e resultado líquido, com variação sobre a janela anterior:
+
+![Executive Summary](docs/img/dashboard-executive.png)
+
+**Product Analytics** — top produtos por receita/unidades, curva Pareto ABC e cohort mensal por produto:
+
+![Product Analytics](docs/img/dashboard-products.png)
+![Curva Pareto ABC](docs/img/dashboard-products-pareto.png)
+![Cohort por mês de lançamento](docs/img/dashboard-products-cohort.png)
+
+**Customer Analytics** — segmentação RFM dos compradores:
+
+![Customer Analytics](docs/img/dashboard-customers.png)
+![Compradores por segmento](docs/img/dashboard-customers-segments.png)
+
+</details>
 
 ---
 
