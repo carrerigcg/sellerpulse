@@ -1,8 +1,8 @@
 """Página 1 do dashboard — Executive Summary.
 
-Espelha visualmente o PDF: 4 KPI cards + fluxo financeiro (barras empilhadas
-por dia) + comparativo semana anterior. Consome apenas metrics.* — nunca
-abre SQLite direto.
+Espelha o PDF: faixa de KPIs com a variação contra a janela anterior embutida
+em cada tile + fluxo financeiro diário. Consome apenas metrics.* — nunca abre
+SQLite direto. Todo o estilo vem de src.theme.
 """
 
 from __future__ import annotations
@@ -18,9 +18,19 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from src import theme
 from src.metrics import fluxo_financeiro, reputacao_devolucao
 
 _DEMO_DB = Path("data/demo.db")
+
+_COMPONENTES = ["receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
+_ROTULOS = {
+    "receita_bruta": "Receita bruta",
+    "taxas_ml": "Taxas ML",
+    "frete": "Frete",
+    "custo_estimado": "Custo estimado",
+    "liquido": "Líquido",
+}
 
 
 def _get_window() -> tuple[str, str]:
@@ -51,90 +61,98 @@ def _load_reputacao(date_from: str, date_to: str) -> dict:
         conn.close()
 
 
-def _render_kpis(fluxo: pd.DataFrame, reput: dict) -> None:
+def _totais(fluxo: pd.DataFrame) -> tuple[float, float, float]:
+    """(receita bruta, custo total, lucro líquido) do período."""
     if fluxo.empty:
-        receita = custo = liquido = 0.0
-    else:
-        receita = float(fluxo["receita_bruta"].sum())
-        custo = float((fluxo["taxas_ml"] + fluxo["frete"] + fluxo["custo_estimado"]).sum())
-        liquido = float(fluxo["liquido"].sum())
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Receita bruta", f"R$ {receita:,.2f}")
-    col2.metric("Custo total", f"R$ {custo:,.2f}")
-    col3.metric("Lucro líquido", f"R$ {liquido:,.2f}")
-    col4.metric("Nível ML", reput.get("nivel_ml", "—"))
+        return 0.0, 0.0, 0.0
+    receita = float(fluxo["receita_bruta"].sum())
+    custo = float((fluxo["taxas_ml"] + fluxo["frete"] + fluxo["custo_estimado"]).sum())
+    liquido = float(fluxo["liquido"].sum())
+    return receita, custo, liquido
 
 
-def _render_fluxo_chart(fluxo: pd.DataFrame) -> None:
-    if fluxo.empty:
-        st.info("Sem pedidos pagos no período selecionado.")
-        return
-    tidy = fluxo.melt(
-        id_vars="date",
-        value_vars=["receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"],
-        var_name="componente",
-        value_name="valor",
-    )
-    fig = px.bar(
-        tidy,
-        x="date",
-        y="valor",
-        color="componente",
-        title="Fluxo financeiro por dia",
-        labels={"date": "Data", "valor": "R$", "componente": "Componente"},
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-
-def _render_comparativo(date_from: str, date_to: str, fluxo_atual: pd.DataFrame) -> None:
-    """Compara receita/custo/líquido com a janela imediatamente anterior."""
+def _janela_anterior(date_from: str, date_to: str) -> tuple[str, str]:
+    """Janela imediatamente anterior, de mesma duração."""
     dt_from = date.fromisoformat(date_from)
     dt_to = date.fromisoformat(date_to)
     delta_dias = (dt_to - dt_from).days
     prev_to = dt_from
     prev_from = prev_to - timedelta(days=delta_dias)
-    fluxo_prev = _load_fluxo(prev_from.isoformat(), prev_to.isoformat())
+    return prev_from.isoformat(), prev_to.isoformat()
 
-    def _sum(df: pd.DataFrame, col: str) -> float:
-        return float(df[col].sum()) if not df.empty else 0.0
 
-    receita_atual = _sum(fluxo_atual, "receita_bruta")
-    receita_prev = _sum(fluxo_prev, "receita_bruta")
-    liquido_atual = _sum(fluxo_atual, "liquido")
-    liquido_prev = _sum(fluxo_prev, "liquido")
+def _delta(atual: float, anterior: float) -> tuple[str | None, bool | None]:
+    """Variação percentual formatada + se subiu. (None, None) sem base."""
+    if anterior == 0:
+        return None, None
+    pct = 100 * (atual - anterior) / anterior
+    return f"{pct:+.1f}%", pct >= 0
 
-    def _delta_pct(atual: float, prev: float) -> str:
-        if prev == 0:
-            return "n/a"
-        return f"{100 * (atual - prev) / prev:+.1f}%"
 
-    st.subheader("Comparativo com janela anterior")
-    col1, col2 = st.columns(2)
-    col1.metric(
-        "Receita bruta",
-        f"R$ {receita_atual:,.2f}",
-        delta=_delta_pct(receita_atual, receita_prev),
+def _render_kpis(fluxo: pd.DataFrame, reput: dict, date_from: str, date_to: str) -> None:
+    receita, custo, liquido = _totais(fluxo)
+    prev_from, prev_to = _janela_anterior(date_from, date_to)
+    receita_ant, custo_ant, liquido_ant = _totais(_load_fluxo(prev_from, prev_to))
+
+    d_receita, subiu_receita = _delta(receita, receita_ant)
+    d_custo, subiu_custo = _delta(custo, custo_ant)
+    d_liquido, subiu_liquido = _delta(liquido, liquido_ant)
+
+    theme.kpi_row(
+        [
+            theme.Kpi("Receita bruta", f"R$ {receita:,.2f}", "revenue", d_receita, subiu_receita),
+            # Custo é o único KPI em que subir é resultado pior: o sinal inverte.
+            theme.Kpi(
+                "Custo total",
+                f"R$ {custo:,.2f}",
+                "cost",
+                d_custo,
+                None if subiu_custo is None else not subiu_custo,
+            ),
+            theme.Kpi("Lucro líquido", f"R$ {liquido:,.2f}", "profit", d_liquido, subiu_liquido),
+            theme.Kpi("Nível ML", str(reput.get("nivel_ml", "—")), "level"),
+        ]
     )
-    col2.metric(
-        "Lucro líquido",
-        f"R$ {liquido_atual:,.2f}",
-        delta=_delta_pct(liquido_atual, liquido_prev),
-    )
+
+
+def _render_fluxo_chart(fluxo: pd.DataFrame) -> None:
+    with theme.card("Fluxo financeiro por dia", "Composição diária de receita e custos"):
+        if fluxo.empty:
+            st.info("Sem pedidos pagos no período selecionado.")
+            return
+        tidy = fluxo.melt(
+            id_vars="date",
+            value_vars=_COMPONENTES,
+            var_name="componente",
+            value_name="valor",
+        )
+        tidy["componente"] = tidy["componente"].map(_ROTULOS)
+        fig = px.bar(
+            tidy,
+            x="date",
+            y="valor",
+            color="componente",
+            labels={"date": "", "valor": "R$", "componente": ""},
+            color_discrete_sequence=theme.CHART_SEQUENCE,
+            category_orders={"componente": [_ROTULOS[c] for c in _COMPONENTES]},
+        )
+        st.plotly_chart(theme.style_fig(fig), width="stretch")
 
 
 def _main() -> None:
+    theme.inject_css()
     date_from, date_to = _get_window()
-    st.title("Executive Summary")
-    st.caption(f"{date_from} — {date_to}")
+    theme.page_header(
+        "Executive Summary",
+        "Receita, custos e resultado do período — com variação sobre a janela anterior.",
+        f"{date_from} — {date_to}",
+    )
 
     fluxo = _load_fluxo(date_from, date_to)
     reput = _load_reputacao(date_from, date_to)
 
-    _render_kpis(fluxo, reput)
-    st.divider()
+    _render_kpis(fluxo, reput, date_from, date_to)
     _render_fluxo_chart(fluxo)
-    st.divider()
-    _render_comparativo(date_from, date_to, fluxo)
 
 
 _main()
