@@ -102,9 +102,41 @@ Módulos concretos (6 seções + 1 utilitário):
 - `src/pdf_sections/financeiro.py` — consome `metrics.fluxo_financeiro()`. Faixa = variação do mês corrente vs. média dos 5 meses anteriores.
 - `src/pdf_sections/produtos.py` — consome `metrics.top_produtos()`. **Sem faixa** — puramente descritiva.
 - `src/pdf_sections/reputacao.py` — consome `metrics.reputacao_devolucao()`. Faixa combina nível ML + taxa de devolução.
-- `src/pdf_sections/rfm.py` — consome `segmentation.rfm()`. Faixa = % da base em segmentos leais (Champions + Loyal + Potential Loyalists).
-- `src/pdf_sections/abc.py` — consome `segmentation.curva_abc()`. Faixa = % do catálogo classificado como classe A.
-- `src/pdf_sections/cohort.py` — consome `segmentation.cohort_mensal()`. Faixa = retenção média em 30 dias.
+- `src/pdf_sections/rfm.py` — consome `segmentation.rfm_scores()`. Faixa = % da base em segmentos leais (Champions + Loyal). "Potential Loyalists" **não existe** no dicionário atual de segmentos (`Champions | Loyal | At Risk | New | Hibernating | Others`); a faixa fica sobre os 2 segmentos claramente positivos.
+- `src/pdf_sections/abc.py` — consome `segmentation.abc_pareto()`. Faixa = % do catálogo classificado como classe A.
+- `src/pdf_sections/cohort.py` — consome `segmentation.cohort_compradores()` (**função nova** — ver §4.1 abaixo). Faixa = retenção média em 30 dias.
+
+### §4.1 Nova função pura em `segmentation.py`
+
+`segmentation.cohort_produto()` (existente) mede cohort de **produtos** por mês de lançamento, não retenção de compradores. Como a seção Cohort do PDF precisa de retenção de compradores em 30 dias (métrica clássica de churn), esta fase adiciona uma segunda função ao módulo — **adição pura, sem modificar nada existente**:
+
+```python
+# src/segmentation.py (adicionar)
+
+def cohort_compradores(
+    conn: sqlite3.Connection,
+    date_from: str,
+    date_to: str,
+) -> pd.DataFrame:
+    """Cohort de retenção de compradores por mês de primeira compra.
+
+    Args:
+        conn: SQLite aberto (read-only OK).
+        date_from: início inclusivo da janela de observação (YYYY-MM-DD).
+        date_to: fim exclusivo.
+
+    Returns:
+        DataFrame com uma linha por cohort mensal e colunas:
+            cohort_mes: str "YYYY-MM" — mês da primeira compra do buyer no banco inteiro.
+            n_compradores: int — tamanho do cohort (compradores únicos que estrearam no mês).
+            n_retornaram_30d: int — quantos fizeram ≥1 nova compra em até 30 dias após a primeira.
+            retencao_30d_pct: float 0-100 — arredondado a 2 casas.
+        Filtro: só considera compradores cujo cohort_mes cai dentro de [date_from, date_to).
+        DataFrame vazio (colunas presentes) se nenhum comprador se qualificar.
+    """
+```
+
+Detalhes finos (janelas de borda, buyers com null, arredondamento) ficam pro plan. O ponto travado aqui é o **contrato de assinatura + shape do output**.
 
 **`templates/sections/`** — novo diretório. 1 partial Jinja2 por seção:
 
@@ -190,7 +222,8 @@ O `_generate_pdf_on_click_only` roda `render_pdf(conn=get_active_conn(), ...)` d
 
 ### Módulos não modificados (importante)
 
-- `src/metrics.py`, `src/segmentation.py` — **zero mudanças**. A camada analítica pura continua indiferente à origem da conn e à finalidade do consumidor.
+- `src/metrics.py` — **zero mudanças**. A camada analítica pura continua indiferente à origem da conn e à finalidade do consumidor.
+- `src/segmentation.py` — **nenhuma função existente é modificada**. Ganha 1 função pura nova (`cohort_compradores()`, ver §4.1) porque a métrica de retenção de compradores em 30 dias não existia no módulo — semanticamente diferente do `cohort_produto()` já existente.
 - `src/session_auth.py`, `src/session_store.py`, `src/ingest.py` — módulos da Fase 3 intactos. Este spec só consome via `get_active_conn()` / `is_ml_connected()`.
 - `src/dashboard_helpers.py` — sem mudanças. Já expõe `get_active_conn()` e `is_ml_connected()` que este spec precisa.
 - `src/main.py` — CLI `gerar-pdf` intacto. Continua chamando `render_pdf(db_path=..., output_path=...)`. O renderer com assinatura dual atende os 2 callers.
@@ -243,8 +276,8 @@ Ordem no PDF (narrativa macro → detalhe → comportamento):
 | 2 | Reputação & Devoluções | nível ML + taxa devolução como sub-indicador | Verde ML **e** devol < 2% | Amarelo ML **ou** devol 2–5% | Vermelho ML **ou** devol > 5% |
 | 3 | Top Produtos & Categorias | — (sem faixa; puramente descritiva) | — | — | — |
 | 4 | Curva ABC | % do catálogo classificado como classe A (80% da receita) | > 20% (diversificado) | 10–20% (concentração normal) | < 10% (alta concentração) |
-| 5 | RFM | % da base em Champions + Loyal + Potential Loyalists | > 40% | 20–40% | < 20% |
-| 6 | Cohort mensal | retenção média em 30 dias | > 20% | 10–20% | < 10% |
+| 5 | RFM | % da base em Champions + Loyal (segmentos leais existentes em `rfm_scores()`) | > 40% | 20–40% | < 20% |
+| 6 | Cohort de compradores | retenção média em 30 dias (via nova função `cohort_compradores()` — ver §4.1) | > 20% | 10–20% | < 10% |
 
 Thresholds são propostas iniciais baseadas em heurísticas de mercado; ficam no código como constantes e podem ser ajustados por PR direto no arquivo da seção sem tocar em `pdf_renderer.py` nem em templates. Cada ajuste de threshold requer atualizar o golden HTML correspondente.
 
