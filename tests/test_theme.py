@@ -7,6 +7,8 @@ rodando sem runtime do Streamlit.
 
 from __future__ import annotations
 
+import plotly.graph_objects as go
+
 from src import theme
 
 _TOKENS_ESPERADOS = {
@@ -125,3 +127,30 @@ def test_page_header_html_omite_partes_opcionais() -> None:
     markup = theme.page_header_html("Só o título")
     assert "sp-header__subtitle" not in markup
     assert "sp-pill" not in markup
+
+
+def test_card_devolve_um_context_manager() -> None:
+    # @contextmanager não executa o corpo da função até o __enter__, então
+    # dá pra checar o protocolo sem runtime do Streamlit.
+    cm = theme.card("Título")
+    assert hasattr(cm, "__enter__")
+    assert hasattr(cm, "__exit__")
+
+
+def test_style_fig_aplica_a_rampa_e_fundo_transparente() -> None:
+    fig = theme.style_fig(go.Figure())
+    assert list(fig.layout.colorway) == theme.CHART_SEQUENCE
+    assert fig.layout.paper_bgcolor == "rgba(0,0,0,0)"
+    assert fig.layout.plot_bgcolor == "rgba(0,0,0,0)"
+
+
+def test_style_fig_pinta_eixos_e_texto_com_os_tokens() -> None:
+    fig = theme.style_fig(go.Figure())
+    assert fig.layout.font.color == theme.COLORS["text_muted"]
+    assert fig.layout.xaxis.gridcolor == theme.GRID_COLOR
+    assert fig.layout.yaxis.gridcolor == theme.GRID_COLOR
+
+
+def test_style_fig_devolve_a_mesma_figura() -> None:
+    fig = go.Figure()
+    assert theme.style_fig(fig) is fig

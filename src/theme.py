@@ -13,8 +13,11 @@ Streamlit (são o que os testes exercitam); as demais renderizam.
 from __future__ import annotations
 
 import html
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
+import plotly.graph_objects as go
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -298,3 +301,73 @@ def page_header_html(title: str, subtitle: str | None = None, period: str | None
 def page_header(title: str, subtitle: str | None = None, period: str | None = None) -> None:
     """Substitui o par st.title + st.caption das páginas."""
     st.markdown(page_header_html(title, subtitle, period), unsafe_allow_html=True)
+
+
+@contextmanager
+def card(title: str, subtitle: str | None = None) -> Iterator[None]:
+    """Cartão de seção. Uso: `with card("Título"): st.plotly_chart(fig)`.
+
+    É um context manager sobre st.container(border=True), e não uma <div>
+    injetada — HTML cru do st.markdown NÃO embrulha widgets que venham
+    depois dele.
+    """
+    with st.container(border=True):
+        if title:
+            head = f'<div class="sp-card__head"><span class="sp-card__title">{html.escape(title)}</span>'
+            if subtitle:
+                head += f'<span class="sp-card__subtitle">{html.escape(subtitle)}</span>'
+            head += "</div>"
+            st.markdown(head, unsafe_allow_html=True)
+        yield
+
+
+def nav_card(title: str, description: str, icon: str, page: str) -> None:
+    """Cartão de navegação da home.
+
+    `page` é o caminho do arquivo da página relativo à raiz do projeto,
+    ex.: "src/pages/1_executive.py" — formato que o st.page_link espera.
+    """
+    with st.container(border=True):
+        st.markdown(
+            '<div class="sp-nav">'
+            f'<div class="sp-nav__icon">{icon_html(icon, size=22)}</div>'
+            f'<div class="sp-nav__title">{html.escape(title)}</div>'
+            f'<div class="sp-nav__desc">{html.escape(description)}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.page_link(page, label="Abrir →")
+
+
+def style_fig(fig: go.Figure) -> go.Figure:
+    """Aplica layout, eixos e tipografia do tema à figura. Devolve a própria.
+
+    Atenção: `colorway` só vale para traces sem cor explícita. Figuras do
+    Plotly Express já nascem com cor por trace — para elas, passe
+    `color_discrete_sequence=CHART_SEQUENCE` na criação.
+    """
+    fig.update_layout(
+        colorway=CHART_SEQUENCE,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"family": FONT_STACK, "color": COLORS["text_muted"], "size": 13},
+        margin={"l": 8, "r": 8, "t": 10, "b": 8},
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.02,
+            "xanchor": "left",
+            "x": 0,
+            "bgcolor": "rgba(0,0,0,0)",
+            "title": {"text": ""},
+        },
+        hoverlabel={
+            "bgcolor": COLORS["surface_raised"],
+            "bordercolor": COLORS["border"],
+            "font": {"color": COLORS["text"], "family": FONT_STACK},
+        },
+        coloraxis={"colorbar": {"outlinewidth": 0, "tickfont": {"color": COLORS["text_muted"]}}},
+    )
+    fig.update_xaxes(gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR, linecolor=GRID_COLOR)
+    fig.update_yaxes(gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR, linecolor=GRID_COLOR)
+    return fig
