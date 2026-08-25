@@ -41,3 +41,15 @@ def test_chart_sequence_na_ordem_especificada() -> None:
 def test_chart_continuous_vai_de_navy_a_gold() -> None:
     assert theme.CHART_CONTINUOUS[0] == [0.0, theme.COLORS["surface"]]
     assert theme.CHART_CONTINUOUS[-1] == [1.0, theme.COLORS["gold"]]
+
+
+def test_icons_cobre_todos_os_usos_das_paginas() -> None:
+    necessarios = {"revenue", "cost", "profit", "level", "users", "star", "alert", "ticket", "box"}
+    assert necessarios <= set(theme.ICONS)
+
+
+def test_icon_html_produz_svg_com_a_cor_de_acento() -> None:
+    markup = theme.icon_html("revenue")
+    assert markup.startswith("<svg")
+    assert theme.COLORS["accent"] in markup
+    assert 'viewBox="0 0 24 24"' in markup

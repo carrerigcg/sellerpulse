@@ -62,3 +62,41 @@ CHART_CONTINUOUS: list[list[float | str]] = [
 GRID_COLOR = "rgba(148,163,184,.10)"
 
 FONT_STACK = '"Inter", system-ui, -apple-system, "Segoe UI", sans-serif'
+
+# Ícones: só o miolo do <svg>, num grid de 24x24, traço em currentColor.
+# Emoji está descartado de propósito — destoa da regra de contenção
+# corporativa (ver docs/specs/2026-08-25-ui-theme-dashboard-design.md).
+ICONS: dict[str, str] = {
+    "revenue": '<polyline points="3 17 9 11 13 15 21 7"/><polyline points="15 7 21 7 21 13"/>',
+    "cost": '<polyline points="3 7 9 13 13 9 21 17"/><polyline points="15 17 21 17 21 11"/>',
+    "profit": (
+        '<path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'
+        '<path d="M16 12h3"/>'
+    ),
+    "level": '<circle cx="12" cy="9" r="5"/><polyline points="9 13 8 21 12 19 16 21 15 13"/>',
+    "users": (
+        '<path d="M16 19v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/>'
+        '<circle cx="9.5" cy="7" r="3.5"/>'
+        '<path d="M21 19v-2a4 4 0 0 0-3-3.9"/>'
+    ),
+    "star": '<polygon points="12 3 14.8 8.6 21 9.5 16.5 13.9 17.6 20 12 17.1 6.4 20 7.5 13.9 3 9.5 9.2 8.6"/>',
+    "alert": '<path d="M12 4 2.5 20h19z"/><line x1="12" y1="10" x2="12" y2="14"/><line x1="12" y1="16.8" x2="12" y2="17"/>',
+    "ticket": (
+        '<path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 3 12V5a2 2 0 0 1 2-2h7'
+        'a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.6z"/><circle cx="7.5" cy="7.5" r="1.2"/>'
+    ),
+    "box": (
+        '<path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5"/>'
+        '<line x1="12" y1="13" x2="12" y2="21"/>'
+    ),
+}
+
+
+def icon_html(name: str, size: int = 20, color: str | None = None) -> str:
+    """SVG inline de `ICONS[name]`. Levanta KeyError se o nome não existir."""
+    return (
+        f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" '
+        f'stroke="{color or COLORS["accent"]}" stroke-width="1.5" '
+        f'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        f"{ICONS[name]}</svg>"
+    )
