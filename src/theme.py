@@ -324,8 +324,10 @@ def card(title: str, subtitle: str | None = None) -> Iterator[None]:
 def nav_card(title: str, description: str, icon: str, page: str) -> None:
     """Cartão de navegação da home.
 
-    `page` é o caminho do arquivo da página relativo à raiz do projeto,
-    ex.: "src/pages/1_executive.py" — formato que o st.page_link espera.
+    `page` é o caminho da página relativo ao diretório do ENTRYPOINT do
+    Streamlit, não à raiz do projeto. Como o entrypoint é `src/dashboard.py`,
+    a forma correta é "pages/1_executive.py" — passar
+    "src/pages/1_executive.py" levanta StreamlitPageNotFoundError.
     """
     with st.container(border=True):
         st.markdown(
