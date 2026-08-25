@@ -72,3 +72,56 @@ def test_build_css_da_cores_distintas_as_pilulas_de_delta() -> None:
 def test_build_css_comeca_pelo_import_da_fonte() -> None:
     # @import só vale se for a primeira regra da folha de estilo.
     assert theme.build_css().lstrip().startswith("@import")
+
+
+def test_kpi_row_html_emite_valor_e_rotulo_de_cada_tile() -> None:
+    markup = theme.kpi_row_html(
+        [
+            theme.Kpi("Receita bruta", "R$ 1.234,00", "revenue"),
+            theme.Kpi("Nível ML", "Verde", "level"),
+        ]
+    )
+    assert "Receita bruta" in markup
+    assert "R$ 1.234,00" in markup
+    assert "Nível ML" in markup
+    assert "Verde" in markup
+    assert markup.count("sp-kpi__value") == 2
+
+
+def test_kpi_row_html_marca_delta_positivo_e_negativo_com_classes_distintas() -> None:
+    positivo = theme.kpi_row_html([theme.Kpi("A", "1", "revenue", "+5.0%", True)])
+    negativo = theme.kpi_row_html([theme.Kpi("A", "1", "revenue", "-5.0%", False)])
+    assert "is-positive" in positivo
+    assert "is-negative" not in positivo
+    assert "is-negative" in negativo
+    assert "is-positive" not in negativo
+
+
+def test_kpi_row_html_usa_pilula_neutra_quando_nao_ha_base_de_comparacao() -> None:
+    markup = theme.kpi_row_html([theme.Kpi("A", "1", "revenue", "n/a", None)])
+    assert "is-neutral" in markup
+
+
+def test_kpi_row_html_omite_a_pilula_quando_nao_ha_delta() -> None:
+    markup = theme.kpi_row_html([theme.Kpi("A", "1", "revenue")])
+    assert "sp-kpi__delta" not in markup
+
+
+def test_kpi_row_html_escapa_html_no_valor() -> None:
+    markup = theme.kpi_row_html([theme.Kpi("<b>rótulo</b>", "<script>", "revenue")])
+    assert "<script>" not in markup
+    assert "&lt;script&gt;" in markup
+
+
+def test_page_header_html_inclui_titulo_subtitulo_e_periodo() -> None:
+    markup = theme.page_header_html("Executive", "Resumo do período", "2026-05-01 — 2026-08-01")
+    assert "Executive" in markup
+    assert "Resumo do período" in markup
+    assert "2026-05-01 — 2026-08-01" in markup
+    assert "sp-pill" in markup
+
+
+def test_page_header_html_omite_partes_opcionais() -> None:
+    markup = theme.page_header_html("Só o título")
+    assert "sp-header__subtitle" not in markup
+    assert "sp-pill" not in markup

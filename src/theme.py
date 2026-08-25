@@ -12,6 +12,9 @@ Streamlit (são o que os testes exercitam); as demais renderizam.
 
 from __future__ import annotations
 
+import html
+from dataclasses import dataclass
+
 import streamlit as st
 
 # ---------------------------------------------------------------------------
@@ -226,3 +229,72 @@ def inject_css() -> None:
     — inofensivo (as regras são as mesmas), mas desnecessário.
     """
     st.markdown(f"<style>{build_css()}</style>", unsafe_allow_html=True)
+
+
+@dataclass(frozen=True)
+class Kpi:
+    """Um tile da faixa de KPIs.
+
+    Attributes:
+        label: rótulo curto, renderizado em caixa alta.
+        value: valor já formatado para exibição (o theme não formata número).
+        icon: chave de `ICONS`.
+        delta: variação já formatada (ex.: "+12.4%"). None esconde a pílula.
+        delta_positive: True pinta de verde, False de vermelho, None de cinza.
+            Quem chama decide o sinal — para custo, um aumento é negativo.
+    """
+
+    label: str
+    value: str
+    icon: str
+    delta: str | None = None
+    delta_positive: bool | None = None
+
+
+def _kpi_tile_html(kpi: Kpi) -> str:
+    delta = ""
+    if kpi.delta is not None:
+        if kpi.delta_positive is None:
+            modifier = "is-neutral"
+        else:
+            modifier = "is-positive" if kpi.delta_positive else "is-negative"
+        delta = f'<span class="sp-kpi__delta {modifier}">{html.escape(kpi.delta)}</span>'
+    return (
+        '<div class="sp-kpi">'
+        f'<div class="sp-kpi__icon">{icon_html(kpi.icon)}</div>'
+        f'<div class="sp-kpi__value">{html.escape(kpi.value)}</div>'
+        f'<div class="sp-kpi__label">{html.escape(kpi.label)}</div>'
+        f"{delta}"
+        "</div>"
+    )
+
+
+def kpi_row_html(kpis: list[Kpi]) -> str:
+    """Grid de tiles como string. Testável sem Streamlit."""
+    tiles = "".join(_kpi_tile_html(k) for k in kpis)
+    return f'<div class="sp-kpi-grid">{tiles}</div>'
+
+
+def kpi_row(kpis: list[Kpi]) -> None:
+    """Renderiza a faixa de KPIs.
+
+    Vai numa ÚNICA chamada de st.markdown de propósito: quebrar em várias
+    (uma por coluna) faz o Streamlit inserir espaçamento entre os blocos e
+    o grid deixa de alinhar.
+    """
+    st.markdown(kpi_row_html(kpis), unsafe_allow_html=True)
+
+
+def page_header_html(title: str, subtitle: str | None = None, period: str | None = None) -> str:
+    parts = [f'<div class="sp-header"><h1 class="sp-header__title">{html.escape(title)}</h1>']
+    if subtitle:
+        parts.append(f'<p class="sp-header__subtitle">{html.escape(subtitle)}</p>')
+    if period:
+        parts.append(f'<span class="sp-pill">{html.escape(period)}</span>')
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def page_header(title: str, subtitle: str | None = None, period: str | None = None) -> None:
+    """Substitui o par st.title + st.caption das páginas."""
+    st.markdown(page_header_html(title, subtitle, period), unsafe_allow_html=True)
