@@ -7,15 +7,35 @@ Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos vi
 [![tests](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml/badge.svg)](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.3.1-blue.svg)
 
 ---
 
 ## Dashboard
 
-![Dashboard SellerPulse](docs/img/dashboard.png)
+![Home do SellerPulse](docs/img/dashboard-home.png)
 
 _Screenshot capturado localmente rodando `python -m src.main abrir-dashboard`._
+
+<details>
+<summary>Mais telas</summary>
+
+**Executive Summary** — receita, custos e resultado líquido, com variação sobre a janela anterior:
+
+![Executive Summary](docs/img/dashboard-executive.png)
+
+**Product Analytics** — top produtos por receita/unidades, curva Pareto ABC e cohort mensal por produto:
+
+![Product Analytics](docs/img/dashboard-products.png)
+![Curva Pareto ABC](docs/img/dashboard-products-pareto.png)
+![Cohort por mês de lançamento](docs/img/dashboard-products-cohort.png)
+
+**Customer Analytics** — segmentação RFM dos compradores:
+
+![Customer Analytics](docs/img/dashboard-customers.png)
+![Compradores por segmento](docs/img/dashboard-customers-segments.png)
+
+</details>
 
 ---
 
@@ -32,6 +52,7 @@ _Screenshot capturado localmente rodando `python -m src.main abrir-dashboard`._
 | Camadas de forecasting + patrimony (`forecasting.py`, `patrimony.py`) | 🚧 Em construção |
 | Renderizador de PDF executivo (`pdf_renderer.py`) | 🚧 Em construção — mockup visual em `mockup/relatorio.html` |
 | Dashboard Streamlit (`dashboard.py`) — 3 páginas navegáveis local | ✅ Pronto — Fase 2 |
+| Identidade visual (`theme.py`) — paleta navy/gold compartilhada com o PDF | ✅ Pronto — Fase 2.5 |
 | Notebooks Jupyter narrativos (`notebooks/`) | 🚧 Em construção |
 | CI GitHub Actions | ✅ Pronto — matrix py3.11 × ubuntu/windows, ruff + pytest |
 

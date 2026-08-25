@@ -12,6 +12,8 @@ from importlib import metadata
 
 import streamlit as st
 
+from src import theme
+
 st.set_page_config(page_title="SellerPulse", page_icon="📊", layout="wide")
 
 
@@ -23,16 +25,25 @@ def _get_version() -> str:
 
 
 def _render_sidebar() -> None:
-    st.sidebar.title("SellerPulse")
+    st.sidebar.markdown(
+        '<div class="sp-brand">'
+        '<div class="sp-brand__name">Seller<em>Pulse</em></div>'
+        f'<div class="sp-brand__version">v{_get_version()}</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
     default_to = date.today()
     default_from = default_to - timedelta(days=90)
-    date_from = st.sidebar.date_input("Início", value=default_from, key="sidebar_date_from")
-    date_to = st.sidebar.date_input("Fim", value=default_to, key="sidebar_date_to")
+    with st.sidebar.container(border=True):
+        st.markdown(
+            '<div class="sp-card__head"><span class="sp-card__title">Período</span></div>',
+            unsafe_allow_html=True,
+        )
+        date_from = st.date_input("Início", value=default_from, key="sidebar_date_from")
+        date_to = st.date_input("Fim", value=default_to, key="sidebar_date_to")
     st.session_state["date_from"] = date_from.isoformat()
     st.session_state["date_to"] = date_to.isoformat()
-
-    st.sidebar.divider()
 
     # Toggle Demo/Real — Real desabilitado nesta fase.
     # Guard roda ANTES da instanciação do widget — Streamlit >= 1.29 proíbe
@@ -42,29 +53,63 @@ def _render_sidebar() -> None:
         st.session_state["sidebar_modo"] = "Demo"
         st.sidebar.warning("Modo Real não disponível nesta versão — voltando para Demo.")
 
-    st.sidebar.radio(
-        "Modo",
-        options=["Demo", "Real"],
-        index=0,
-        captions=["Dados sintéticos versionados", "Configure data/business.db para habilitar"],
-        key="sidebar_modo",
+    with st.sidebar.container(border=True):
+        st.markdown(
+            '<div class="sp-card__head"><span class="sp-card__title">Fonte de dados</span></div>',
+            unsafe_allow_html=True,
+        )
+        st.radio(
+            "Modo",
+            options=["Demo", "Real"],
+            index=0,
+            captions=["Dados sintéticos versionados", "Configure data/business.db para habilitar"],
+            key="sidebar_modo",
+        )
+        st.selectbox(
+            "Categoria",
+            options=["Todas"],
+            index=0,
+            disabled=True,
+            help="Disponível na v1.0",
+            key="sidebar_categoria",
+        )
+
+
+def _render_home() -> None:
+    periodo = f"{st.session_state['date_from']} — {st.session_state['date_to']}"
+    st.markdown(
+        '<div class="sp-cover">'
+        '<div class="sp-cover__name">Seller<em>Pulse</em></div>'
+        '<p class="sp-cover__tagline">Analytics para vendedores Mercado Livre.</p>'
+        f'<span class="sp-pill">{periodo}</span>'
+        "</div>",
+        unsafe_allow_html=True,
     )
 
-    st.sidebar.selectbox(
-        "Categoria",
-        options=["Todas"],
-        index=0,
-        disabled=True,
-        help="Disponível na v1.0",
-        key="sidebar_categoria",
-    )
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        theme.nav_card(
+            "Executive",
+            "Receita, custos e resultado do período, com variação sobre a janela anterior.",
+            "revenue",
+            "pages/1_executive.py",
+        )
+    with col2:
+        theme.nav_card(
+            "Products",
+            "Top produtos e categorias, curva Pareto ABC e cohort por mês de lançamento.",
+            "box",
+            "pages/2_products.py",
+        )
+    with col3:
+        theme.nav_card(
+            "Customers",
+            "Segmentação RFM dos compradores e distribuição por segmento.",
+            "users",
+            "pages/3_customers.py",
+        )
 
-    st.sidebar.divider()
-    st.sidebar.caption(f"SellerPulse v{_get_version()}")
 
-
+theme.inject_css()
 _render_sidebar()
-
-st.title("SellerPulse")
-st.caption("Analytics interativo para vendedores Mercado Livre.")
-st.info("Selecione uma página na barra lateral à esquerda.")
+_render_home()

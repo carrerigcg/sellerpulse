@@ -143,7 +143,7 @@ Semântica de cada função:
   `color_discrete_sequence=CHART_SEQUENCE` na criação da figura.
 - **`nav_card()`** — usado apenas na home; envolve um `st.page_link` clicável. O
   parâmetro `page` recebe o caminho do arquivo da página relativo à raiz do
-  projeto (por exemplo `"src/pages/1_executive.py"`), que é o formato aceito
+  projeto (por exemplo `"pages/1_executive.py"`), que é o formato aceito
   pelo `st.page_link`.
 
 ### Restrições técnicas do Streamlit
