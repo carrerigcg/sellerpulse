@@ -93,10 +93,17 @@ carregamento inicial.
 Estimativa: cerca de 180 linhas. Este é o contrato completo que as páginas
 enxergam:
 
+Convenção do módulo: funções `*_html` constroem string e não tocam o Streamlit —
+são elas que os testes exercitam. As demais renderizam. Essa separação é o que
+torna o módulo testável sem runtime do Streamlit.
+
 ```python
 COLORS: dict[str, str]
 CHART_SEQUENCE: list[str]
-ICONS: dict[str, str]          # nome -> SVG inline
+CHART_CONTINUOUS: list[list]
+GRID_COLOR: str
+FONT_STACK: str
+ICONS: dict[str, str]          # nome -> miolo do SVG
 
 @dataclass(frozen=True)
 class Kpi:
@@ -106,8 +113,12 @@ class Kpi:
     delta: str | None = None
     delta_positive: bool | None = None
 
+def icon_html(name: str, size: int = 20, color: str | None = None) -> str
+def build_css() -> str
 def inject_css() -> None
+def page_header_html(title: str, subtitle: str | None = None, period: str | None = None) -> str
 def page_header(title: str, subtitle: str | None = None, period: str | None = None) -> None
+def kpi_row_html(kpis: list[Kpi]) -> str
 def kpi_row(kpis: list[Kpi]) -> None
 def card(title: str, subtitle: str | None = None) -> AbstractContextManager
 def style_fig(fig: go.Figure) -> go.Figure
@@ -116,15 +127,20 @@ def nav_card(title: str, description: str, icon: str, page: str) -> None
 
 Semântica de cada função:
 
-- **`inject_css()`** — injeta o bloco `<style>` uma única vez por execução de
-  página. Idempotente: chamadas repetidas no mesmo run não duplicam o estilo.
-  Deve ser a primeira chamada de toda página.
+- **`build_css()` / `inject_css()`** — `build_css` devolve a folha de estilo como
+  string (é o que os testes verificam); `inject_css` a emite num bloco `<style>`.
+  Convenção: chamar `inject_css()` uma vez, no topo de cada página. Chamar duas
+  vezes no mesmo run apenas emite um segundo bloco idêntico — inofensivo, já que
+  as regras são as mesmas, mas desnecessário.
 - **`page_header()`** — título, subtítulo opcional e o período ativo como pílula.
   Substitui os pares `st.title` mais `st.caption` das páginas atuais.
 - **`kpi_row()`** — renderiza a lista inteira de tiles em CSS Grid.
 - **`card()`** — context manager usado como `with card("Título"): st.plotly_chart(...)`.
-- **`style_fig()`** — aplica template, rampa categórica, fundo transparente,
-  cor de grade e tipografia a uma figura Plotly. Devolve a própria figura.
+- **`style_fig()`** — aplica fundo transparente, cor de grade, tipografia,
+  legenda e hover a uma figura Plotly. Devolve a própria figura. **Ressalva:**
+  `colorway` só afeta traces sem cor explícita, e figuras do Plotly Express já
+  nascem com cor por trace — para elas, a rampa precisa ser passada como
+  `color_discrete_sequence=CHART_SEQUENCE` na criação da figura.
 - **`nav_card()`** — usado apenas na home; envolve um `st.page_link` clicável. O
   parâmetro `page` recebe o caminho do arquivo da página relativo à raiz do
   projeto (por exemplo `"src/pages/1_executive.py"`), que é o formato aceito
@@ -143,7 +159,7 @@ redescobertas na implementação:
    chamada de `st.markdown`, senão aparecem espaçamentos fantasma entre as
    colunas.
 2. **Atributos `data-testid` mudam entre versões do Streamlit.** Mitigação:
-   fixar `streamlit>=1.36,<2` no `requirements.txt` e concentrar todo seletor
+   fixar `streamlit>=1.62,<2` no `requirements.txt` e concentrar todo seletor
    frágil num bloco único e comentado no topo do `theme.py`, de modo que uma
    quebra de versão tenha um só lugar a consertar.
 
@@ -209,10 +225,10 @@ execução) sobre o contrato do módulo:
 
 - `COLORS` contém todos os tokens da tabela acima.
 - `CHART_SEQUENCE` tem os seis valores, na ordem especificada.
-- `kpi_row` emite HTML contendo o valor e o rótulo de cada `Kpi` recebido.
+- `kpi_row_html` emite HTML contendo o valor e o rótulo de cada `Kpi` recebido.
 - Um `Kpi` com `delta_positive=True` e outro com `False` produzem cores
   distintas de pílula.
-- `style_fig` aplica a rampa categórica e o fundo transparente ao `go.Figure`.
+- `style_fig` aplica o fundo transparente, a cor de grade e o `colorway` ao `go.Figure`.
 - `card` devolve um objeto que implementa o protocolo de context manager.
 
 `src/theme.py` não entra na lista `omit` de `[tool.coverage.run]` no
@@ -223,7 +239,7 @@ coberto.
 
 | Risco | Mitigação |
 |---|---|
-| Seletores CSS quebram numa atualização do Streamlit | Fixar `streamlit>=1.36,<2`; isolar todo seletor por `data-testid` num bloco único e comentado no topo do `theme.py` |
+| Seletores CSS quebram numa atualização do Streamlit | Fixar `streamlit>=1.62,<2`; isolar todo seletor por `data-testid` num bloco único e comentado no topo do `theme.py` |
 | Google Fonts indisponível (offline) | Stack de fallback `system-ui`; a tela degrada para a fonte do sistema sem quebrar layout |
 | `AppTest` não renderiza CSS, então nenhum teste pega regressão visual | Verificação manual, registrada pela atualização dos prints em `docs/img/` |
 
