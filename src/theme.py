@@ -53,7 +53,7 @@ CHART_SEQUENCE: list[str] = [
 ]
 
 # Escala contínua (heatmap de cohort): navy -> azul -> dourado.
-CHART_CONTINUOUS: list[list] = [
+CHART_CONTINUOUS: list[list[float | str]] = [
     [0.0, COLORS["surface"]],
     [0.6, COLORS["accent"]],
     [1.0, COLORS["gold"]],
