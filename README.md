@@ -7,7 +7,7 @@ Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos vi
 [![tests](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml/badge.svg)](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-v0.3.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.3.1-blue.svg)
 
 ---
 
@@ -32,6 +32,7 @@ _Screenshot capturado localmente rodando `python -m src.main abrir-dashboard`._
 | Camadas de forecasting + patrimony (`forecasting.py`, `patrimony.py`) | 🚧 Em construção |
 | Renderizador de PDF executivo (`pdf_renderer.py`) | 🚧 Em construção — mockup visual em `mockup/relatorio.html` |
 | Dashboard Streamlit (`dashboard.py`) — 3 páginas navegáveis local | ✅ Pronto — Fase 2 |
+| Identidade visual (`theme.py`) — paleta navy/gold compartilhada com o PDF | ✅ Pronto — Fase 2.5 |
 | Notebooks Jupyter narrativos (`notebooks/`) | 🚧 Em construção |
 | CI GitHub Actions | ✅ Pronto — matrix py3.11 × ubuntu/windows, ruff + pytest |
 
