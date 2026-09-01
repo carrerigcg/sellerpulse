@@ -49,12 +49,27 @@ _Screenshot capturado localmente rodando `python -m src.main abrir-dashboard`._
 | Dados sintéticos reprodutíveis (`demo_data.py`) | ✅ Pronto — `data/demo.db` versionado, determinístico via seed 42 |
 | Camada de métricas (`metrics.py`) | ✅ Pronto — Fase 1 |
 | Camada de segmentação (`segmentation.py`) — ABC, RFM, cohort | ✅ Pronto — Fase 2 |
-| Camadas de forecasting + patrimony (`forecasting.py`, `patrimony.py`) | 🚧 Em construção |
-| Renderizador de PDF executivo (`pdf_renderer.py`) | 🚧 Em construção — mockup visual em `mockup/relatorio.html` |
+| Renderizador de PDF executivo (`pdf_renderer.py`) | ✅ Pronto — Fase 1 (WeasyPrint + Jinja2) |
 | Dashboard Streamlit (`dashboard.py`) — 3 páginas navegáveis local | ✅ Pronto — Fase 2 |
 | Identidade visual (`theme.py`) — paleta navy/gold compartilhada com o PDF | ✅ Pronto — Fase 2.5 |
-| Notebooks Jupyter narrativos (`notebooks/`) | 🚧 Em construção |
+| Camada de forecasting (`forecasting.py`) — SARIMA + detecção de anomalias | 📋 Planejada — v1.0.0 |
+| Camada de patrimony (`patrimony.py`) — simulação de alocação e recomendação | 📋 Planejada — v1.0.0 |
+| Notebooks Jupyter narrativos (`notebooks/`) | 📋 Planejada — v1.0.0 |
 | CI GitHub Actions | ✅ Pronto — matrix py3.11 × ubuntu/windows, ruff + pytest |
+
+> **Nota sobre o toggle Demo/Real na sidebar do dashboard.** Hoje só o modo Demo (dados sintéticos versionados em `data/demo.db`) está ativo. O modo Real depende da Fase 3 (OAuth no dashboard) — ver Roadmap abaixo.
+
+---
+
+## 🗺️ Roadmap
+
+Versões planejadas com spec técnico já aprovado. Cada uma vira release taggeada quando entra em `main`.
+
+| Versão | Escopo | Spec |
+|---|---|---|
+| `v0.4.0` | **OAuth no dashboard** — modo Real com login Mercado Livre direto pela UI, ingestão sob demanda de 6 meses, session store em memória. | [`docs/specs/2026-08-19-oauth-in-dashboard-design.md`](docs/specs/2026-08-19-oauth-in-dashboard-design.md) |
+| `v0.5.0` | **PDF v2 — guia analytics** — PDF vira roteiro educativo com dados OAuth reais, seções ABC/RFM/cohort, retenção 30d. | [`docs/specs/2026-08-25-pdf-v2-guia-analytics-design.md`](docs/specs/2026-08-25-pdf-v2-guia-analytics-design.md) |
+| `v1.0.0` | **Forecasting + patrimony + notebooks** — SARIMA, detecção de anomalias, simulação de alocação patrimonial, narrativa Jupyter. | [`docs/specs/2026-08-07-camadas-analiticas-design.md`](docs/specs/2026-08-07-camadas-analiticas-design.md) |
 
 ---
 

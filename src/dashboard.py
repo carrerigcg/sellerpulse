@@ -45,13 +45,12 @@ def _render_sidebar() -> None:
     st.session_state["date_from"] = date_from.isoformat()
     st.session_state["date_to"] = date_to.isoformat()
 
-    # Toggle Demo/Real — Real desabilitado nesta fase.
     # Guard roda ANTES da instanciação do widget — Streamlit >= 1.29 proíbe
     # escrever em st.session_state[key] após o widget com aquele key ter sido
-    # criado no mesmo run (levanta StreamlitAPIException).
-    if st.session_state.get("sidebar_modo") == "Real":
+    # criado no mesmo run.
+    if st.session_state.get("sidebar_modo", "").startswith("Real"):
         st.session_state["sidebar_modo"] = "Demo"
-        st.sidebar.warning("Modo Real não disponível nesta versão — voltando para Demo.")
+        st.sidebar.warning("Modo Real chega na v0.4.0 — voltando para Demo.")
 
     with st.sidebar.container(border=True):
         st.markdown(
@@ -60,9 +59,12 @@ def _render_sidebar() -> None:
         )
         st.radio(
             "Modo",
-            options=["Demo", "Real"],
+            options=["Demo", "Real (v0.4.0)"],
             index=0,
-            captions=["Dados sintéticos versionados", "Configure data/business.db para habilitar"],
+            captions=[
+                "Dados sintéticos versionados",
+                "OAuth Mercado Livre — em desenvolvimento (Fase 3)",
+            ],
             key="sidebar_modo",
         )
         st.selectbox(
