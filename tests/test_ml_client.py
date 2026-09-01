@@ -3,7 +3,7 @@
 import pytest
 import responses
 
-from src.ml_client import MLAPIError, MLClient
+from src.ml_client import MLAPIError, MLClient, _parse_retry_after
 
 BASE_URL = "https://api.mercadolibre.com"
 
@@ -49,6 +49,37 @@ def test_get_respects_retry_after_on_429(client):
     responses.add(responses.GET, f"{BASE_URL}/users/me", json={"id": 1}, status=200)
     result = client.get("/users/me")
     assert result["id"] == 1
+
+
+@responses.activate
+def test_get_raises_after_max_retries_on_429(client):
+    """429 respeita MAX_RETRIES (não fica em loop infinito)."""
+    for _ in range(4):
+        responses.add(
+            responses.GET, f"{BASE_URL}/users/me", status=429, headers={"Retry-After": "0"}
+        )
+    with pytest.raises(MLAPIError) as exc:
+        client.get("/users/me")
+    assert exc.value.status_code == 429
+
+
+def test_parse_retry_after_handles_seconds():
+    assert _parse_retry_after("5", default=1.0) == 5.0
+
+
+def test_parse_retry_after_handles_http_date():
+    """Formato HTTP-date da RFC 7231 não deve levantar ValueError."""
+    result = _parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT", default=1.0)
+    # Data passada → delta negativo é clampeado em 0.
+    assert result == 0.0
+
+
+def test_parse_retry_after_fallback_on_garbage():
+    assert _parse_retry_after("garbage-not-a-date", default=2.5) == 2.5
+
+
+def test_parse_retry_after_uses_default_when_missing():
+    assert _parse_retry_after(None, default=7.0) == 7.0
 
 
 @responses.activate
@@ -157,3 +188,26 @@ def test_get_claims(client):
     claims = client.get_claims(seller_id=999, date_from="2026-06-01T00:00:00")
     assert len(claims) == 1
     assert claims[0]["status"] == "opened"
+
+
+@responses.activate
+def test_get_claims_filters_by_date_to(client):
+    """date_to opcional: filtra client-side quando informado."""
+    responses.add(
+        responses.GET,
+        f"{BASE_URL}/post-purchase/v1/claims/search",
+        json={
+            "data": [
+                {"id": 1, "date_created": "2026-06-05T10:00:00"},
+                {"id": 2, "date_created": "2026-06-20T10:00:00"},
+            ],
+            "paging": {"total": 2},
+        },
+        status=200,
+    )
+    claims = client.get_claims(
+        seller_id=999,
+        date_from="2026-06-01T00:00:00",
+        date_to="2026-06-15T00:00:00",
+    )
+    assert [c["id"] for c in claims] == [1]

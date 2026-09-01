@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import requests
@@ -10,6 +12,24 @@ import requests
 BASE_URL = "https://api.mercadolibre.com"
 MAX_RETRIES = 3
 BACKOFF_BASE = 1.0  # segundos
+RETRY_AFTER_CAP = 30.0  # segundos — cap defensivo pra não dormir minutos
+
+
+def _parse_retry_after(header_value: str | None, default: float) -> float:
+    """Interpreta header Retry-After. Aceita segundos (int) ou HTTP-date (RFC 7231)."""
+    if not header_value:
+        return default
+    try:
+        return float(header_value)
+    except ValueError:
+        pass
+    try:
+        target = parsedate_to_datetime(header_value)
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=UTC)
+        return max((target - datetime.now(UTC)).total_seconds(), 0.0)
+    except (TypeError, ValueError):
+        return default
 
 
 class MLAPIError(Exception):
@@ -29,7 +49,7 @@ class MLClient:
         self._session = requests.Session()
 
     def get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        """GET um endpoint do ML, com retry em 5xx e 429."""
+        """GET um endpoint do ML, com retry em 5xx e 429 (respeita Retry-After)."""
         url = f"{self._base_url}{path}"
         headers = {"Authorization": f"Bearer {self._access_token}"}
         last_response = None
@@ -37,9 +57,9 @@ class MLClient:
             response = self._session.get(url, headers=headers, params=params, timeout=30)
             if response.status_code < 400:
                 return response.json()
-            if response.status_code == 429:
-                retry_after = float(response.headers.get("Retry-After", BACKOFF_BASE))
-                time.sleep(retry_after)
+            if response.status_code == 429 and attempt < MAX_RETRIES:
+                retry_after = _parse_retry_after(response.headers.get("Retry-After"), BACKOFF_BASE)
+                time.sleep(min(retry_after, RETRY_AFTER_CAP))
                 continue
             if 500 <= response.status_code < 600 and attempt < MAX_RETRIES:
                 time.sleep(BACKOFF_BASE * (2**attempt))
@@ -105,11 +125,24 @@ class MLClient:
         """Dados do usuário, incluindo seller_reputation."""
         return self.get(f"/users/{user_id}")
 
-    def get_claims(self, *, seller_id: int, date_from: str) -> list[dict[str, Any]]:
-        """Reclamações/claims pós-compra do vendedor a partir de date_from."""
+    def get_claims(
+        self,
+        *,
+        seller_id: int,
+        date_from: str,
+        date_to: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Reclamações/claims pós-compra do vendedor no intervalo [date_from, date_to).
+
+        `date_to` é opcional pra compatibilidade — se omitido, traz tudo desde
+        `date_from` (comportamento antigo). Filtragem client-side quando informado.
+        """
         params = {
             "seller_id": seller_id,
             "date_created.from": date_from,
         }
         data = self.get("/post-purchase/v1/claims/search", params=params)
-        return data.get("data", [])
+        claims = data.get("data", [])
+        if date_to is not None:
+            claims = [c for c in claims if (c.get("date_created") or "") < date_to]
+        return claims

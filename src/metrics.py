@@ -135,6 +135,11 @@ def reputacao_devolucao(conn: sqlite3.Connection, date_from: str, date_to: str) 
 
     Alertas disparam quando: taxa >= 5% ou claims_ativos > 3.
 
+    A taxa é **volume operacional** (claims novas / vendas pagas na MESMA
+    janela), não cohort de conversão pedido→claim: as claims podem se referir
+    a pedidos fora da janela. Interpretar como "quanto de ruído operacional
+    aconteceu na semana", não como "% de pedidos da semana que viraram claim".
+
     Returns:
         dict com chaves: nivel_ml, taxa_devolucao_pct, claims_ativos,
         claims_total, alertas.

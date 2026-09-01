@@ -8,7 +8,7 @@ pro WeasyPrint.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -37,6 +37,7 @@ _MESES_PT = [
 # Posições 2 (Laranja) e 4 (Verde claro) ficam vazias até o feed real de
 # reputação ML entrar (Fase 3+).
 _THERM_POSITION_BY_NIVEL = {"Vermelho": 1, "Amarelo": 3, "Verde": 5}
+_THERM_POSITION_DEFAULT = 3  # nível desconhecido → posição neutra (Amarelo)
 
 
 def _fmt_brl(value: float) -> str:
@@ -140,7 +141,7 @@ def _build_context(
         "claims_ativos": reput["claims_ativos"],
         "claims_total": reput["claims_total"],
         "alertas": reput["alertas"],
-        "therm_position": _THERM_POSITION_BY_NIVEL[reput["nivel_ml"]],
+        "therm_position": _THERM_POSITION_BY_NIVEL.get(reput["nivel_ml"], _THERM_POSITION_DEFAULT),
     }
 
     inicio = datetime.fromisoformat(date_from)
@@ -173,7 +174,7 @@ def render_html(
     Returns:
         HTML pronto pro WeasyPrint. UTF-8.
     """
-    when = generated_at if generated_at is not None else datetime.now()
+    when = generated_at if generated_at is not None else datetime.now(UTC)
     env = Environment(
         loader=FileSystemLoader(str(_TEMPLATE_DIR)),
         autoescape=select_autoescape(["html", "j2"]),

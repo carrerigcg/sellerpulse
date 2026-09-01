@@ -7,21 +7,13 @@ SQLite direto. Todo o estilo vem de src.theme.
 
 from __future__ import annotations
 
-import sqlite3
-import sys
-from datetime import date, timedelta
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from src import theme
 from src.metrics import fluxo_financeiro, reputacao_devolucao
-
-_DEMO_DB = Path("data/demo.db")
+from src.pages._shared import get_window, open_ro, previous_window
 
 _COMPONENTES = ["receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
 _ROTULOS = {
@@ -33,32 +25,16 @@ _ROTULOS = {
 }
 
 
-def _get_window() -> tuple[str, str]:
-    """Lê período da sidebar; fallback = últimos 90 dias."""
-    default_to = date.today()
-    default_from = default_to - timedelta(days=90)
-    return (
-        st.session_state.get("date_from", default_from.isoformat()),
-        st.session_state.get("date_to", default_to.isoformat()),
-    )
-
-
 @st.cache_data(ttl=300)
 def _load_fluxo(date_from: str, date_to: str) -> pd.DataFrame:
-    conn = sqlite3.connect(f"file:{_DEMO_DB}?mode=ro", uri=True)
-    try:
+    with open_ro() as conn:
         return fluxo_financeiro(conn, date_from, date_to)
-    finally:
-        conn.close()
 
 
 @st.cache_data(ttl=300)
 def _load_reputacao(date_from: str, date_to: str) -> dict:
-    conn = sqlite3.connect(f"file:{_DEMO_DB}?mode=ro", uri=True)
-    try:
+    with open_ro() as conn:
         return reputacao_devolucao(conn, date_from, date_to)
-    finally:
-        conn.close()
 
 
 def _totais(fluxo: pd.DataFrame) -> tuple[float, float, float]:
@@ -71,16 +47,6 @@ def _totais(fluxo: pd.DataFrame) -> tuple[float, float, float]:
     return receita, custo, liquido
 
 
-def _janela_anterior(date_from: str, date_to: str) -> tuple[str, str]:
-    """Janela imediatamente anterior, de mesma duração."""
-    dt_from = date.fromisoformat(date_from)
-    dt_to = date.fromisoformat(date_to)
-    delta_dias = (dt_to - dt_from).days
-    prev_to = dt_from
-    prev_from = prev_to - timedelta(days=delta_dias)
-    return prev_from.isoformat(), prev_to.isoformat()
-
-
 def _delta(atual: float, anterior: float) -> tuple[str | None, bool | None]:
     """Variação percentual formatada + se subiu. (None, None) sem base."""
     if anterior == 0:
@@ -91,7 +57,7 @@ def _delta(atual: float, anterior: float) -> tuple[str | None, bool | None]:
 
 def _render_kpis(fluxo: pd.DataFrame, reput: dict, date_from: str, date_to: str) -> None:
     receita, custo, liquido = _totais(fluxo)
-    prev_from, prev_to = _janela_anterior(date_from, date_to)
+    prev_from, prev_to = previous_window(date_from, date_to)
     receita_ant, custo_ant, liquido_ant = _totais(_load_fluxo(prev_from, prev_to))
 
     d_receita, subiu_receita = _delta(receita, receita_ant)
@@ -141,7 +107,7 @@ def _render_fluxo_chart(fluxo: pd.DataFrame) -> None:
 
 def _main() -> None:
     theme.inject_css()
-    date_from, date_to = _get_window()
+    date_from, date_to = get_window()
     theme.page_header(
         "Executive Summary",
         "Receita, custos e resultado do período — com variação sobre a janela anterior.",

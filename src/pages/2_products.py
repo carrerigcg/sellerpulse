@@ -7,13 +7,6 @@ segmentation.cohort_produto. Todo o estilo vem de src.theme.
 
 from __future__ import annotations
 
-import sqlite3
-import sys
-from datetime import date, timedelta
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -21,9 +14,8 @@ import streamlit as st
 
 from src import theme
 from src.metrics import top_produtos
+from src.pages._shared import get_window, open_ro
 from src.segmentation import abc_pareto, cohort_produto
-
-_DEMO_DB = Path("data/demo.db")
 
 _COLS_PRODUTOS = {
     "item_id": st.column_config.TextColumn("SKU", width="small"),
@@ -41,40 +33,22 @@ _COLS_CATEGORIAS = {
 }
 
 
-def _get_window() -> tuple[str, str]:
-    default_to = date.today()
-    default_from = default_to - timedelta(days=90)
-    return (
-        st.session_state.get("date_from", default_from.isoformat()),
-        st.session_state.get("date_to", default_to.isoformat()),
-    )
-
-
 @st.cache_data(ttl=300)
 def _load_top(date_from: str, date_to: str, n: int = 10) -> dict[str, pd.DataFrame]:
-    conn = sqlite3.connect(f"file:{_DEMO_DB}?mode=ro", uri=True)
-    try:
+    with open_ro() as conn:
         return top_produtos(conn, date_from, date_to, n=n)
-    finally:
-        conn.close()
 
 
 @st.cache_data(ttl=300)
 def _load_abc(date_from: str, date_to: str) -> pd.DataFrame:
-    conn = sqlite3.connect(f"file:{_DEMO_DB}?mode=ro", uri=True)
-    try:
+    with open_ro() as conn:
         return abc_pareto(conn, date_from, date_to)
-    finally:
-        conn.close()
 
 
 @st.cache_data(ttl=300)
 def _load_cohort(date_from: str, date_to: str) -> pd.DataFrame:
-    conn = sqlite3.connect(f"file:{_DEMO_DB}?mode=ro", uri=True)
-    try:
+    with open_ro() as conn:
         return cohort_produto(conn, date_from, date_to)
-    finally:
-        conn.close()
 
 
 def _render_top(top: dict[str, pd.DataFrame]) -> None:
@@ -158,7 +132,7 @@ def _render_cohort(cohort: pd.DataFrame) -> None:
 
 def _main() -> None:
     theme.inject_css()
-    date_from, date_to = _get_window()
+    date_from, date_to = get_window()
     theme.page_header(
         "Product Analytics",
         "Concentração de receita por produto, categoria e safra de lançamento.",

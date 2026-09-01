@@ -7,6 +7,8 @@ import sqlite3
 import pandas as pd
 import pytest
 
+from src.segmentation import _assign_segment, abc_pareto, cohort_produto, rfm_scores
+
 
 def _seed_minimal_schema(conn: sqlite3.Connection) -> None:
     """Cria as tabelas mínimas necessárias para segmentation (subset de storage.py)."""
@@ -151,9 +153,6 @@ def rfm_conn() -> sqlite3.Connection:
     conn.close()
 
 
-from src.segmentation import abc_pareto  # noqa: E402 — after fixtures for readability
-
-
 def test_abc_pareto_returns_dataframe_with_expected_columns(abc_conn: sqlite3.Connection) -> None:
     df = abc_pareto(abc_conn, "2026-07-01", "2026-08-01")
     assert isinstance(df, pd.DataFrame)
@@ -197,9 +196,6 @@ def test_abc_pareto_empty_window_returns_empty_df(abc_conn: sqlite3.Connection) 
         "receita_acumulada_pct",
         "classe",
     }
-
-
-from src.segmentation import rfm_scores  # noqa: E402
 
 
 def test_rfm_returns_expected_columns(rfm_conn: sqlite3.Connection) -> None:
@@ -341,9 +337,6 @@ def cohort_conn() -> sqlite3.Connection:
     conn.close()
 
 
-from src.segmentation import cohort_produto  # noqa: E402
-
-
 def test_cohort_returns_pivot_dataframe(cohort_conn: sqlite3.Connection) -> None:
     df = cohort_produto(cohort_conn, "2026-01-01", "2026-04-01")
     assert isinstance(df, pd.DataFrame)
@@ -385,3 +378,20 @@ def test_cohort_p1_receita_across_months(cohort_conn: sqlite3.Connection) -> Non
 def test_cohort_empty_window_returns_empty_df(cohort_conn: sqlite3.Connection) -> None:
     df = cohort_produto(cohort_conn, "2020-01-01", "2020-01-02")
     assert df.empty
+
+
+# ---- RFM: cobertura de partição ----
+
+
+@pytest.mark.parametrize("r", range(1, 6))
+@pytest.mark.parametrize("f", range(1, 6))
+@pytest.mark.parametrize("m", range(1, 6))
+def test_assign_segment_returns_valid_label_for_all_combinations(r: int, f: int, m: int) -> None:
+    """Cada uma das 125 combinações (r,f,m) mapeia para um segmento conhecido.
+
+    Guarda contra `_assign_segment` devolver algo fora do vocabulário fixo se
+    alguma regra for editada de forma inconsistente no futuro.
+    """
+    valid = {"Champions", "Loyal", "At Risk", "New", "Hibernating", "Others"}
+    row = pd.Series({"r_score": r, "f_score": f, "m_score": m})
+    assert _assign_segment(row) in valid
