@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -69,23 +71,38 @@ class TokenStore:
 def _apply_user_only_acl(path: Path) -> None:
     """Restringe permissões a apenas o usuário atual.
 
-    Em Windows usa icacls. Em outros sistemas usa chmod 600.
-    Falhas são silenciosas — a próxima execução tenta de novo.
+    Em Windows usa icacls; em outros sistemas usa chmod 600. Falhas emitem
+    warning (stderr + logging) — silenciar mascarava incidentes onde o
+    tokens.json fica com permissões default herdadas do diretório pai.
     """
     try:
         if platform.system() == "Windows":
             user = os.environ.get("USERNAME", "")
-            if user:
-                subprocess.run(
-                    ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
-                    check=False,
-                    capture_output=True,
-                    timeout=5,
+            if not user:
+                _warn_acl_failure(path, "USERNAME não definido no ambiente")
+                return
+            result = subprocess.run(
+                ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
+                check=False,
+                capture_output=True,
+                timeout=5,
+                text=True,
+            )
+            if result.returncode != 0:
+                _warn_acl_failure(
+                    path, f"icacls saiu com {result.returncode}: {result.stderr[:200]}"
                 )
         else:
             os.chmod(path, 0o600)
-    except (OSError, subprocess.TimeoutExpired):
-        pass
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        _warn_acl_failure(path, str(exc))
+
+
+def _warn_acl_failure(path: Path, detail: str) -> None:
+    """Loga que a ACL não pôde ser aplicada — arquivo fica com perms default."""
+    msg = f"AVISO: não foi possível restringir ACL de {path}: {detail}"
+    logging.warning(msg)
+    print(msg, file=sys.stderr)
 
 
 ML_TOKEN_URL = "https://api.mercadolibre.com/oauth/token"
