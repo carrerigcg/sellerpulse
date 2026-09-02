@@ -8,7 +8,7 @@ import responses
 
 from src.auth import TokenSet, TokenStore
 from src.main import _default_pdf_output, _resolve_gerar_pdf_window, ingest_window, main
-from src.storage import connect, get_orders_in_range
+from src.storage import connect
 
 BASE_URL = "https://api.mercadolibre.com"
 
@@ -96,7 +96,7 @@ def test_ingest_window_persists_orders_items_claims_and_logs_run(tmp_path, monke
 
     # 4) Validar
     conn = connect(db_path)
-    orders = get_orders_in_range(conn, "2026-06-08", "2026-06-15")
+    orders = conn.execute("SELECT * FROM orders").fetchall()
     assert len(orders) == 1
     assert orders[0]["order_id"] == 1001
 
@@ -244,6 +244,22 @@ def test_cmd_abrir_dashboard_invokes_streamlit(monkeypatch):
     assert exit_code == 0
     assert captured["cmd"] == ["streamlit", "run", str(main_mod._DASHBOARD_PATH)]
     assert captured["check"] is False
+
+
+def test_cmd_ingerir_reports_missing_env_var(monkeypatch, tmp_path, capsys):
+    """Faltando ML_CLIENT_ID: retorna 1 com msg amigável, sem traceback."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ML_CLIENT_ID", raising=False)
+    monkeypatch.delenv("ML_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("ML_USER_ID", raising=False)
+    # Também impede que load_dotenv() puxe um .env do CWD real.
+    monkeypatch.setattr("src.main.load_dotenv", lambda: None)
+
+    rc = main(["ingerir", "--week", "2026-W25"])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "ML_CLIENT_ID" in err
+    assert ".env.example" in err
 
 
 def test_cmd_abrir_dashboard_reports_missing_streamlit(monkeypatch, capsys):

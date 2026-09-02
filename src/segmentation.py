@@ -7,6 +7,7 @@ Sem side effects: leitura pura, sem prints, sem HTTP, sem escrita.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
 import pandas as pd
 
@@ -65,12 +66,13 @@ def abc_pareto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
 
 
 # Ordem importa: primeiro segmento cuja condição casar vence.
-_RFM_SEGMENT_RULES: list[tuple[str, str]] = [
-    ("Champions", "r_score >= 4 and f_score >= 4 and m_score >= 4"),
-    ("Loyal", "f_score >= 4 and m_score >= 3"),
-    ("At Risk", "r_score <= 2 and (f_score >= 3 or m_score >= 3)"),
-    ("New", "r_score >= 4 and f_score <= 2"),
-    ("Hibernating", "r_score <= 2 and f_score <= 2 and m_score <= 2"),
+# Callables > strings-eval: elimina landmine se regras virarem input externo.
+_RFM_SEGMENT_RULES: list[tuple[str, Callable[[int, int, int], bool]]] = [
+    ("Champions", lambda r, f, m: r >= 4 and f >= 4 and m >= 4),
+    ("Loyal", lambda r, f, m: f >= 4 and m >= 3),
+    ("At Risk", lambda r, f, m: r <= 2 and (f >= 3 or m >= 3)),
+    ("New", lambda r, f, m: r >= 4 and f <= 2),
+    ("Hibernating", lambda r, f, m: r <= 2 and f <= 2 and m <= 2),
 ]
 
 _RFM_COLUMNS = [
@@ -110,9 +112,8 @@ def _assign_segment(row: pd.Series) -> str:
     r_score = int(row["r_score"])
     f_score = int(row["f_score"])
     m_score = int(row["m_score"])
-    scope = {"r_score": r_score, "f_score": f_score, "m_score": m_score}
-    for name, expr in _RFM_SEGMENT_RULES:
-        if eval(expr, {"__builtins__": {}}, scope):  # noqa: S307 — expr é hardcoded
+    for name, rule in _RFM_SEGMENT_RULES:
+        if rule(r_score, f_score, m_score):
             return name
     return "Others"
 

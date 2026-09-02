@@ -9,39 +9,19 @@ exibir baixa variabilidade de segmentos — comportamento esperado nesta fase.
 
 from __future__ import annotations
 
-import sqlite3
-import sys
-from datetime import date, timedelta
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from src import theme
+from src.pages._shared import get_window, open_ro
 from src.segmentation import rfm_scores
-
-_DEMO_DB = Path("data/demo.db")
-
-
-def _get_window() -> tuple[str, str]:
-    default_to = date.today()
-    default_from = default_to - timedelta(days=90)
-    return (
-        st.session_state.get("date_from", default_from.isoformat()),
-        st.session_state.get("date_to", default_to.isoformat()),
-    )
 
 
 @st.cache_data(ttl=300)
 def _load_rfm(date_from: str, date_to: str) -> pd.DataFrame:
-    conn = sqlite3.connect(f"file:{_DEMO_DB}?mode=ro", uri=True)
-    try:
+    with open_ro() as conn:
         return rfm_scores(conn, date_from, date_to)
-    finally:
-        conn.close()
 
 
 def _render_kpis(rfm: pd.DataFrame) -> None:
@@ -107,7 +87,7 @@ def _render_segment_bar(rfm: pd.DataFrame) -> None:
 
 def _main() -> None:
     theme.inject_css()
-    date_from, date_to = _get_window()
+    date_from, date_to = get_window()
     theme.page_header(
         "Customer Analytics",
         "Quem compra, com que frequência e quanto vale cada segmento.",

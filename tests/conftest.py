@@ -5,12 +5,20 @@ from pathlib import Path
 
 import pytest
 
+from src.storage import init_schema
+
 
 @pytest.fixture
 def memory_db():
-    """Banco SQLite em memória, fresco a cada teste."""
+    """SQLite em memória com schema inicializado.
+
+    Testes que precisam do estado "sem schema" devem instanciar sua própria
+    conexão. Os testes de `init_schema` funcionam mesmo assim, pois a função
+    é idempotente por design.
+    """
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    init_schema(conn)
     yield conn
     conn.close()
 

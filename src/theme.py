@@ -225,13 +225,21 @@ html, body, [data-testid="stAppViewContainer"] {{
 """
 
 
-def inject_css() -> None:
-    """Injeta a folha de estilo. Chamar UMA vez, no topo de cada página.
+_CSS_SENTINEL = "_sp_css_injected"
 
-    Chamar duas vezes no mesmo run só emite um segundo bloco <style> idêntico
-    — inofensivo (as regras são as mesmas), mas desnecessário.
+
+def inject_css() -> None:
+    """Injeta a folha de estilo. Idempotente dentro da mesma sessão Streamlit.
+
+    Streamlit re-executa o script inteiro a cada interação, e cada página
+    também importa o tema; sem o guard, o DOM acabava com 4 blocos <style>
+    idênticos após navegar Home→Executive→Products→Customers. O sentinel em
+    session_state garante que só o primeiro chega ao DOM.
     """
+    if st.session_state.get(_CSS_SENTINEL):
+        return
     st.markdown(f"<style>{build_css()}</style>", unsafe_allow_html=True)
+    st.session_state[_CSS_SENTINEL] = True
 
 
 @dataclass(frozen=True)

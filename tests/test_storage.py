@@ -4,12 +4,8 @@ from datetime import UTC, datetime, timedelta
 
 from src.storage import (
     get_category_cache,
-    get_claims_in_range,
     get_item_cache,
-    get_last_run,
-    get_orders_in_range,
     init_schema,
-    log_run,
     upsert_category_cache,
     upsert_claim,
     upsert_item_cache,
@@ -91,29 +87,27 @@ def test_upsert_order_updates_existing(memory_db):
     assert rows[0]["status"] == "cancelled"
 
 
-def test_get_orders_in_range_filters_by_date(memory_db):
+def test_upsert_order_normalizes_date_closed_to_utc(memory_db):
+    """Input com fuso −03:00 é convertido para UTC (ISO com +00:00)."""
     init_schema(memory_db)
-    for oid, date in [
-        (1, "2026-06-01T10:00:00"),
-        (2, "2026-06-10T10:00:00"),
-        (3, "2026-06-20T10:00:00"),
-    ]:
-        upsert_order(
-            memory_db,
-            {
-                "order_id": oid,
-                "date_closed": date,
-                "status": "paid",
-                "total_amount": 100.0,
-                "marketplace_fee": 10.0,
-                "shipping_cost": 5.0,
-                "buyer_id": 1,
-                "raw_json": "{}",
-                "items": [],
-            },
-        )
-    result = get_orders_in_range(memory_db, "2026-06-05", "2026-06-15")
-    assert [o["order_id"] for o in result] == [2]
+    upsert_order(
+        memory_db,
+        {
+            "order_id": 4242,
+            "date_closed": "2026-06-10T14:30:00-03:00",
+            "status": "paid",
+            "total_amount": 100.0,
+            "marketplace_fee": 10.0,
+            "shipping_cost": 5.0,
+            "buyer_id": 1,
+            "raw_json": "{}",
+            "items": [],
+        },
+    )
+    stored = memory_db.execute("SELECT date_closed FROM orders WHERE order_id = 4242").fetchone()[
+        "date_closed"
+    ]
+    assert stored == "2026-06-10T17:30:00+00:00"
 
 
 def test_item_cache_roundtrip(memory_db):
@@ -139,7 +133,7 @@ def test_category_cache_roundtrip(memory_db):
     assert get_category_cache(memory_db, "MLB-cat-1") == "Iluminação"
 
 
-def test_claims_upsert_and_range(memory_db):
+def test_claims_upsert_persists_row(memory_db):
     init_schema(memory_db)
     upsert_claim(
         memory_db,
@@ -151,21 +145,6 @@ def test_claims_upsert_and_range(memory_db):
             "raw_json": "{}",
         },
     )
-    result = get_claims_in_range(memory_db, "2026-06-01", "2026-06-30")
-    assert len(result) == 1
-    assert result[0]["claim_id"] == 555
-
-
-def test_log_run_and_get_last_run(memory_db):
-    init_schema(memory_db)
-    log_run(
-        memory_db,
-        week_start="2026-06-08",
-        week_end="2026-06-14",
-        pdf_path=None,
-        status="ok",
-        error_message=None,
-    )
-    last = get_last_run(memory_db)
-    assert last["status"] == "ok"
-    assert last["week_start"] == "2026-06-08"
+    row = memory_db.execute("SELECT claim_id, status FROM claims WHERE claim_id = 555").fetchone()
+    assert row["claim_id"] == 555
+    assert row["status"] == "opened"

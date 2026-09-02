@@ -1,4 +1,10 @@
-"""Camada de persistência SQLite — schema, conexão, repositories."""
+"""Camada de persistência SQLite — schema, conexão, repositories.
+
+Convenção de timestamps: colunas `date_closed` e `date_created` são sempre
+gravadas como ISO 8601 em UTC (sufixo `+00:00`). Inputs com fuso são
+convertidos automaticamente; inputs naive são tratados como UTC. Isso permite
+comparação lexicográfica correta em queries de range.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +14,15 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_VERSION = 1
+
+
+def _to_utc_iso(value: str) -> str:
+    """Normaliza string ISO 8601 para UTC. Entrada naive assume UTC."""
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC).isoformat()
+
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -97,8 +112,14 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 
 def upsert_order(conn: sqlite3.Connection, order: dict[str, Any]) -> None:
-    """Insere ou atualiza um pedido + seus itens. Idempotente."""
+    """Insere ou atualiza um pedido + seus itens. Idempotente. `date_closed`
+    é normalizado para UTC.
+
+    Sem commit interno — o caller define a transação (via `with conn:` ou
+    `conn.commit()` explícito).
+    """
     now = datetime.now(UTC).isoformat()
+    date_closed = _to_utc_iso(order["date_closed"])
     conn.execute(
         """
         INSERT INTO orders (
@@ -117,7 +138,7 @@ def upsert_order(conn: sqlite3.Connection, order: dict[str, Any]) -> None:
         """,
         (
             order["order_id"],
-            order["date_closed"],
+            date_closed,
             order["status"],
             order["total_amount"],
             order["marketplace_fee"],
@@ -133,21 +154,10 @@ def upsert_order(conn: sqlite3.Connection, order: dict[str, Any]) -> None:
             "INSERT INTO order_items (order_id, item_id, quantity, unit_price) VALUES (?, ?, ?, ?)",
             (order["order_id"], item["item_id"], item["quantity"], item["unit_price"]),
         )
-    conn.commit()
-
-
-def get_orders_in_range(
-    conn: sqlite3.Connection, start_iso: str, end_iso: str
-) -> list[sqlite3.Row]:
-    """Devolve pedidos com date_closed >= start e < end (ISO8601 strings)."""
-    cursor = conn.execute(
-        "SELECT * FROM orders WHERE date_closed >= ? AND date_closed < ? ORDER BY date_closed",
-        (start_iso, end_iso),
-    )
-    return cursor.fetchall()
 
 
 def upsert_item_cache(conn: sqlite3.Connection, item_id: str, title: str, category_id: str) -> None:
+    """Sem commit interno — caller controla a transação."""
     now = datetime.now(UTC).isoformat()
     conn.execute(
         """
@@ -160,7 +170,6 @@ def upsert_item_cache(conn: sqlite3.Connection, item_id: str, title: str, catego
         """,
         (item_id, title, category_id, now),
     )
-    conn.commit()
 
 
 def get_item_cache(
@@ -176,6 +185,7 @@ def get_item_cache(
 
 
 def upsert_category_cache(conn: sqlite3.Connection, category_id: str, name: str) -> None:
+    """Sem commit interno — caller controla a transação."""
     now = datetime.now(UTC).isoformat()
     conn.execute(
         """
@@ -187,7 +197,6 @@ def upsert_category_cache(conn: sqlite3.Connection, category_id: str, name: str)
         """,
         (category_id, name, now),
     )
-    conn.commit()
 
 
 def get_category_cache(conn: sqlite3.Connection, category_id: str) -> str | None:
@@ -198,7 +207,9 @@ def get_category_cache(conn: sqlite3.Connection, category_id: str) -> str | None
 
 
 def upsert_claim(conn: sqlite3.Connection, claim: dict[str, Any]) -> None:
+    """Sem commit interno — caller controla a transação. `date_created` UTC."""
     now = datetime.now(UTC).isoformat()
+    date_created = _to_utc_iso(claim["date_created"])
     conn.execute(
         """
         INSERT INTO claims (claim_id, order_id, status, date_created, raw_json, fetched_at)
@@ -214,21 +225,11 @@ def upsert_claim(conn: sqlite3.Connection, claim: dict[str, Any]) -> None:
             claim["claim_id"],
             claim["order_id"],
             claim["status"],
-            claim["date_created"],
+            date_created,
             claim["raw_json"],
             now,
         ),
     )
-    conn.commit()
-
-
-def get_claims_in_range(
-    conn: sqlite3.Connection, start_iso: str, end_iso: str
-) -> list[sqlite3.Row]:
-    return conn.execute(
-        "SELECT * FROM claims WHERE date_created >= ? AND date_created < ? ORDER BY date_created",
-        (start_iso, end_iso),
-    ).fetchall()
 
 
 def log_run(
@@ -240,6 +241,7 @@ def log_run(
     status: str,
     error_message: str | None,
 ) -> int:
+    """Sem commit interno — caller controla a transação."""
     cursor = conn.execute(
         """
         INSERT INTO runs (run_at, week_start, week_end, pdf_path, status, error_message)
@@ -247,9 +249,4 @@ def log_run(
         """,
         (datetime.now(UTC).isoformat(), week_start, week_end, pdf_path, status, error_message),
     )
-    conn.commit()
     return cursor.lastrowid
-
-
-def get_last_run(conn: sqlite3.Connection) -> sqlite3.Row | None:
-    return conn.execute("SELECT * FROM runs ORDER BY run_id DESC LIMIT 1").fetchone()

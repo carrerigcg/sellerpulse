@@ -3,14 +3,15 @@
 Subcomandos:
     python -m src.main ingerir [--week=YYYY-WNN | --from=... --to=...]
     python -m src.main regerar-dados     # regera data/demo.db determinístico
-    python -m src.main gerar-pdf         # [Fase 1]
-    python -m src.main abrir-dashboard   # [Fase 2]
+    python -m src.main gerar-pdf
+    python -m src.main abrir-dashboard
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sqlite3
 import sys
@@ -37,6 +38,27 @@ DEFAULT_DB_PATH = Path("data/historico.db")
 DEFAULT_DEMO_DB_PATH = Path("data/demo.db")
 DEFAULT_PDF_DIR = Path("RELATORIOS")
 
+_REQUIRED_ENV_VARS = ("ML_CLIENT_ID", "ML_CLIENT_SECRET", "ML_USER_ID")
+
+
+class MissingEnvError(RuntimeError):
+    """Variável de ambiente obrigatória ausente. Mensagem já vem amigável."""
+
+
+def _load_required_env() -> tuple[str, str, int]:
+    """Lê ML_CLIENT_ID/SECRET/USER_ID. Levanta MissingEnvError com msg pt-BR."""
+    load_dotenv()
+    missing = [v for v in _REQUIRED_ENV_VARS if not os.environ.get(v)]
+    if missing:
+        raise MissingEnvError(
+            f"variável(is) {', '.join(missing)} ausente(s). Copie .env.example → .env e preencha."
+        )
+    return (
+        os.environ["ML_CLIENT_ID"],
+        os.environ["ML_CLIENT_SECRET"],
+        int(os.environ["ML_USER_ID"]),
+    )
+
 
 def ingest_window(
     *,
@@ -46,10 +68,7 @@ def ingest_window(
     date_to: str,
 ) -> dict[str, int]:
     """Busca e persiste todos os dados ML para a janela [date_from, date_to)."""
-    load_dotenv()
-    client_id = os.environ["ML_CLIENT_ID"]
-    client_secret = os.environ["ML_CLIENT_SECRET"]
-    user_id = int(os.environ["ML_USER_ID"])
+    client_id, client_secret, user_id = _load_required_env()
 
     store = TokenStore(tokens_path)
     oauth = OAuthClient(client_id=client_id, client_secret=client_secret, store=store)
@@ -72,38 +91,49 @@ def ingest_window(
         )
         all_orders = orders_paid + orders_cancelled
 
-        for raw in all_orders:
-            _persist_order(conn, ml, raw)
+        # Atomicidade: um único commit por ingestão. `with conn:` faz
+        # commit no sucesso e rollback em qualquer exceção.
+        claims_persisted = 0
+        with conn:
+            for raw in all_orders:
+                _persist_order(conn, ml, raw)
 
-        claims = ml.get_claims(seller_id=user_id, date_from=date_from)
-        for c in claims:
-            upsert_claim(
+            claims = ml.get_claims(seller_id=user_id, date_from=date_from, date_to=date_to)
+            for c in claims:
+                if not c.get("date_created"):
+                    logging.warning(
+                        "claim %s sem date_created; pulando",
+                        c.get("id") or c.get("claim_id"),
+                    )
+                    continue
+                upsert_claim(
+                    conn,
+                    {
+                        "claim_id": c.get("id") or c.get("claim_id"),
+                        "order_id": c.get("resource_id") or c.get("order_id"),
+                        "status": c.get("status", "unknown"),
+                        "date_created": c["date_created"],
+                        "raw_json": json.dumps(c),
+                    },
+                )
+                claims_persisted += 1
+
+            # Reputação — armazenada como singleton em users/{user_id}.
+            # Por ora não persistimos separado; Setor 5 (cálculos) busca direto.
+            # Apenas validamos que respondeu.
+            ml.get_user(user_id)
+
+            log_run(
                 conn,
-                {
-                    "claim_id": c.get("id") or c.get("claim_id"),
-                    "order_id": c.get("resource_id") or c.get("order_id"),
-                    "status": c.get("status", "unknown"),
-                    "date_created": c.get("date_created", date_from),
-                    "raw_json": json.dumps(c),
-                },
+                week_start=date_from[:10],
+                week_end=date_to[:10],
+                pdf_path=None,
+                status="ok",
+                error_message=None,
             )
-
-        # Reputação — armazenada como singleton em users/{user_id}.
-        # Por ora não persistimos separado; Setor 5 (cálculos) busca direto.
-        # Apenas validamos que respondeu.
-        ml.get_user(user_id)
-
-        log_run(
-            conn,
-            week_start=date_from[:10],
-            week_end=date_to[:10],
-            pdf_path=None,
-            status="ok",
-            error_message=None,
-        )
         return {
             "orders_fetched": len(all_orders),
-            "claims_fetched": len(claims),
+            "claims_fetched": claims_persisted,
         }
     except (MLAPIError, OAuthError) as exc:
         log_run(
@@ -117,7 +147,7 @@ def ingest_window(
         raise
 
 
-def _persist_order(conn, ml: MLClient, raw: dict) -> None:
+def _persist_order(conn: sqlite3.Connection, ml: MLClient, raw: dict) -> None:
     """Converte payload bruto do ML para o formato do storage + enriquece itens."""
     payments = raw.get("payments", [])
     marketplace_fee = sum(p.get("marketplace_fee", 0.0) or 0.0 for p in payments)
@@ -155,7 +185,7 @@ def _persist_order(conn, ml: MLClient, raw: dict) -> None:
     )
 
 
-def _ensure_item_cache(conn, ml: MLClient, item_id: str) -> None:
+def _ensure_item_cache(conn: sqlite3.Connection, ml: MLClient, item_id: str) -> None:
     cached = get_item_cache(conn, item_id)
     if cached is not None:
         return
@@ -196,13 +226,20 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def _resolve_window(args: argparse.Namespace) -> tuple[str, str]:
+    """Devolve janela como ISO UTC. Inputs com fuso são convertidos; naive é
+    tratado como UTC.
+    """
     if args.week:
         year, week = args.week.split("-W")
-        start = datetime.fromisocalendar(int(year), int(week), 1)
+        start = datetime.fromisocalendar(int(year), int(week), 1).replace(tzinfo=UTC)
         end = start + timedelta(days=7)
     elif args.date_from and args.date_to:
         start = datetime.fromisoformat(args.date_from)
         end = datetime.fromisoformat(args.date_to)
+        start = start if start.tzinfo else start.replace(tzinfo=UTC)
+        end = end if end.tzinfo else end.replace(tzinfo=UTC)
+        start = start.astimezone(UTC)
+        end = end.astimezone(UTC)
     else:
         end = datetime.now(UTC)
         start = end - timedelta(days=7)
@@ -220,6 +257,9 @@ def _cmd_ingerir(args: argparse.Namespace) -> int:
         )
         print(f"OK — {result['orders_fetched']} pedidos, {result['claims_fetched']} reclamações.")
         return 0
+    except MissingEnvError as exc:
+        print(f"ERRO: {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"ERRO: {exc}", file=sys.stderr)
         return 1
