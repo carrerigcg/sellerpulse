@@ -184,13 +184,13 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "regerar-dados",
         help="Regenera data/demo.db determinístico (modo sintético).",
     )
-    p_pdf = sub.add_parser("gerar-pdf", help="Gera o PDF executivo. [Fase 1]")
+    p_pdf = sub.add_parser("gerar-pdf", help="Gera o PDF executivo.")
     p_pdf.add_argument("--from", dest="date_from", help="Início (YYYY-MM-DD).")
     p_pdf.add_argument("--to", dest="date_to", help="Fim exclusivo (YYYY-MM-DD).")
     p_pdf.add_argument(
         "--output", help="Path do PDF de saída (default RELATORIOS/relatorio-YYYY-WNN.pdf)."
     )
-    sub.add_parser("abrir-dashboard", help="Abre o dashboard Streamlit. [Fase 2]")
+    sub.add_parser("abrir-dashboard", help="Abre o dashboard Streamlit.")
 
     return parser.parse_args(argv)
 

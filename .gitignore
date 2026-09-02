@@ -10,6 +10,13 @@ venv/
 
 # Project secrets and data
 .env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*tokens.json
+*tokens.json.tmp
+secrets.json
+credentials.json
 data/*
 !data/demo.db
 RELATORIOS/
@@ -30,3 +37,6 @@ docs/plans/
 
 # Git worktrees for isolated feature work
 .worktrees/
+
+# Superpowers brainstorming (visual companion mockups)
+.superpowers/
