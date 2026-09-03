@@ -14,14 +14,18 @@ import plotly.express as px
 import streamlit as st
 
 from src import theme
-from src.pages._shared import get_window, open_ro
+from src.dashboard_helpers import get_active_conn, get_window, is_session_conn, source_key
 from src.segmentation import rfm_scores
 
 
 @st.cache_data(ttl=300)
-def _load_rfm(date_from: str, date_to: str) -> pd.DataFrame:
-    with open_ro() as conn:
+def _load_rfm(date_from: str, date_to: str, source: str) -> pd.DataFrame:
+    conn = get_active_conn()
+    try:
         return rfm_scores(conn, date_from, date_to)
+    finally:
+        if not is_session_conn(conn):
+            conn.close()
 
 
 def _render_kpis(rfm: pd.DataFrame) -> None:
@@ -94,7 +98,7 @@ def _main() -> None:
         f"{date_from} — {date_to}",
     )
 
-    rfm = _load_rfm(date_from, date_to)
+    rfm = _load_rfm(date_from, date_to, source_key())
     _render_kpis(rfm)
 
     col_scatter, col_barra = st.columns([2, 1])

@@ -12,8 +12,9 @@ import plotly.express as px
 import streamlit as st
 
 from src import theme
+from src.dashboard_helpers import get_active_conn, get_window, is_session_conn, source_key
 from src.metrics import fluxo_financeiro, reputacao_devolucao
-from src.pages._shared import get_window, open_ro, previous_window
+from src.pages._shared import previous_window
 
 _COMPONENTES = ["receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
 _ROTULOS = {
@@ -26,15 +27,23 @@ _ROTULOS = {
 
 
 @st.cache_data(ttl=300)
-def _load_fluxo(date_from: str, date_to: str) -> pd.DataFrame:
-    with open_ro() as conn:
+def _load_fluxo(date_from: str, date_to: str, source: str) -> pd.DataFrame:
+    conn = get_active_conn()
+    try:
         return fluxo_financeiro(conn, date_from, date_to)
+    finally:
+        if not is_session_conn(conn):
+            conn.close()
 
 
 @st.cache_data(ttl=300)
-def _load_reputacao(date_from: str, date_to: str) -> dict:
-    with open_ro() as conn:
+def _load_reputacao(date_from: str, date_to: str, source: str) -> dict:
+    conn = get_active_conn()
+    try:
         return reputacao_devolucao(conn, date_from, date_to)
+    finally:
+        if not is_session_conn(conn):
+            conn.close()
 
 
 def _totais(fluxo: pd.DataFrame) -> tuple[float, float, float]:
@@ -58,7 +67,7 @@ def _delta(atual: float, anterior: float) -> tuple[str | None, bool | None]:
 def _render_kpis(fluxo: pd.DataFrame, reput: dict, date_from: str, date_to: str) -> None:
     receita, custo, liquido = _totais(fluxo)
     prev_from, prev_to = previous_window(date_from, date_to)
-    receita_ant, custo_ant, liquido_ant = _totais(_load_fluxo(prev_from, prev_to))
+    receita_ant, custo_ant, liquido_ant = _totais(_load_fluxo(prev_from, prev_to, source_key()))
 
     d_receita, subiu_receita = _delta(receita, receita_ant)
     d_custo, subiu_custo = _delta(custo, custo_ant)
@@ -114,8 +123,8 @@ def _main() -> None:
         f"{date_from} — {date_to}",
     )
 
-    fluxo = _load_fluxo(date_from, date_to)
-    reput = _load_reputacao(date_from, date_to)
+    fluxo = _load_fluxo(date_from, date_to, source_key())
+    reput = _load_reputacao(date_from, date_to, source_key())
 
     _render_kpis(fluxo, reput, date_from, date_to)
     _render_fluxo_chart(fluxo)

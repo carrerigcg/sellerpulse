@@ -13,8 +13,8 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from src import theme
+from src.dashboard_helpers import get_active_conn, get_window, is_session_conn, source_key
 from src.metrics import top_produtos
-from src.pages._shared import get_window, open_ro
 from src.segmentation import abc_pareto, cohort_produto
 
 _COLS_PRODUTOS = {
@@ -34,21 +34,33 @@ _COLS_CATEGORIAS = {
 
 
 @st.cache_data(ttl=300)
-def _load_top(date_from: str, date_to: str, n: int = 10) -> dict[str, pd.DataFrame]:
-    with open_ro() as conn:
+def _load_top(date_from: str, date_to: str, source: str, n: int = 10) -> dict[str, pd.DataFrame]:
+    conn = get_active_conn()
+    try:
         return top_produtos(conn, date_from, date_to, n=n)
+    finally:
+        if not is_session_conn(conn):
+            conn.close()
 
 
 @st.cache_data(ttl=300)
-def _load_abc(date_from: str, date_to: str) -> pd.DataFrame:
-    with open_ro() as conn:
+def _load_abc(date_from: str, date_to: str, source: str) -> pd.DataFrame:
+    conn = get_active_conn()
+    try:
         return abc_pareto(conn, date_from, date_to)
+    finally:
+        if not is_session_conn(conn):
+            conn.close()
 
 
 @st.cache_data(ttl=300)
-def _load_cohort(date_from: str, date_to: str) -> pd.DataFrame:
-    with open_ro() as conn:
+def _load_cohort(date_from: str, date_to: str, source: str) -> pd.DataFrame:
+    conn = get_active_conn()
+    try:
         return cohort_produto(conn, date_from, date_to)
+    finally:
+        if not is_session_conn(conn):
+            conn.close()
 
 
 def _render_top(top: dict[str, pd.DataFrame]) -> None:
@@ -139,9 +151,16 @@ def _main() -> None:
         f"{date_from} — {date_to}",
     )
 
-    _render_top(_load_top(date_from, date_to, n=10))
-    _render_pareto(_load_abc(date_from, date_to))
-    _render_cohort(_load_cohort(date_from, date_to))
+    top = _load_top(date_from, date_to, source_key(), n=10)
+    _render_top(top)
+    st.divider()
+
+    abc = _load_abc(date_from, date_to, source_key())
+    _render_pareto(abc)
+    st.divider()
+
+    cohort = _load_cohort(date_from, date_to, source_key())
+    _render_cohort(cohort)
 
 
 _main()
