@@ -208,3 +208,36 @@ async def test_top_produtos_vazio_tem_as_colunas_certas(pg_pool, test_seller):
     assert list(res["categorias"].columns) == [
         "category_id", "category_name", "unidades", "receita"
     ]
+
+
+async def test_top_produtos_nao_infla_com_categoria_compartilhada(
+    pg_pool, test_seller, outro_seller
+):
+    """Fan-out cross-tenant: category_id do ML e GLOBAL (ex: MLB1234), entao
+    varios sellers tem linha com o MESMO category_id em categories_cache.
+
+    Se um JOIN perder o `seller_id`, cada linha de order_items casa N vezes
+    (N = sellers na mesma categoria) e a receita MULTIPLICA silenciosamente.
+    O teste de isolamento nao pega isso porque usa category_id diferente
+    entre os sellers — sem colisao, nao ha fan-out pra observar.
+    """
+    _, sid = test_seller
+    _, outro = outro_seller
+
+    # MESMO category_id e MESMO item_id nos dois sellers (cenario real do ML),
+    # e MESMO order_id, pra tambem cobrir o join com orders.
+    for s in (sid, outro):
+        await _item(pg_pool, s, "MLB1", "Produto A", "MLB1234", "Eletronicos")
+        await _order(pg_pool, s, 1, "2026-07-25T10:00:00+00:00", 100.0, 0.0, 0.0)
+        await _order_item(pg_pool, s, 1, "MLB1", 1, 100.0)
+
+    res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26")
+
+    prod = res["produtos"]
+    assert len(prod) == 1, f"fan-out: esperava 1 linha, veio {len(prod)}"
+    assert prod.iloc[0]["receita"] == pytest.approx(100.0), "receita inflada por fan-out"
+    assert prod.iloc[0]["unidades"] == 1, "unidades infladas por fan-out"
+
+    cat = res["categorias"]
+    assert len(cat) == 1, f"fan-out: esperava 1 categoria, veio {len(cat)}"
+    assert cat.iloc[0]["receita"] == pytest.approx(100.0), "receita de categoria inflada"
