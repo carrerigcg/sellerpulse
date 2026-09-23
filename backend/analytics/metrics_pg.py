@@ -22,10 +22,10 @@ Duas armadilhas de tradução de dialeto que este módulo trata explicitamente:
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 
 import pandas as pd
 
+from backend.analytics._common import _parse_boundary
 from src.metrics import COST_ESTIMATE_RATE
 
 _FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
@@ -103,21 +103,6 @@ _TOP_CATEGORIAS_QUERY = """
     ORDER BY receita DESC, cc.category_id
     LIMIT $4
 """
-
-
-def _parse_boundary(date_str: str) -> datetime:
-    """Converte data/hora ISO 8601 em datetime timezone-aware (default UTC).
-
-    asyncpg exige `datetime.datetime` — não `str` — como argumento pra um
-    parâmetro com cast `::timestamptz` (o protocolo binário não faz o parse
-    que o `psycopg`/SQLite fariam com uma string crua). Datas sem horário
-    (ex: "2026-07-25") viram meia-noite UTC, coerente com o pool fixado em
-    UTC e com o corte exclusivo de `date_to` nos testes de borda.
-    """
-    dt = datetime.fromisoformat(date_str)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    return dt
 
 
 async def fluxo_financeiro(
