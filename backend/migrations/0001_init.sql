@@ -6,7 +6,7 @@ create extension if not exists pgcrypto;
 
 create table sellers (
     id            uuid primary key default gen_random_uuid(),
-    user_id       uuid not null references auth.users(id) unique,
+    user_id       uuid not null unique references auth.users(id) on delete cascade,
     ml_seller_id  bigint,
     ml_nickname   text,
     created_at    timestamptz not null default now()
