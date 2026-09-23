@@ -41,3 +41,19 @@ async def test_seller(pg_pool):
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
         await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+
+
+@pytest.fixture
+async def outro_seller(pg_pool):
+    """Segundo seller — usado pra provar isolamento entre tenants."""
+    user_id = uuid.uuid4()
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO auth.users (id, email) VALUES ($1, $2)", user_id, "outro@sellerpulse.dev"
+        )
+        seller_id = await conn.fetchval(
+            "INSERT INTO sellers (user_id) VALUES ($1) RETURNING id", user_id
+        )
+    yield user_id, seller_id
+    async with pg_pool.acquire() as conn:
+        await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
