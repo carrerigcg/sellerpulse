@@ -14,7 +14,11 @@ TEST_DATABASE_URL = os.environ.get(
 
 @pytest.fixture
 async def pg_pool():
-    pool = await asyncpg.create_pool(TEST_DATABASE_URL, min_size=1, max_size=2)
+    # server_settings espelha backend/db.py: sem UTC fixo, o Postgres local
+    # (America/Sao_Paulo) daria resultados diferentes da producao (UTC).
+    pool = await asyncpg.create_pool(
+        TEST_DATABASE_URL, min_size=1, max_size=2, server_settings={"timezone": "UTC"}
+    )
     yield pool
     await pool.close()
 

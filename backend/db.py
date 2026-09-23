@@ -18,7 +18,17 @@ async def get_pool() -> asyncpg.Pool:
     global _pool
     if _pool is None:
         database_url = os.environ["DATABASE_URL"]
-        _pool = await asyncpg.create_pool(database_url, min_size=1, max_size=5)
+        _pool = await asyncpg.create_pool(
+            database_url,
+            min_size=1,
+            max_size=5,
+            # UTC fixo: o Supabase roda em UTC, mas um Postgres local herda o
+            # fuso do SO (aqui, America/Sao_Paulo). Sem fixar, `to_char(...,
+            # 'YYYY-MM-DD')` agruparia pedidos no dia errado e `$1::timestamptz`
+            # deslocaria as bordas da janela — receita diaria silenciosamente
+            # errada, divergindo entre teste e producao.
+            server_settings={"timezone": "UTC"},
+        )
     return _pool
 
 
