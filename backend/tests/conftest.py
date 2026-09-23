@@ -57,3 +57,28 @@ async def outro_seller(pg_pool):
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
         await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+
+
+@pytest.fixture
+async def pg_pool_fuso_nao_utc():
+    """Pool com TimeZone de sessao DELIBERADAMENTE nao-UTC.
+
+    `to_char` sobre `timestamptz` converte pro fuso da SESSAO. As queries
+    analiticas usam `AT TIME ZONE 'UTC'` justamente pra nao depender disso —
+    mas `pg_pool` fixa UTC, entao remover o `AT TIME ZONE` do codigo nao
+    quebraria teste nenhum (verificado por mutacao). Este pool existe pra
+    fechar essa cegueira: rodar a mesma query nos dois pools tem que dar o
+    MESMO resultado.
+
+    America/Sao_Paulo (UTC-3) e escolhido explicitamente em vez de herdar o
+    fuso do SO pra que o teste seja deterministico em qualquer maquina —
+    inclusive numa CI que rode em UTC, onde herdar tornaria o teste vazio.
+    """
+    pool = await asyncpg.create_pool(
+        TEST_DATABASE_URL,
+        min_size=1,
+        max_size=2,
+        server_settings={"timezone": "America/Sao_Paulo"},
+    )
+    yield pool
+    await pool.close()

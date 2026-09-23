@@ -362,3 +362,22 @@ async def test_top_produtos_respeita_bordas_da_janela_em_utc(pg_pool, test_selle
     assert len(cat) == 1
     assert cat.iloc[0]["receita"] == pytest.approx(50.0)
     assert cat.iloc[0]["unidades"] == 2
+
+
+async def test_fluxo_independe_do_fuso_da_sessao(pg_pool, pg_pool_fuso_nao_utc, test_seller):
+    """A agregacao por dia nao pode mudar com o TimeZone da sessao.
+
+    Protege o `AT TIME ZONE 'UTC'` do to_char. Sem ele, um pedido as 02:00Z
+    cai no dia anterior quando a sessao esta em America/Sao_Paulo (UTC-3) —
+    receita diaria errada, sem erro nenhum. O pool padrao dos testes fixa
+    UTC, entao so um pool nao-UTC expoe a regressao.
+    """
+    _, sid = test_seller
+    # 02:00Z = 23:00 do dia ANTERIOR em Sao_Paulo. E o caso critico.
+    await _order(pg_pool, sid, 1, "2026-07-25T02:00:00+00:00", 100.0, 10.0, 5.0)
+
+    em_utc = await fluxo_financeiro(pg_pool, sid, "2026-07-25", "2026-07-26")
+    em_sp = await fluxo_financeiro(pg_pool_fuso_nao_utc, sid, "2026-07-25", "2026-07-26")
+
+    pd.testing.assert_frame_equal(em_utc, em_sp, check_dtype=False, atol=1e-6)
+    assert em_utc.iloc[0]["date"] == "2026-07-25"

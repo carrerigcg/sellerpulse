@@ -416,3 +416,25 @@ async def test_cohort_produto_agrupa_mes_em_utc_na_virada_do_dia(pg_pool, test_s
     assert list(pivot.index) == ["2026-08"]
     assert list(pivot.columns) == ["2026-08"]
     assert pivot.loc["2026-08", "2026-08"] == pytest.approx(90.0)
+
+
+async def test_cohort_independe_do_fuso_da_sessao(pg_pool, pg_pool_fuso_nao_utc, test_seller):
+    """O agrupamento por MES nao pode mudar com o TimeZone da sessao.
+
+    Protege o `AT TIME ZONE 'UTC'` das duas queries do cohort. Sem ele, um
+    pedido de 1o de agosto as 02:00Z e contabilizado em JULHO quando a sessao
+    esta em America/Sao_Paulo (UTC-3) — o cohort inteiro desloca de mes.
+    Verificado por mutacao: sem este teste, remover o AT TIME ZONE passa
+    despercebido, porque o pool padrao dos testes ja fixa UTC.
+    """
+    _, sid = test_seller
+    await _item(pg_pool, sid, "MLB1", "Produto A", "CAT1", "Categoria 1")
+    # 02:00Z do dia 1o = 23:00 do ultimo dia de julho em Sao_Paulo.
+    await _order(pg_pool, sid, 1, "2026-08-01T02:00:00+00:00", 100.0, 0.0, 0.0)
+    await _order_item(pg_pool, sid, 1, "MLB1", 1, 100.0)
+
+    em_utc = await cohort_produto(pg_pool, sid, "2026-08-01", "2026-09-01")
+    em_sp = await cohort_produto(pg_pool_fuso_nao_utc, sid, "2026-08-01", "2026-09-01")
+
+    pd.testing.assert_frame_equal(em_utc, em_sp, check_dtype=False, atol=1e-6)
+    assert "2026-08" in em_utc.index
