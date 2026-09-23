@@ -149,7 +149,7 @@ async def test_fluxo_paridade_com_a_versao_sqlite(pg_pool, test_seller):
         esperado.reset_index(drop=True),
         obtido.reset_index(drop=True),
         check_dtype=False,
-        atol=0.01,
+        atol=1e-6,
     )
 
 
@@ -241,3 +241,124 @@ async def test_top_produtos_nao_infla_com_categoria_compartilhada(
     cat = res["categorias"]
     assert len(cat) == 1, f"fan-out: esperava 1 categoria, veio {len(cat)}"
     assert cat.iloc[0]["receita"] == pytest.approx(100.0), "receita de categoria inflada"
+
+
+async def test_top_produtos_desempate_estavel_por_item_id(pg_pool, test_seller):
+    """Empate de receita tem que ter desempate deterministico (por item_id).
+
+    Sem `ORDER BY receita DESC, item_id`, a ordem entre linhas empatadas nao
+    e garantida pelo Postgres — com LIMIT, o "produto top" podia alternar
+    entre recarregamentos. MLB1 < MLB2 lexicograficamente, entao com n=1
+    o resultado tem que ser sempre MLB1.
+    """
+    _, sid = test_seller
+    await _item(pg_pool, sid, "MLB2", "Produto B", "CAT1", "Categoria 1")
+    await _item(pg_pool, sid, "MLB1", "Produto A", "CAT1", "Categoria 1")
+    await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 200.0, 0.0, 0.0)
+    await _order_item(pg_pool, sid, 1, "MLB2", 1, 100.0)
+    await _order_item(pg_pool, sid, 1, "MLB1", 1, 100.0)
+
+    for _ in range(5):
+        res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26", n=1)
+        assert list(res["produtos"]["item_id"]) == ["MLB1"]
+
+
+async def test_top_produtos_paridade_com_a_versao_sqlite(pg_pool, test_seller):
+    """O porte tem que dar os MESMOS numeros que o original em SQLite.
+
+    Cobre agregacao multi-pedido (mesmo produto em mais de um pedido, em
+    dias diferentes) e o ponto de arredondamento do ROUND no SQL — a
+    superficie de top_produtos que test_fluxo_paridade... nao cobre.
+
+    O original em SQLite nao tem seller_id; comparamos so as colunas que
+    o porte tambem tem em comum com ele (mesmas colunas em produtos/categorias).
+    """
+    from src.metrics import top_produtos as top_produtos_sqlite
+    from src.storage import connect as sqlite_connect
+    from src.storage import upsert_category_cache, upsert_item_cache, upsert_order
+
+    _, sid = test_seller
+
+    itens = [
+        ("MLB1", "Produto A", "CAT1", "Categoria 1"),
+        ("MLB2", "Produto B", "CAT2", "Categoria 2"),
+    ]
+    # MLB1 aparece em dois pedidos, em dias diferentes -> testa GROUP BY
+    # agregando por item_id atraves de multiplos pedidos.
+    pedidos = [
+        (1, "2026-07-25T10:00:00+00:00", [("MLB1", 2, 33.33), ("MLB2", 1, 10.0)]),
+        (2, "2026-07-26T12:00:00+00:00", [("MLB1", 1, 33.33)]),
+    ]
+
+    sconn = sqlite_connect(":memory:")
+    try:
+        for item_id, title, category_id, category_name in itens:
+            upsert_category_cache(sconn, category_id, category_name)
+            upsert_item_cache(sconn, item_id, title, category_id)
+        for order_id, date_closed, items in pedidos:
+            upsert_order(sconn, {
+                "order_id": order_id, "date_closed": date_closed, "status": "paid",
+                "total_amount": sum(q * p for _, q, p in items),
+                "marketplace_fee": 0.0, "shipping_cost": 0.0,
+                "buyer_id": 1001, "raw_json": "{}",
+                "items": [
+                    {"item_id": item_id, "quantity": qty, "unit_price": price}
+                    for item_id, qty, price in items
+                ],
+            })
+        sconn.commit()
+        esperado = top_produtos_sqlite(sconn, "2026-07-25", "2026-07-27")
+    finally:
+        sconn.close()
+
+    for item_id, title, category_id, category_name in itens:
+        await _item(pg_pool, sid, item_id, title, category_id, category_name)
+    for order_id, date_closed, items in pedidos:
+        total = sum(q * p for _, q, p in items)
+        await _order(pg_pool, sid, order_id, date_closed, total, 0.0, 0.0)
+        for item_id, qty, price in items:
+            await _order_item(pg_pool, sid, order_id, item_id, qty, price)
+    obtido = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-27")
+
+    pd.testing.assert_frame_equal(
+        esperado["produtos"].reset_index(drop=True),
+        obtido["produtos"].reset_index(drop=True),
+        check_dtype=False,
+        atol=1e-6,
+    )
+    pd.testing.assert_frame_equal(
+        esperado["categorias"].reset_index(drop=True),
+        obtido["categorias"].reset_index(drop=True),
+        check_dtype=False,
+        atol=1e-6,
+    )
+
+
+async def test_top_produtos_respeita_bordas_da_janela_em_utc(pg_pool, test_seller):
+    """date_to e EXCLUSIVO e o corte e em UTC — produtos E categorias tem
+    que concordar (uma query com `<=` no lugar de `<` faria as duas
+    divergirem entre si sem levantar excecao)."""
+    _, sid = test_seller
+    await _item(pg_pool, sid, "MLB1", "Produto A", "CAT1", "Categoria 1")
+
+    casos = [
+        (1, "2026-07-24T23:59:00+00:00", 10.0),  # fora (antes)
+        (2, "2026-07-25T00:00:00+00:00", 20.0),  # dentro
+        (3, "2026-07-25T23:59:00+00:00", 30.0),  # dentro
+        (4, "2026-07-26T00:00:00+00:00", 40.0),  # fora (depois)
+    ]
+    for order_id, date_closed, preco in casos:
+        await _order(pg_pool, sid, order_id, date_closed, preco, 0.0, 0.0)
+        await _order_item(pg_pool, sid, order_id, "MLB1", 1, preco)
+
+    res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26")
+
+    prod = res["produtos"]
+    assert len(prod) == 1
+    assert prod.iloc[0]["receita"] == pytest.approx(50.0)
+    assert prod.iloc[0]["unidades"] == 2
+
+    cat = res["categorias"]
+    assert len(cat) == 1
+    assert cat.iloc[0]["receita"] == pytest.approx(50.0)
+    assert cat.iloc[0]["unidades"] == 2

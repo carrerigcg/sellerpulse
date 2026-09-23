@@ -60,8 +60,8 @@ def test_decode_token_assinado_com_outro_secret_levanta_401(monkeypatch):
 async def test_resolve_seller_id_encontrado(pg_pool, test_seller):
     user_id, seller_id = test_seller
     resolvido = await resolve_seller_id(pg_pool, str(user_id))
-    # resolve_seller_id devolve str; a fixture devolve uuid.UUID (vem do asyncpg)
-    assert resolvido == str(seller_id)
+    # resolve_seller_id devolve uuid.UUID, igual a fixture (vem do asyncpg)
+    assert resolvido == seller_id
 
 
 async def test_resolve_seller_id_inexistente_levanta_404(pg_pool):

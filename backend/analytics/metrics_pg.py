@@ -34,7 +34,10 @@ _CATEGORIAS_COLUMNS = ["category_id", "category_name", "unidades", "receita"]
 
 _FLUXO_QUERY = """
     SELECT
-        to_char(date_closed, 'YYYY-MM-DD') AS date,
+        -- to_char sobre timestamptz converte pro fuso da SESSAO. O pool ja
+        -- fixa server_settings={"timezone": "UTC"}, mas o AT TIME ZONE torna
+        -- essa query correta por si so, independente de config externa.
+        to_char(date_closed AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
         SUM(total_amount)                  AS receita_bruta,
         SUM(marketplace_fee)               AS taxas_ml,
         SUM(shipping_cost)                 AS frete
@@ -43,7 +46,7 @@ _FLUXO_QUERY = """
       AND status = 'paid'
       AND date_closed >= $2::timestamptz
       AND date_closed <  $3::timestamptz
-    GROUP BY to_char(date_closed, 'YYYY-MM-DD')
+    GROUP BY 1
     ORDER BY date
 """
 
@@ -66,10 +69,17 @@ _TOP_PRODUTOS_QUERY = """
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
     GROUP BY oi.item_id, ic.title, cc.name
-    ORDER BY receita DESC
+    -- Desempate por item_id: divergencia INTENCIONAL de src/metrics.py (que
+    -- tem o mesmo defeito de ORDER BY sem desempate, mas esta congelado).
+    -- Sem isso, empates de receita tem ordem nao-deterministica no Postgres
+    -- e o "top produto" alterna entre recarregamentos com LIMIT.
+    ORDER BY receita DESC, oi.item_id
     LIMIT $4
 """
 
+# Segunda query separada — não dá pra reaproveitar o LIMIT do ranking de
+# produtos aqui: filtrar por top-N produtos distorceria os totais por
+# categoria (excluiria receita de produtos fora do top-N).
 _TOP_CATEGORIAS_QUERY = """
     SELECT
         cc.category_id                              AS category_id,
@@ -88,7 +98,9 @@ _TOP_CATEGORIAS_QUERY = """
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
     GROUP BY cc.category_id, cc.name
-    ORDER BY receita DESC
+    -- Desempate por category_id: mesma divergencia INTENCIONAL de
+    -- src/metrics.py explicada acima em _TOP_PRODUTOS_QUERY.
+    ORDER BY receita DESC, cc.category_id
     LIMIT $4
 """
 
