@@ -274,3 +274,32 @@ def test_n_invalido_devolve_400(client, test_seller, n):
         headers=_auth(user_id),
     )
     assert resp.status_code == 400
+
+
+async def test_isolamento_e_bidirecional(client, pg_pool, test_seller, outro_seller):
+    """Cada token tem que ver os dados DO SEU seller — nos dois sentidos.
+
+    Os outros testes de isolamento so fazem requisicao com o token de A, entao
+    provam "A nao ve B" mas nao "B ve B". Um lookup quebrado que resolvesse
+    TODO token pro mesmo seller (ex: perder o WHERE user_id em
+    resolve_seller_id) passaria por eles: a requisicao de A continuaria
+    devolvendo os dados de A.
+
+    Verificado por mutacao: trocando o lookup por
+    `SELECT id FROM sellers ORDER BY created_at LIMIT 1`, os 58 testes
+    anteriores passavam e so este acusa.
+    """
+    user_a, sid_a = test_seller
+    user_b, sid_b = outro_seller
+    await _order(pg_pool, sid_a, 1, "2026-07-25T10:00:00+00:00", 100.0, 0.0, 0.0)
+    await _order(pg_pool, sid_b, 2, "2026-07-25T10:00:00+00:00", 999.0, 0.0, 0.0)
+
+    params = {"date_from": "2026-07-25", "date_to": "2026-07-26"}
+
+    resp_a = client.get("/metrics/fluxo-financeiro", params=params, headers=_auth(user_a))
+    assert resp_a.status_code == 200
+    assert resp_a.json()[0]["receita_bruta"] == pytest.approx(100.0), "token de A nao viu dados de A"
+
+    resp_b = client.get("/metrics/fluxo-financeiro", params=params, headers=_auth(user_b))
+    assert resp_b.status_code == 200
+    assert resp_b.json()[0]["receita_bruta"] == pytest.approx(999.0), "token de B nao viu dados de B"
