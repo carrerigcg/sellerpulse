@@ -5,6 +5,7 @@ O isolamento entre tenants do backend é feito AQUI: o seller_id nunca vem
 do cliente, sempre é resolvido a partir do `sub` de um JWT já validado.
 As queries analíticas filtram por esse valor.
 """
+
 from __future__ import annotations
 
 import uuid

@@ -4,6 +4,7 @@
 Singleton por processo: o FastAPI abre no startup (lifespan em main.py) e
 fecha no shutdown. Os testes controlam o ciclo manualmente via close_pool().
 """
+
 from __future__ import annotations
 
 import os

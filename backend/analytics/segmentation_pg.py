@@ -131,9 +131,7 @@ _COHORT_REVENUE_QUERY = """
 """
 
 
-async def abc_pareto(
-    pool, seller_id: uuid.UUID, date_from: str, date_to: str
-) -> pd.DataFrame:
+async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> pd.DataFrame:
     """Ranking de produtos por receita + classe A/B/C (regra 80/15/5 acumulada).
 
     Args:
@@ -177,9 +175,7 @@ async def abc_pareto(
     return df[_ABC_COLUMNS]
 
 
-async def rfm_scores(
-    pool, seller_id: uuid.UUID, date_from: str, date_to: str
-) -> pd.DataFrame:
+async def rfm_scores(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> pd.DataFrame:
     """RFM por comprador único no período + segmento textual.
 
     Args:
@@ -225,9 +221,7 @@ async def rfm_scores(
     return df[_RFM_COLUMNS]
 
 
-async def cohort_produto(
-    pool, seller_id: uuid.UUID, date_from: str, date_to: str
-) -> pd.DataFrame:
+async def cohort_produto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> pd.DataFrame:
     """Cohort de produtos por mês de lançamento — agregado.
 
     "Mês de lançamento" = menor date_closed do produto **no banco inteiro**

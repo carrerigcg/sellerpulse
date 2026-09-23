@@ -1,5 +1,6 @@
 # backend/routers/segmentation.py
 """Endpoints REST de segmentação — expõe `backend/analytics/segmentation_pg.py`."""
+
 from __future__ import annotations
 
 import uuid

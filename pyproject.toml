@@ -24,3 +24,15 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 ignore = ["E501"]  # line-length is enforced by formatter
+
+[tool.ruff.lint.flake8-bugbear]
+# `Depends(...)` em default de argumento e o idioma oficial de injecao de
+# dependencia do FastAPI — B008 e falso positivo nesse caso. Idem para os
+# outros marcadores de parametro (Query/Path/Body/Header), caso apareçam.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+]

@@ -14,16 +14,18 @@ _INSERT_ORDER = """
 """
 
 
-async def _order(pool, seller_id, order_id, date_closed, total, fee, ship,
-                 status="paid", buyer_id=1001):
+async def _order(
+    pool, seller_id, order_id, date_closed, total, fee, ship, status="paid", buyer_id=1001
+):
     # asyncpg 0.31 exige datetime real (nao str) para um parametro usado com
     # cast ::timestamptz no SQL -- o protocolo binario nao faz esse parse.
     dt = datetime.fromisoformat(date_closed)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     async with pool.acquire() as conn:
-        await conn.execute(_INSERT_ORDER, order_id, seller_id, dt, status,
-                           total, fee, ship, buyer_id)
+        await conn.execute(
+            _INSERT_ORDER, order_id, seller_id, dt, status, total, fee, ship, buyer_id
+        )
 
 
 async def _item(pool, seller_id, item_id, title, category_id, category_name):
@@ -31,11 +33,18 @@ async def _item(pool, seller_id, item_id, title, category_id, category_name):
         await conn.execute(
             "INSERT INTO categories_cache (seller_id, category_id, name, fetched_at) "
             "VALUES ($1,$2,$3,now()) ON CONFLICT DO NOTHING",
-            seller_id, category_id, category_name)
+            seller_id,
+            category_id,
+            category_name,
+        )
         await conn.execute(
             "INSERT INTO items_cache (seller_id, item_id, title, category_id, fetched_at) "
             "VALUES ($1,$2,$3,$4,now()) ON CONFLICT DO NOTHING",
-            seller_id, item_id, title, category_id)
+            seller_id,
+            item_id,
+            title,
+            category_id,
+        )
 
 
 async def _order_item(pool, seller_id, order_id, item_id, qty, unit_price):
@@ -43,10 +52,16 @@ async def _order_item(pool, seller_id, order_id, item_id, qty, unit_price):
         await conn.execute(
             "INSERT INTO order_items (seller_id, order_id, item_id, quantity, unit_price) "
             "VALUES ($1,$2,$3,$4,$5)",
-            seller_id, order_id, item_id, qty, unit_price)
+            seller_id,
+            order_id,
+            item_id,
+            qty,
+            unit_price,
+        )
 
 
 # ---------- fluxo_financeiro ----------
+
 
 async def test_fluxo_agrega_por_dia(pg_pool, test_seller):
     _, sid = test_seller
@@ -66,8 +81,7 @@ async def test_fluxo_agrega_por_dia(pg_pool, test_seller):
 async def test_fluxo_ignora_nao_pagos(pg_pool, test_seller):
     _, sid = test_seller
     await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 100.0, 10.0, 5.0)
-    await _order(pg_pool, sid, 2, "2026-07-25T11:00:00+00:00", 999.0, 0.0, 0.0,
-                 status="cancelled")
+    await _order(pg_pool, sid, 2, "2026-07-25T11:00:00+00:00", 999.0, 0.0, 0.0, status="cancelled")
     df = await fluxo_financeiro(pg_pool, sid, "2026-07-25", "2026-07-26")
     assert df.iloc[0]["receita_bruta"] == pytest.approx(100.0)
 
@@ -97,7 +111,12 @@ async def test_fluxo_vazio_tem_as_colunas_certas(pg_pool, test_seller):
     df = await fluxo_financeiro(pg_pool, sid, "2026-01-01", "2026-01-02")
     assert df.empty
     assert list(df.columns) == [
-        "date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"
+        "date",
+        "receita_bruta",
+        "taxas_ml",
+        "frete",
+        "custo_estimado",
+        "liquido",
     ]
 
 
@@ -131,11 +150,20 @@ async def test_fluxo_paridade_com_a_versao_sqlite(pg_pool, test_seller):
     sconn = sqlite_connect(":memory:")
     try:
         for oid, dt, total, fee, ship in pedidos:
-            upsert_order(sconn, {
-                "order_id": oid, "date_closed": dt, "status": "paid",
-                "total_amount": total, "marketplace_fee": fee, "shipping_cost": ship,
-                "buyer_id": 1001, "raw_json": "{}", "items": [],
-            })
+            upsert_order(
+                sconn,
+                {
+                    "order_id": oid,
+                    "date_closed": dt,
+                    "status": "paid",
+                    "total_amount": total,
+                    "marketplace_fee": fee,
+                    "shipping_cost": ship,
+                    "buyer_id": 1001,
+                    "raw_json": "{}",
+                    "items": [],
+                },
+            )
         sconn.commit()
         esperado = fluxo_sqlite(sconn, "2026-07-25", "2026-07-27")
     finally:
@@ -155,13 +183,14 @@ async def test_fluxo_paridade_com_a_versao_sqlite(pg_pool, test_seller):
 
 # ---------- top_produtos ----------
 
+
 async def test_top_produtos_ranqueia_por_receita(pg_pool, test_seller):
     _, sid = test_seller
     await _item(pg_pool, sid, "MLB1", "Produto A", "CAT1", "Categoria 1")
     await _item(pg_pool, sid, "MLB2", "Produto B", "CAT1", "Categoria 1")
     await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 300.0, 0.0, 0.0)
-    await _order_item(pg_pool, sid, 1, "MLB1", 2, 50.0)    # 100
-    await _order_item(pg_pool, sid, 1, "MLB2", 1, 200.0)   # 200
+    await _order_item(pg_pool, sid, 1, "MLB1", 2, 50.0)  # 100
+    await _order_item(pg_pool, sid, 1, "MLB2", 1, 200.0)  # 200
 
     res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26")
     prod = res["produtos"]
@@ -203,10 +232,17 @@ async def test_top_produtos_vazio_tem_as_colunas_certas(pg_pool, test_seller):
     _, sid = test_seller
     res = await top_produtos(pg_pool, sid, "2026-01-01", "2026-01-02")
     assert list(res["produtos"].columns) == [
-        "item_id", "title", "category_name", "unidades", "receita"
+        "item_id",
+        "title",
+        "category_name",
+        "unidades",
+        "receita",
     ]
     assert list(res["categorias"].columns) == [
-        "category_id", "category_name", "unidades", "receita"
+        "category_id",
+        "category_name",
+        "unidades",
+        "receita",
     ]
 
 
@@ -296,16 +332,23 @@ async def test_top_produtos_paridade_com_a_versao_sqlite(pg_pool, test_seller):
             upsert_category_cache(sconn, category_id, category_name)
             upsert_item_cache(sconn, item_id, title, category_id)
         for order_id, date_closed, items in pedidos:
-            upsert_order(sconn, {
-                "order_id": order_id, "date_closed": date_closed, "status": "paid",
-                "total_amount": sum(q * p for _, q, p in items),
-                "marketplace_fee": 0.0, "shipping_cost": 0.0,
-                "buyer_id": 1001, "raw_json": "{}",
-                "items": [
-                    {"item_id": item_id, "quantity": qty, "unit_price": price}
-                    for item_id, qty, price in items
-                ],
-            })
+            upsert_order(
+                sconn,
+                {
+                    "order_id": order_id,
+                    "date_closed": date_closed,
+                    "status": "paid",
+                    "total_amount": sum(q * p for _, q, p in items),
+                    "marketplace_fee": 0.0,
+                    "shipping_cost": 0.0,
+                    "buyer_id": 1001,
+                    "raw_json": "{}",
+                    "items": [
+                        {"item_id": item_id, "quantity": qty, "unit_price": price}
+                        for item_id, qty, price in items
+                    ],
+                },
+            )
         sconn.commit()
         esperado = top_produtos_sqlite(sconn, "2026-07-25", "2026-07-27")
     finally:

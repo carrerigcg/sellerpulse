@@ -30,14 +30,16 @@ def _make_token(user_id: str, *, expired: bool = False, secret: str = TEST_JWT_S
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
-async def _order(pool, seller_id, order_id, date_closed, total, fee=0.0, ship=0.0,
-                  status="paid", buyer_id=1001):
+async def _order(
+    pool, seller_id, order_id, date_closed, total, fee=0.0, ship=0.0, status="paid", buyer_id=1001
+):
     dt = datetime.fromisoformat(date_closed)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     async with pool.acquire() as conn:
-        await conn.execute(_INSERT_ORDER, order_id, seller_id, dt, status,
-                            total, fee, ship, buyer_id)
+        await conn.execute(
+            _INSERT_ORDER, order_id, seller_id, dt, status, total, fee, ship, buyer_id
+        )
 
 
 async def _item(pool, seller_id, item_id, title, category_id="CAT1", category_name="Categoria 1"):
@@ -45,11 +47,18 @@ async def _item(pool, seller_id, item_id, title, category_id="CAT1", category_na
         await conn.execute(
             "INSERT INTO categories_cache (seller_id, category_id, name, fetched_at) "
             "VALUES ($1,$2,$3,now()) ON CONFLICT DO NOTHING",
-            seller_id, category_id, category_name)
+            seller_id,
+            category_id,
+            category_name,
+        )
         await conn.execute(
             "INSERT INTO items_cache (seller_id, item_id, title, category_id, fetched_at) "
             "VALUES ($1,$2,$3,$4,now()) ON CONFLICT DO NOTHING",
-            seller_id, item_id, title, category_id)
+            seller_id,
+            item_id,
+            title,
+            category_id,
+        )
 
 
 async def _order_item(pool, seller_id, order_id, item_id, qty, unit_price):
@@ -57,7 +66,12 @@ async def _order_item(pool, seller_id, order_id, item_id, qty, unit_price):
         await conn.execute(
             "INSERT INTO order_items (seller_id, order_id, item_id, quantity, unit_price) "
             "VALUES ($1,$2,$3,$4,$5)",
-            seller_id, order_id, item_id, qty, unit_price)
+            seller_id,
+            order_id,
+            item_id,
+            qty,
+            unit_price,
+        )
 
 
 @pytest.fixture
@@ -73,6 +87,7 @@ def _auth(user_id) -> dict[str, str]:
 
 
 # ---------- caminho feliz ----------
+
 
 async def test_fluxo_financeiro_endpoint(client, pg_pool, test_seller):
     user_id, sid = test_seller
@@ -184,6 +199,7 @@ async def test_cohort_vazio_devolve_lista_vazia(client, test_seller):
 
 # ---------- autenticação ----------
 
+
 def test_sem_token_devolve_401(client):
     """HTTPBearer sem Authorization: confirmado rodando que devolve 401
     nesta versao do FastAPI (0.141.1), nao 403 como em versoes antigas."""
@@ -205,6 +221,7 @@ def test_token_invalido_devolve_401(client):
 
 
 # ---------- isolamento entre tenants ----------
+
 
 async def test_fluxo_financeiro_isola_por_tenant(client, pg_pool, test_seller, outro_seller):
     user_a, sid_a = test_seller
@@ -244,6 +261,7 @@ async def test_top_produtos_isola_por_tenant(client, pg_pool, test_seller, outro
 
 
 # ---------- validação de entrada ----------
+
 
 def test_date_from_malformada_devolve_400(client, test_seller):
     user_id, _sid = test_seller
@@ -298,8 +316,12 @@ async def test_isolamento_e_bidirecional(client, pg_pool, test_seller, outro_sel
 
     resp_a = client.get("/metrics/fluxo-financeiro", params=params, headers=_auth(user_a))
     assert resp_a.status_code == 200
-    assert resp_a.json()[0]["receita_bruta"] == pytest.approx(100.0), "token de A nao viu dados de A"
+    assert resp_a.json()[0]["receita_bruta"] == pytest.approx(100.0), (
+        "token de A nao viu dados de A"
+    )
 
     resp_b = client.get("/metrics/fluxo-financeiro", params=params, headers=_auth(user_b))
     assert resp_b.status_code == 200
-    assert resp_b.json()[0]["receita_bruta"] == pytest.approx(999.0), "token de B nao viu dados de B"
+    assert resp_b.json()[0]["receita_bruta"] == pytest.approx(999.0), (
+        "token de B nao viu dados de B"
+    )

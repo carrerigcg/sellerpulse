@@ -5,6 +5,7 @@ Usa o JWT Secret compartilhado (HS256) do projeto, aplicado CRU — não
 base64-decodificado. Validação local, sem round-trip de rede.
 Ver Project Settings > API > JWT Settings no dashboard do Supabase.
 """
+
 from __future__ import annotations
 
 import os

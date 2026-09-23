@@ -1,5 +1,6 @@
 # backend/routers/metrics.py
 """Endpoints REST de métricas financeiras — expõe `backend/analytics/metrics_pg.py`."""
+
 from __future__ import annotations
 
 import uuid

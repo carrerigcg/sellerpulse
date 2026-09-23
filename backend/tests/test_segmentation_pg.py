@@ -14,16 +14,18 @@ _INSERT_ORDER = """
 """
 
 
-async def _order(pool, seller_id, order_id, date_closed, total, fee=0.0, ship=0.0,
-                 status="paid", buyer_id=1001):
+async def _order(
+    pool, seller_id, order_id, date_closed, total, fee=0.0, ship=0.0, status="paid", buyer_id=1001
+):
     # asyncpg exige datetime real (nao str) para parametro usado com cast
     # ::timestamptz -- o protocolo binario nao faz esse parse.
     dt = datetime.fromisoformat(date_closed)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     async with pool.acquire() as conn:
-        await conn.execute(_INSERT_ORDER, order_id, seller_id, dt, status,
-                           total, fee, ship, buyer_id)
+        await conn.execute(
+            _INSERT_ORDER, order_id, seller_id, dt, status, total, fee, ship, buyer_id
+        )
 
 
 async def _item(pool, seller_id, item_id, title, category_id="CAT1", category_name="Categoria 1"):
@@ -31,11 +33,18 @@ async def _item(pool, seller_id, item_id, title, category_id="CAT1", category_na
         await conn.execute(
             "INSERT INTO categories_cache (seller_id, category_id, name, fetched_at) "
             "VALUES ($1,$2,$3,now()) ON CONFLICT DO NOTHING",
-            seller_id, category_id, category_name)
+            seller_id,
+            category_id,
+            category_name,
+        )
         await conn.execute(
             "INSERT INTO items_cache (seller_id, item_id, title, category_id, fetched_at) "
             "VALUES ($1,$2,$3,$4,now()) ON CONFLICT DO NOTHING",
-            seller_id, item_id, title, category_id)
+            seller_id,
+            item_id,
+            title,
+            category_id,
+        )
 
 
 async def _order_item(pool, seller_id, order_id, item_id, qty, unit_price):
@@ -43,10 +52,16 @@ async def _order_item(pool, seller_id, order_id, item_id, qty, unit_price):
         await conn.execute(
             "INSERT INTO order_items (seller_id, order_id, item_id, quantity, unit_price) "
             "VALUES ($1,$2,$3,$4,$5)",
-            seller_id, order_id, item_id, qty, unit_price)
+            seller_id,
+            order_id,
+            item_id,
+            qty,
+            unit_price,
+        )
 
 
 # ---------- abc_pareto ----------
+
 
 async def test_abc_pareto_classifica_a_b_c_com_fronteira(pg_pool, test_seller):
     """4 produtos cobrindo as 3 classes, com um produto cruzando a fronteira
@@ -114,7 +129,12 @@ async def test_abc_pareto_vazio_tem_as_colunas_certas(pg_pool, test_seller):
     df = await abc_pareto(pg_pool, sid, "2026-01-01", "2026-01-02")
     assert df.empty
     assert list(df.columns) == [
-        "sku", "titulo", "receita", "receita_pct", "receita_acumulada_pct", "classe"
+        "sku",
+        "titulo",
+        "receita",
+        "receita_pct",
+        "receita_acumulada_pct",
+        "classe",
     ]
 
 
@@ -145,16 +165,23 @@ async def test_abc_pareto_paridade_com_a_versao_sqlite(pg_pool, test_seller):
         for item_id, title, category_id in itens:
             upsert_item_cache(sconn, item_id, title, category_id)
         for order_id, date_closed, items in pedidos:
-            upsert_order(sconn, {
-                "order_id": order_id, "date_closed": date_closed, "status": "paid",
-                "total_amount": sum(q * p for _, q, p in items),
-                "marketplace_fee": 0.0, "shipping_cost": 0.0,
-                "buyer_id": 1001, "raw_json": "{}",
-                "items": [
-                    {"item_id": item_id, "quantity": qty, "unit_price": price}
-                    for item_id, qty, price in items
-                ],
-            })
+            upsert_order(
+                sconn,
+                {
+                    "order_id": order_id,
+                    "date_closed": date_closed,
+                    "status": "paid",
+                    "total_amount": sum(q * p for _, q, p in items),
+                    "marketplace_fee": 0.0,
+                    "shipping_cost": 0.0,
+                    "buyer_id": 1001,
+                    "raw_json": "{}",
+                    "items": [
+                        {"item_id": item_id, "quantity": qty, "unit_price": price}
+                        for item_id, qty, price in items
+                    ],
+                },
+            )
         sconn.commit()
         esperado = abc_pareto_sqlite(sconn, "2026-07-01", "2026-08-01")
     finally:
@@ -178,6 +205,7 @@ async def test_abc_pareto_paridade_com_a_versao_sqlite(pg_pool, test_seller):
 
 
 # ---------- rfm_scores ----------
+
 
 async def _buyer_orders(pool, seller_id, buyer_id, order_id_start, amounts, last_date, step_days=1):
     """Insere `len(amounts)` pedidos pro comprador, o ultimo na data `last_date`
@@ -204,17 +232,31 @@ async def test_rfm_scores_caminho_feliz_com_recencias_variadas(pg_pool, test_sel
     # frequencia (5 pedidos, 1/dia, terminando em 07-02) dentro da janela.
     date_from = "2026-06-20"
 
-    await _buyer_orders(pg_pool, sid, 1001, 100, [50.0], "2026-08-01T10:00:00+00:00")          # recency 0
-    await _buyer_orders(pg_pool, sid, 1002, 200, [80.0, 70.0], "2026-07-25T09:00:00+00:00")     # recency 7
-    await _buyer_orders(pg_pool, sid, 1003, 300, [100.0, 100.0, 100.0], "2026-07-15T09:00:00+00:00")  # recency 17
-    await _buyer_orders(pg_pool, sid, 1004, 400, [120.0] * 4, "2026-07-08T09:00:00+00:00")      # recency 24
-    await _buyer_orders(pg_pool, sid, 1005, 500, [120.0] * 5, "2026-07-02T09:00:00+00:00")      # recency 30
+    await _buyer_orders(pg_pool, sid, 1001, 100, [50.0], "2026-08-01T10:00:00+00:00")  # recency 0
+    await _buyer_orders(
+        pg_pool, sid, 1002, 200, [80.0, 70.0], "2026-07-25T09:00:00+00:00"
+    )  # recency 7
+    await _buyer_orders(
+        pg_pool, sid, 1003, 300, [100.0, 100.0, 100.0], "2026-07-15T09:00:00+00:00"
+    )  # recency 17
+    await _buyer_orders(
+        pg_pool, sid, 1004, 400, [120.0] * 4, "2026-07-08T09:00:00+00:00"
+    )  # recency 24
+    await _buyer_orders(
+        pg_pool, sid, 1005, 500, [120.0] * 5, "2026-07-02T09:00:00+00:00"
+    )  # recency 30
 
     df = await rfm_scores(pg_pool, sid, date_from, date_to)
 
     assert list(df.columns) == [
-        "buyer_id", "recency_dias", "frequency", "monetary",
-        "r_score", "f_score", "m_score", "segmento",
+        "buyer_id",
+        "recency_dias",
+        "frequency",
+        "monetary",
+        "r_score",
+        "f_score",
+        "m_score",
+        "segmento",
     ]
     assert len(df) == 5
 
@@ -236,7 +278,12 @@ async def test_rfm_scores_caminho_feliz_com_recencias_variadas(pg_pool, test_sel
     assert by_buyer.loc[1005, "m_score"] > by_buyer.loc[1001, "m_score"]
 
     assert set(df["segmento"]) <= {
-        "Champions", "Loyal", "At Risk", "New", "Hibernating", "Others",
+        "Champions",
+        "Loyal",
+        "At Risk",
+        "New",
+        "Hibernating",
+        "Others",
     }
 
 
@@ -261,7 +308,9 @@ async def test_rfm_scores_nao_mistura_comprador_entre_sellers(pg_pool, test_sell
     _, outro = outro_seller
 
     await _buyer_orders(pg_pool, sid, 2001, 10, [60.0, 40.0], "2026-07-20T10:00:00+00:00")
-    await _buyer_orders(pg_pool, outro, 2001, 20, [999.0, 999.0, 999.0], "2026-07-20T10:00:00+00:00")
+    await _buyer_orders(
+        pg_pool, outro, 2001, 20, [999.0, 999.0, 999.0], "2026-07-20T10:00:00+00:00"
+    )
 
     df = await rfm_scores(pg_pool, sid, "2026-07-01", "2026-08-01")
     row = df[df["buyer_id"] == 2001].iloc[0]
@@ -274,8 +323,14 @@ async def test_rfm_scores_vazio_tem_as_colunas_certas(pg_pool, test_seller):
     df = await rfm_scores(pg_pool, sid, "2026-01-01", "2026-01-02")
     assert df.empty
     assert list(df.columns) == [
-        "buyer_id", "recency_dias", "frequency", "monetary",
-        "r_score", "f_score", "m_score", "segmento",
+        "buyer_id",
+        "recency_dias",
+        "frequency",
+        "monetary",
+        "r_score",
+        "f_score",
+        "m_score",
+        "segmento",
     ]
 
 
@@ -298,11 +353,20 @@ async def test_rfm_scores_paridade_com_a_versao_sqlite(pg_pool, test_seller):
     sconn = sqlite_connect(":memory:")
     try:
         for order_id, date_closed, total, buyer_id in pedidos:
-            upsert_order(sconn, {
-                "order_id": order_id, "date_closed": date_closed, "status": "paid",
-                "total_amount": total, "marketplace_fee": 0.0, "shipping_cost": 0.0,
-                "buyer_id": buyer_id, "raw_json": "{}", "items": [],
-            })
+            upsert_order(
+                sconn,
+                {
+                    "order_id": order_id,
+                    "date_closed": date_closed,
+                    "status": "paid",
+                    "total_amount": total,
+                    "marketplace_fee": 0.0,
+                    "shipping_cost": 0.0,
+                    "buyer_id": buyer_id,
+                    "raw_json": "{}",
+                    "items": [],
+                },
+            )
         sconn.commit()
         esperado = rfm_sqlite(sconn, "2026-07-01", "2026-08-01")
     finally:
@@ -328,6 +392,7 @@ async def test_rfm_scores_paridade_com_a_versao_sqlite(pg_pool, test_seller):
 
 
 # ---------- cohort_produto ----------
+
 
 async def test_cohort_produto_lancamento_fora_da_janela(pg_pool, test_seller):
     """Produto lancado antes da janela e vendido dentro dela: o mes de

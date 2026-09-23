@@ -6,6 +6,7 @@ responsabilidade de quem chama). Como os routers são endpoints públicos de
 um SaaS, qualquer entrada malformada do cliente precisa virar 400 — nunca
 500. Centralizado aqui pra não repetir a mesma validação nos 5 endpoints.
 """
+
 from __future__ import annotations
 
 from fastapi import HTTPException
@@ -24,9 +25,7 @@ def validate_window(date_from: str, date_to: str) -> tuple[str, str]:
         try:
             _parse_boundary(value)
         except ValueError as exc:
-            raise HTTPException(
-                status_code=400, detail=f"{label} inválida: {value!r}"
-            ) from exc
+            raise HTTPException(status_code=400, detail=f"{label} inválida: {value!r}") from exc
     return date_from, date_to
 
 
