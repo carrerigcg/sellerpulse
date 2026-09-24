@@ -9,11 +9,12 @@ import { NextResponse, type NextRequest } from "next/server";
  * cache-control headers de auth, que devem ser propagados para a
  * resposta (ver README do pacote).
  *
- * Nota: no Next.js 16 o arquivo `middleware.ts` foi renomeado para
- * `proxy.ts` (a função continua funcionando de forma idêntica, apenas
- * deprecated). Mantido como `middleware.ts` por ser o que a task pediu.
+ * Next.js 16 renomeou a convenção `middleware.ts` para `proxy.ts` — o
+ * comportamento é idêntico, só mudaram o nome do arquivo e o da função
+ * exportada. Já nascemos na convenção nova pra não carregar o aviso de
+ * deprecação desde o primeiro commit.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
