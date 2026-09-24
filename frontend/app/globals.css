@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+:root {
+  /* superfícies */
+  --sp-bg: #ffffff;
+  --sp-surface: #f8fafc;
+  --sp-border: #e2e8f0;
+
+  /* texto */
+  --sp-text: #0f172a;
+  --sp-muted: #64748b;
+
+  /* laranja = ação (botão, link, estado ativo). Contraste >= 4.5:1 em branco. */
+  --sp-accent: #ea580c;
+  --sp-accent-hover: #c2410c;
+  --sp-accent-soft: #fff7ed;
+
+  /* amarelo = SÓ preenchimento/realce. Nunca texto pequeno nem traço fino:
+     amarelo sobre branco não atinge contraste legível. */
+  --sp-highlight: #facc15;
+  --sp-highlight-soft: #fefce8;
+
+  /* variação de KPI */
+  --sp-positive: #16a34a;
+  --sp-negative: #dc2626;
+
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--sp-bg);
+  color: var(--sp-text);
+  font-family: Arial, Helvetica, sans-serif;
+}
