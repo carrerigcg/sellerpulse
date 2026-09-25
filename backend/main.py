@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,9 +26,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SellerPulse API", lifespan=lifespan)
 
+# Origens liberadas no CORS. Fixar so a URL de producao quebraria a cada
+# deploy de preview da Vercel, que recebe um subdominio novo — entao a lista
+# vem de CORS_ORIGINS (separada por virgula) somada aos defaults abaixo.
+_ORIGENS_PADRAO = [
+    "http://localhost:3000",
+    "https://frontend-three-rosy-iwes33l1kk.vercel.app",
+]
+_extras = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # frontend dev; ajustar pra URL da Vercel no deploy
+    allow_origins=[*_ORIGENS_PADRAO, *_extras],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
