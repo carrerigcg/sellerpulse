@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+:root {
+  /* superfícies */
+  --sp-bg: #ffffff;
+  --sp-surface: #f8fafc;
+  --sp-border: #e2e8f0;
+
+  /* texto */
+  --sp-text: #0f172a;
+  --sp-muted: #64748b;
+
+  /* laranja = ação (botão, link, estado ativo). Contraste >= 4.5:1 em branco. */
+  --sp-accent: #ea580c;
+  --sp-accent-hover: #c2410c;
+  --sp-accent-soft: #fff7ed;
+
+  /* amarelo = SÓ preenchimento/realce. Nunca texto pequeno nem traço fino:
+     amarelo sobre branco não atinge contraste legível. */
+  --sp-highlight: #facc15;
+  --sp-highlight-soft: #fefce8;
+
+  /* variação de KPI */
+  --sp-positive: #16a34a;
+  --sp-negative: #dc2626;
+}
+
+/* Expõe os tokens como utilitários do Tailwind (bg-accent, text-muted, ...). */
+@theme inline {
+  --color-bg: var(--sp-bg);
+  --color-surface: var(--sp-surface);
+  --color-line: var(--sp-border);
+  --color-ink: var(--sp-text);
+  --color-muted: var(--sp-muted);
+  --color-accent: var(--sp-accent);
+  --color-accent-hover: var(--sp-accent-hover);
+  --color-accent-soft: var(--sp-accent-soft);
+  --color-highlight: var(--sp-highlight);
+  --color-highlight-soft: var(--sp-highlight-soft);
+  --color-positive: var(--sp-positive);
+  --color-negative: var(--sp-negative);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Sem bloco de dark mode: a identidade é de base branca e os tokens --sp-*
+   não têm variante escura. Um `prefers-color-scheme` aqui só trocaria as
+   variáveis do template do create-next-app, que não são usadas — código
+   morto que enganaria quem mexesse depois. */
+
+body {
+  background: var(--sp-bg);
+  color: var(--sp-text);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Números de KPI alinham melhor com figuras de largura fixa. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
