@@ -13,6 +13,7 @@ import {
   PrimaryButton,
   TextField,
 } from "@/components/auth-ui";
+import { mensagemDeLogin, registraErroDeAuth } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -26,20 +27,28 @@ export default function LoginPage() {
     e.preventDefault();
     setErro(null);
     setCarregando(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password: senha,
-    });
-    if (error) {
-      // Mensagem genérica de propósito: distinguir "email não cadastrado" de
-      // "senha errada" revela quais emails existem na base.
-      setErro("Email ou senha incorretos.");
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password: senha,
+      });
+      if (error) {
+        registraErroDeAuth("login", error);
+        setErro(mensagemDeLogin(error));
+        setCarregando(false);
+        return;
+      }
+      router.push("/dashboard");
+      router.refresh();
+    } catch (e) {
+      // signInWithPassword normalmente devolve o erro em vez de lançar, mas
+      // uma falha na criação do cliente (env var ausente, por exemplo) estoura
+      // aqui — e sem este catch a tela ficaria travada em "Entrando...".
+      registraErroDeAuth("login:excecao", e);
+      setErro(mensagemDeLogin(e instanceof Error ? e : new Error(String(e))));
       setCarregando(false);
-      return;
     }
-    router.push("/dashboard");
-    router.refresh();
   }
 
   async function entrarComGoogle() {
@@ -51,6 +60,7 @@ export default function LoginPage() {
       options: { redirectTo: `${window.location.origin}/dashboard` },
     });
     if (error) {
+      registraErroDeAuth("login:google", error);
       setErro("Não foi possível conectar com o Google. Tente de novo.");
       setCarregando(false);
     }
