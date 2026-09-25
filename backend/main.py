@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.db import close_pool, get_pool
 from backend.routers import metrics, segmentation
+
+# Carrega backend/.env em desenvolvimento. `load_dotenv` NAO sobrescreve
+# variaveis ja presentes no ambiente, entao em producao (Render) os valores
+# da plataforma continuam valendo e a ausencia do arquivo e inofensiva.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 
 @asynccontextmanager
