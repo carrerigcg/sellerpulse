@@ -1,0 +1,32 @@
+# Sem isto, o contexto de build enviado ao Render inclui node_modules, os
+# venvs e o historico do git — centenas de MB que so tornam o deploy lento.
+
+.git
+.github
+.venv
+venv
+backend/.venv
+frontend/node_modules
+frontend/.next
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.ruff_cache
+.worktrees
+.superpowers
+
+# Segredos: mesmo gitignored, nao podem entrar na imagem.
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env.local
+
+# Nao servem em producao.
+docs
+notebooks
+mockup
+tests
+backend/tests
+RELATORIOS
+data/demo.db
