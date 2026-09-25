@@ -42,6 +42,10 @@ def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> 
         ORDER BY date
     """
     df = pd.read_sql_query(query, conn, params=(date_from, date_to))
+    # SUM(...) sobre um result set vazio (janela sem pedidos) volta como coluna
+    # "object" em vez de numérica — normaliza antes de fazer aritmética/round.
+    for col in ("receita_bruta", "taxas_ml", "frete"):
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     df["custo_estimado"] = (df["receita_bruta"] * COST_ESTIMATE_RATE).round(2)
     df["liquido"] = (
         df["receita_bruta"] - df["taxas_ml"] - df["frete"] - df["custo_estimado"]
