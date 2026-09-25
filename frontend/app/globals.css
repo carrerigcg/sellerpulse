@@ -23,27 +23,38 @@
   /* variação de KPI */
   --sp-positive: #16a34a;
   --sp-negative: #dc2626;
-
-  --background: #ffffff;
-  --foreground: #171717;
 }
 
+/* Expõe os tokens como utilitários do Tailwind (bg-accent, text-muted, ...). */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--sp-bg);
+  --color-surface: var(--sp-surface);
+  --color-line: var(--sp-border);
+  --color-ink: var(--sp-text);
+  --color-muted: var(--sp-muted);
+  --color-accent: var(--sp-accent);
+  --color-accent-hover: var(--sp-accent-hover);
+  --color-accent-soft: var(--sp-accent-soft);
+  --color-highlight: var(--sp-highlight);
+  --color-highlight-soft: var(--sp-highlight-soft);
+  --color-positive: var(--sp-positive);
+  --color-negative: var(--sp-negative);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* Sem bloco de dark mode: a identidade é de base branca e os tokens --sp-*
+   não têm variante escura. Um `prefers-color-scheme` aqui só trocaria as
+   variáveis do template do create-next-app, que não são usadas — código
+   morto que enganaria quem mexesse depois. */
 
 body {
   background: var(--sp-bg);
   color: var(--sp-text);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Números de KPI alinham melhor com figuras de largura fixa. */
+.tabular {
+  font-variant-numeric: tabular-nums;
 }
