@@ -163,7 +163,12 @@ async def sync(
         if ultimo is not None and datetime.now(UTC) - ultimo < LIMIAR_DELTA:
             return {"enfileirado": False, "motivo": "recente"}
 
-    job_id = await queue.enqueue(pool, seller_id, "delta")
+    # Seller que nunca sincronizou precisa de HISTORICO, nao de delta: `_delta`
+    # cai numa janela de 7 dias quando last_synced_at e nulo, e o seller ficaria
+    # preso nela pra sempre se o backfill do callback tivesse falhado em
+    # definitivo. A decisao e aqui porque so aqui se sabe o estado do seller.
+    kind = "delta" if seller["last_synced_at"] is not None else "backfill"
+    job_id = await queue.enqueue(pool, seller_id, kind)
     if job_id is None:
         return {"enfileirado": False, "motivo": "ja-em-andamento"}
     return {"enfileirado": True, "job_id": job_id}
@@ -184,6 +189,11 @@ async def sync_status(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> 
             FROM sync_jobs WHERE seller_id = $1
             ORDER BY created_at DESC LIMIT 1
             """,
+            seller_id,
+        )
+        historico_completo = await conn.fetchval(
+            "SELECT exists(SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
+            "AND kind = 'backfill' AND status = 'done')",
             seller_id,
         )
 
@@ -207,4 +217,9 @@ async def sync_status(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> 
             "criado_em": job["created_at"].isoformat(),
             "concluido_em": job["finished_at"].isoformat() if job["finished_at"] else None,
         },
+        # Responde "os numeros do dashboard cobrem os 6 meses?". Sem isso, um
+        # backfill que falhou em definitivo some assim que qualquer delta
+        # posterior conclui — e a tela diz "sincronizado" sobre historico
+        # incompleto, sem nada indicando.
+        "historico_completo": bool(historico_completo),
     }

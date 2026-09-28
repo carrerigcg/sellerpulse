@@ -393,3 +393,87 @@ async def test_status_nao_mostra_job_de_outro_seller(client, pg_pool, test_selle
     await queue.enqueue(pg_pool, seller_b, "backfill")
     corpo = client.get("/ml/sync/status", headers=_auth(user_a)).json()
     assert corpo["job"] is None
+
+
+async def test_sync_de_seller_que_nunca_sincronizou_pede_backfill(client, pg_pool, test_seller):
+    """Nunca sincronizado precisa dos 6 meses, nao de 7 dias.
+
+    `_delta` cai numa janela de 7 dias quando last_synced_at e nulo. Se o
+    backfill do callback tiver falhado em definitivo, enfileirar delta aqui
+    deixaria o seller preso numa semana de dados pra sempre.
+    """
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=None)
+    resp = client.post("/ml/sync", params={"motivo": "manual"}, headers=_auth(user_id))
+    assert resp.json()["enfileirado"] is True
+    async with pg_pool.acquire() as conn:
+        kind = await conn.fetchval("SELECT kind FROM sync_jobs WHERE seller_id = $1", seller_id)
+    assert kind == "backfill"
+
+
+async def test_sync_de_seller_ja_sincronizado_pede_delta(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(hours=9))
+    client.post("/ml/sync", params={"motivo": "manual"}, headers=_auth(user_id))
+    async with pg_pool.acquire() as conn:
+        kind = await conn.fetchval("SELECT kind FROM sync_jobs WHERE seller_id = $1", seller_id)
+    assert kind == "delta"
+
+
+async def test_status_marca_historico_incompleto_quando_backfill_falhou(
+    client, pg_pool, test_seller
+):
+    """Backfill que falhou de vez + delta que deu certo = historico incompleto.
+
+    Sem o flag, o job mais recente (o delta) e o unico visivel e a tela diz
+    "sincronizado" — enquanto os graficos cobrem menos periodo do que dizem.
+    """
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC))
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'failed', now())",
+            seller_id,
+        )
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'delta', 'done', now())",
+            seller_id,
+        )
+    corpo = client.get("/ml/sync/status", headers=_auth(user_id)).json()
+    assert corpo["job"]["kind"] == "delta"
+    assert corpo["job"]["status"] == "done"
+    assert corpo["historico_completo"] is False
+
+
+async def test_status_marca_historico_completo_apos_backfill_concluido(
+    client, pg_pool, test_seller
+):
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC))
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'done', now())",
+            seller_id,
+        )
+    corpo = client.get("/ml/sync/status", headers=_auth(user_id)).json()
+    assert corpo["historico_completo"] is True
+
+
+async def test_historico_completo_nao_olha_backfill_de_outro_seller(
+    client, pg_pool, test_seller, outro_seller
+):
+    """Um WHERE esquecido aqui diria ao seller que o historico dele esta pronto."""
+    user_a, seller_a = test_seller
+    _ub, seller_b = outro_seller
+    await _conectado(pg_pool, seller_a, ultimo_sync=datetime.now(UTC))
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'done', now())",
+            seller_b,
+        )
+    corpo = client.get("/ml/sync/status", headers=_auth(user_a)).json()
+    assert corpo["historico_completo"] is False
