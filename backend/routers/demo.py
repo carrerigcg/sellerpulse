@@ -22,6 +22,7 @@ import asyncpg
 from fastapi import APIRouter, HTTPException, Response
 
 from backend.analytics.metrics_pg import fluxo_financeiro, top_produtos
+from backend.analytics.segmentation_pg import abc_pareto, cohort_produto, rfm_scores
 from backend.db import get_pool
 from backend.routers._common import validate_n, validate_window
 
@@ -86,3 +87,39 @@ async def demo_top_produtos(
         "produtos": resultado["produtos"].to_dict(orient="records"),
         "categorias": resultado["categorias"].to_dict(orient="records"),
     }
+
+
+@router.get("/abc")
+async def demo_abc(date_from: str, date_to: str, response: Response) -> list[dict]:
+    date_from, date_to = validate_window(date_from, date_to)
+    response.headers["Cache-Control"] = _CACHE
+    pool = await get_pool()
+    seller_id = await _seller_de_demo(pool)
+    df = await abc_pareto(pool, seller_id, date_from, date_to)
+    return df.to_dict(orient="records")
+
+
+@router.get("/rfm")
+async def demo_rfm(date_from: str, date_to: str, response: Response) -> list[dict]:
+    date_from, date_to = validate_window(date_from, date_to)
+    response.headers["Cache-Control"] = _CACHE
+    pool = await get_pool()
+    seller_id = await _seller_de_demo(pool)
+    df = await rfm_scores(pool, seller_id, date_from, date_to)
+    return df.to_dict(orient="records")
+
+
+@router.get("/cohort")
+async def demo_cohort(date_from: str, date_to: str, response: Response) -> list[dict]:
+    date_from, date_to = validate_window(date_from, date_to)
+    response.headers["Cache-Control"] = _CACHE
+    pool = await get_pool()
+    seller_id = await _seller_de_demo(pool)
+    df = await cohort_produto(pool, seller_id, date_from, date_to)
+    # Mesmo caso vazio do /segmentation/cohort autenticado (routers/segmentation.py):
+    # cohort_produto devolve um DataFrame puro (sem index nomeado) quando não há
+    # vendas -- reset_index() geraria uma coluna "index" espúria em vez de
+    # estourar, mas o formato correto pro cliente é lista vazia.
+    if df.empty:
+        return []
+    return df.reset_index().to_dict(orient="records")

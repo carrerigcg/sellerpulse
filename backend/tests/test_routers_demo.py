@@ -18,6 +18,24 @@ _INSERT_ORDER = """
     VALUES ($1, $2, $3, 'paid', $4, 0, 0, 1, '{}'::jsonb, now())
 """
 
+# Variante com buyer_id explicito -- os testes de RFM precisam de compradores
+# distintos (a _INSERT_ORDER acima fixa buyer_id=1 pra todo mundo).
+_INSERT_ORDER_COM_COMPRADOR = """
+    INSERT INTO orders (order_id, seller_id, date_closed, status, total_amount,
+                        marketplace_fee, shipping_cost, buyer_id, raw_json, fetched_at)
+    VALUES ($1, $2, $3, 'paid', $4, 0, 0, $5, '{}'::jsonb, now())
+"""
+
+_INSERT_ITEM_CACHE = """
+    INSERT INTO items_cache (seller_id, item_id, title, category_id, fetched_at)
+    VALUES ($1, $2, $3, 'C1', now())
+"""
+
+_INSERT_ORDER_ITEM = """
+    INSERT INTO order_items (seller_id, order_id, item_id, quantity, unit_price)
+    VALUES ($1, $2, $3, 1, $4)
+"""
+
 
 def _ambiente(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
@@ -183,3 +201,186 @@ async def test_demo_recusa_seller_inexistente(monkeypatch, pg_pool):
             "/demo/fluxo-financeiro", params={"date_from": "2026-07-01", "date_to": "2026-08-01"}
         )
     assert resp.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# /demo/abc, /demo/rfm, /demo/cohort -- Checkpoint 2 da Sprint 3.
+#
+# Mesmas quatro garantias que /demo/fluxo-financeiro e /demo/top-produtos ja
+# tem, replicadas aqui pros tres endpoints novos: sao elas que tornam uma
+# porta sem autenticacao segura em vez de um buraco.
+# ---------------------------------------------------------------------------
+
+
+async def test_demo_abc_responde_sem_autenticacao(client_demo, pg_pool):
+    client, seller_id = client_demo
+    async with pg_pool.acquire() as conn:
+        await conn.execute(_INSERT_ORDER, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 100.0)
+        await conn.execute(_INSERT_ITEM_CACHE, seller_id, "MLB1", "Produto")
+        await conn.execute(_INSERT_ORDER_ITEM, seller_id, 1, "MLB1", 100.0)
+    resp = client.get("/demo/abc", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert resp.status_code == 200
+    assert resp.json()[0]["titulo"] == "Produto"
+
+
+async def test_demo_abc_ignora_seller_id_vindo_do_cliente(client_demo, pg_pool, outro_seller):
+    client, seller_id = client_demo
+    _ub, seller_b = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute(_INSERT_ORDER, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 100.0)
+        await conn.execute(_INSERT_ITEM_CACHE, seller_id, "MLB1", "Produto A")
+        await conn.execute(_INSERT_ORDER_ITEM, seller_id, 1, "MLB1", 100.0)
+
+        await conn.execute(_INSERT_ORDER, 2, seller_b, datetime(2026, 7, 16, tzinfo=UTC), 999.0)
+        await conn.execute(_INSERT_ITEM_CACHE, seller_b, "MLB2", "Produto B")
+        await conn.execute(_INSERT_ORDER_ITEM, seller_b, 2, "MLB2", 999.0)
+    resp = client.get(
+        "/demo/abc",
+        params={"date_from": "2026-07-01", "date_to": "2026-08-01", "seller_id": str(seller_b)},
+    )
+    titulos = [linha["titulo"] for linha in resp.json()]
+    assert titulos == ["Produto A"]
+    assert "Produto B" not in titulos
+
+
+async def test_demo_abc_recusa_seller_nao_marcado_como_demo(monkeypatch, pg_pool, outro_seller):
+    _u, seller_nao_demo = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            _INSERT_ORDER, 1, seller_nao_demo, datetime(2026, 7, 15, tzinfo=UTC), 9999.0
+        )
+        await conn.execute(_INSERT_ITEM_CACHE, seller_nao_demo, "MLB9", "Produto Sigiloso")
+        await conn.execute(_INSERT_ORDER_ITEM, seller_nao_demo, 1, "MLB9", 9999.0)
+    _ambiente(monkeypatch)
+    monkeypatch.setenv("DEMO_SELLER_ID", str(seller_nao_demo))
+
+    with TestClient(app) as c:
+        resp = c.get("/demo/abc", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert resp.status_code == 503
+    assert "Sigiloso" not in resp.text, "catalogo do seller vazou na resposta"
+
+
+def test_demo_abc_manda_cache_control(client_demo):
+    client, _sid = client_demo
+    resp = client.get("/demo/abc", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert "max-age" in resp.headers.get("cache-control", "")
+
+
+async def test_demo_rfm_responde_sem_autenticacao(client_demo, pg_pool):
+    client, seller_id = client_demo
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            _INSERT_ORDER_COM_COMPRADOR, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 250.0, 1
+        )
+    resp = client.get("/demo/rfm", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert resp.status_code == 200
+    assert resp.json()[0]["monetary"] == 250.0
+
+
+async def test_demo_rfm_ignora_seller_id_vindo_do_cliente(client_demo, pg_pool, outro_seller):
+    client, seller_id = client_demo
+    _ub, seller_b = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            _INSERT_ORDER_COM_COMPRADOR, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 100.0, 1
+        )
+        await conn.execute(
+            _INSERT_ORDER_COM_COMPRADOR, 2, seller_b, datetime(2026, 7, 16, tzinfo=UTC), 999.0, 2
+        )
+    resp = client.get(
+        "/demo/rfm",
+        params={"date_from": "2026-07-01", "date_to": "2026-08-01", "seller_id": str(seller_b)},
+    )
+    monetarios = [linha["monetary"] for linha in resp.json()]
+    assert 999.0 not in monetarios
+    assert monetarios == [100.0]
+
+
+async def test_demo_rfm_recusa_seller_nao_marcado_como_demo(monkeypatch, pg_pool, outro_seller):
+    _u, seller_nao_demo = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            _INSERT_ORDER_COM_COMPRADOR,
+            1,
+            seller_nao_demo,
+            datetime(2026, 7, 15, tzinfo=UTC),
+            9999.0,
+            1,
+        )
+    _ambiente(monkeypatch)
+    monkeypatch.setenv("DEMO_SELLER_ID", str(seller_nao_demo))
+
+    with TestClient(app) as c:
+        resp = c.get("/demo/rfm", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert resp.status_code == 503
+    assert "9999" not in resp.text, "faturamento do seller vazou na resposta"
+
+
+def test_demo_rfm_manda_cache_control(client_demo):
+    client, _sid = client_demo
+    resp = client.get("/demo/rfm", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert "max-age" in resp.headers.get("cache-control", "")
+
+
+async def test_demo_cohort_responde_sem_autenticacao(client_demo, pg_pool):
+    client, seller_id = client_demo
+    async with pg_pool.acquire() as conn:
+        await conn.execute(_INSERT_ORDER, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 100.0)
+        await conn.execute(_INSERT_ORDER_ITEM, seller_id, 1, "MLB1", 100.0)
+    resp = client.get("/demo/cohort", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert resp.status_code == 200
+    assert resp.json()[0]["mes_lancamento"] == "2026-07"
+    assert resp.json()[0]["2026-07"] == 100.0
+
+
+async def test_demo_cohort_ignora_seller_id_vindo_do_cliente(client_demo, pg_pool, outro_seller):
+    client, seller_id = client_demo
+    _ub, seller_b = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute(_INSERT_ORDER, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 100.0)
+        await conn.execute(_INSERT_ORDER_ITEM, seller_id, 1, "MLB1", 100.0)
+
+        await conn.execute(_INSERT_ORDER, 2, seller_b, datetime(2026, 7, 16, tzinfo=UTC), 999.0)
+        await conn.execute(_INSERT_ORDER_ITEM, seller_b, 2, "MLB2", 999.0)
+    resp = client.get(
+        "/demo/cohort",
+        params={"date_from": "2026-07-01", "date_to": "2026-08-01", "seller_id": str(seller_b)},
+    )
+    linhas = resp.json()
+    assert len(linhas) == 1
+    assert linhas[0]["2026-07"] == 100.0
+
+
+async def test_demo_cohort_recusa_seller_nao_marcado_como_demo(monkeypatch, pg_pool, outro_seller):
+    _u, seller_nao_demo = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            _INSERT_ORDER, 1, seller_nao_demo, datetime(2026, 7, 15, tzinfo=UTC), 9999.0
+        )
+        await conn.execute(_INSERT_ORDER_ITEM, seller_nao_demo, 1, "MLB9", 9999.0)
+    _ambiente(monkeypatch)
+    monkeypatch.setenv("DEMO_SELLER_ID", str(seller_nao_demo))
+
+    with TestClient(app) as c:
+        resp = c.get("/demo/cohort", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert resp.status_code == 503
+    assert "9999" not in resp.text, "faturamento do seller vazou na resposta"
+
+
+def test_demo_cohort_manda_cache_control(client_demo):
+    client, _sid = client_demo
+    resp = client.get("/demo/cohort", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+    assert "max-age" in resp.headers.get("cache-control", "")
+
+
+async def test_demo_cohort_janela_vazia_devolve_lista_vazia(client_demo):
+    """Mesmo caso vazio do /segmentation/cohort autenticado (segmentation.py):
+
+    cohort_produto devolve um DataFrame sem index nomeado quando nao ha
+    vendas -- reset_index() estouraria uma coluna "index" espuria em vez do
+    formato de lista vazia que o cliente espera.
+    """
+    client, _sid = client_demo
+    resp = client.get("/demo/cohort", params={"date_from": "2020-01-01", "date_to": "2020-02-01"})
+    assert resp.status_code == 200
+    assert resp.json() == []
