@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Wordmark } from "@/components/brand";
 import { createClient } from "@/lib/supabase/server";
 
+import { Nav } from "./nav";
 import { BotaoSair } from "./sair";
 
 export default async function DashboardLayout({
@@ -21,7 +22,10 @@ export default async function DashboardLayout({
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-line">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <Wordmark className="text-base" />
+          <div className="flex items-center gap-6">
+            <Wordmark className="text-base" />
+            <Nav />
+          </div>
           <div className="flex items-center gap-4">
             <span className="hidden text-sm text-muted sm:inline">
               {user.email}
