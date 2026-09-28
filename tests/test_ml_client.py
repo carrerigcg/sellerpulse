@@ -211,3 +211,59 @@ def test_get_claims_filters_by_date_to(client):
         date_to="2026-06-15T00:00:00",
     )
     assert [c["id"] for c in claims] == [1]
+
+
+@responses.activate
+def test_get_orders_usa_date_last_updated_quando_pedido():
+    """O delta precisa filtrar por atualizacao, nao por criacao.
+
+    Sem isso, pedido antigo que mudou de status (paid -> cancelled) nunca
+    voltaria numa sincronizacao incremental, e a receita ficaria errada pra
+    sempre sem nenhum erro aparecer.
+    """
+    responses.add(
+        responses.GET,
+        "https://api.mercadolibre.com/orders/search",
+        json={"results": [], "paging": {"total": 0}},
+    )
+    MLClient("APP_USR-token").get_orders(
+        seller_id=1,
+        status="paid",
+        date_from="2026-09-01T00:00:00Z",
+        date_to="2026-09-28T00:00:00Z",
+        campo_data="date_last_updated",
+    )
+    query = responses.calls[0].request.url
+    assert "order.date_last_updated.from" in query
+    assert "order.date_created.from" not in query
+
+
+@responses.activate
+def test_get_orders_continua_usando_date_created_por_default():
+    """Quem ja chamava get_orders nao muda de comportamento."""
+    responses.add(
+        responses.GET,
+        "https://api.mercadolibre.com/orders/search",
+        json={"results": [], "paging": {"total": 0}},
+    )
+    MLClient("APP_USR-token").get_orders(
+        seller_id=1, status=None, date_from="2026-09-01", date_to="2026-09-28"
+    )
+    assert "order.date_created.from" in responses.calls[0].request.url
+
+
+def test_get_orders_recusa_campo_de_data_desconhecido():
+    """Typo em campo_data nao pode virar filtro silenciosamente ignorado.
+
+    A API do ML ignora parametro que nao conhece — entao
+    `order.dtae_created.from` devolveria a base inteira do vendedor em vez de
+    erro, e o "delta" traria seis meses.
+    """
+    with pytest.raises(ValueError, match="campo_data"):
+        MLClient("APP_USR-token").get_orders(
+            seller_id=1,
+            status=None,
+            date_from="2026-09-01",
+            date_to="2026-09-28",
+            campo_data="dtae_created",
+        )
