@@ -165,7 +165,11 @@ create table sync_jobs (
     leased_until  timestamptz,
     created_at    timestamptz not null default now(),
     started_at    timestamptz,
-    finished_at   timestamptz
+    finished_at   timestamptz,
+    -- O reaper busca lease vencido com `leased_until < now()`, e NULL < now()
+    -- e unknown, nao true: uma linha 'running' sem lease nunca seria repescada,
+    -- e uniq_sync_job_ativo a contaria como ativa — travando o seller pra sempre.
+    constraint running_tem_lease check (status <> 'running' or leased_until is not null)
 );
 
 -- Um job ativo por seller. A garantia é do banco, não de um `if` no app:
@@ -173,7 +177,8 @@ create table sync_jobs (
 create unique index uniq_sync_job_ativo on sync_jobs(seller_id)
     where status in ('queued','running');
 
-create index idx_sync_jobs_fila on sync_jobs(created_at) where status = 'queued';
+create index idx_sync_jobs_fila on sync_jobs(created_at)
+    where status in ('queued','running');
 
 alter table sync_jobs enable row level security;
 create policy "sync_jobs_select_own" on sync_jobs for select using (
@@ -181,7 +186,7 @@ create policy "sync_jobs_select_own" on sync_jobs for select using (
 );
 ```
 
-A parte de RLS e a `drop policy` só se aplicam no Supabase, seguindo a convenção da `0002`: o Postgres de teste não tem `auth.uid()`.
+Na implementação isso virou **dois arquivos**, não um: `0004_ml_tokens_e_fila.sql` com o DDL portátil (roda no Supabase e no banco de teste) e `0005_rls_sprint2.sql` com a RLS e a `drop policy`, que dependem de `auth.uid()` e por isso só rodam no Supabase — a mesma divisão que `setup_test_db.py` já aplica pra excluir a `0002` e a `0003`.
 
 ### Retomada e tolerância a falha
 
@@ -239,7 +244,7 @@ Variáveis de ambiente novas no Render (nenhuma vai pro frontend — nenhuma lev
 | `FRONTEND_URL` | Pra onde o callback redireciona depois de conectar |
 | `DEMO_SELLER_ID` | UUID do seller de demonstração servido por `/api/demo/*` |
 
-**Dependência:** nenhuma nova. `Fernet` vem de `cryptography`, que já está instalado como dependência de `pyjwt[crypto]` no `backend/requirements.txt`.
+**Dependências:** nada de novo pra instalar — `Fernet` vem de `cryptography`, que já chega como dependência transitiva de `pyjwt[crypto]`. Mas ela passa a ser **declarada explicitamente** no `backend/requirements.txt`: cifra de token é funcionalidade de segurança central, e depender de um extra de terceiro pra mantê-la presente é frágil. Junto entra `responses`, a biblioteca que a suíte legada já usa pra mockar a API do ML e que os testes desta sprint precisam.
 
 ## 10. Checkpoints
 
