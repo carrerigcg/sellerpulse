@@ -36,7 +36,12 @@ create table sync_jobs (
     leased_until  timestamptz,
     created_at    timestamptz not null default now(),
     started_at    timestamptz,
-    finished_at   timestamptz
+    finished_at   timestamptz,
+    -- O reaper procura lease vencido com `leased_until < now()`, e NULL < now()
+    -- e unknown, nao true: uma linha 'running' sem lease nunca seria repescada.
+    -- Pior, uniq_sync_job_ativo a conta como ativa, entao o seller ficaria sem
+    -- conseguir enfileirar nada, para sempre, sem erro em lugar nenhum.
+    constraint running_tem_lease check (status <> 'running' or leased_until is not null)
 );
 
 -- Um job ativo por seller. A garantia e do banco, nao de um `if` no app:
