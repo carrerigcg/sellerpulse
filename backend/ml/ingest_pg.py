@@ -87,25 +87,35 @@ async def ingest_janela(
     incluir_claims: bool = False,
     on_progress=None,
 ) -> ResultadoIngestao:
-    """Ingere [date_from, date_to) do vendedor. Idempotente."""
+    """Ingere [date_from, date_to) do vendedor. Idempotente.
+
+    Falhas de rede em `get_orders` PROPAGAM (abortam a janela inteira) — ver
+    o comentário no loop abaixo. Falhas em enriquecimento de item/categoria e
+    na fase de claims só geram warning e a ingestão segue: aquelas degradam
+    um rótulo no dashboard, não corrompem receita.
+    """
     resultado = ResultadoIngestao()
     de, ate = date_from.isoformat(), date_to.isoformat()
 
     pedidos: list[dict] = []
     for status in ("paid", "cancelled"):
-        try:
-            lote = await asyncio.to_thread(
-                lambda s=status: client.get_orders(
-                    seller_id=ml_seller_id,
-                    status=s,
-                    date_from=de,
-                    date_to=ate,
-                    campo_data=campo_data,
-                )
+        # SEM try/except aqui, de proposito. Engolir a falha num warning daria a
+        # janela por concluida faltando pedidos — e se o que falhou foi a busca
+        # de cancelados, a receita fica inflada. Pior: o delta seguinte filtra
+        # por date_last_updated numa janela nova e nunca volta pra buscar esses
+        # pedidos, entao o numero fica errado PRA SEMPRE, sem erro nenhum.
+        # Estourando, a fila repesca o job e tenta de novo (o upsert e
+        # idempotente, entao reprocessar nao duplica nada).
+        lote = await asyncio.to_thread(
+            lambda s=status: client.get_orders(
+                seller_id=ml_seller_id,
+                status=s,
+                date_from=de,
+                date_to=ate,
+                campo_data=campo_data,
             )
-            pedidos.extend(lote)
-        except Exception as exc:  # noqa: BLE001 — boundary de rede
-            resultado.warnings.append(f"Falha na fase pedidos {status}: {exc}")
+        )
+        pedidos.extend(lote)
 
     itens_vistos: set[str] = set()
     compradores: set[int] = set()
@@ -269,13 +279,27 @@ async def _garante_cache_de_item(
         )
 
 
+def _order_id_do_claim(claim: dict) -> int | None:
+    """resource_id, senao order_id, senao None.
+
+    Checa `is not None` e nao truthiness: o ML manda id como numero JSON, e o
+    inteiro 0 e falsy — com `if claim.get(...)` um resource_id legitimo de 0
+    seria descartado em silencio. `claims.order_id` e nulavel, entao claim sem
+    pedido associado e representavel e nao e erro.
+    """
+    bruto = claim.get("resource_id")
+    if bruto is None:
+        bruto = claim.get("order_id")
+    return int(bruto) if bruto is not None else None
+
+
 async def _persiste_claim(pool: asyncpg.Pool, seller_id: uuid.UUID, claim: dict) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             _UPSERT_CLAIM,
             seller_id,
             int(claim.get("id") or claim["claim_id"]),
-            int(claim["resource_id"]) if claim.get("resource_id") else claim.get("order_id"),
+            _order_id_do_claim(claim),
             claim.get("status", "unknown"),
             _para_datetime(claim["date_created"]),
             json.dumps(claim),

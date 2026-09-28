@@ -6,6 +6,8 @@ import asyncio
 import time
 from datetime import UTC, datetime
 
+import pytest
+
 from backend.ml.ingest_pg import ingest_janela
 
 JANELA = (datetime(2026, 7, 1, tzinfo=UTC), datetime(2026, 8, 1, tzinfo=UTC))
@@ -269,3 +271,73 @@ async def test_nao_bloqueia_o_event_loop(pg_pool, test_seller):
     # Duas chamadas de 0.4s bloqueantes = 0.8s. Se foram pra thread, o relogio
     # bateu dezenas de vezes; se travaram o loop, bateu ~0.
     assert batidas > 20, f"o event loop ficou travado (batidas={batidas})"
+
+
+async def test_falha_ao_baixar_pedidos_aborta_a_janela(pg_pool, test_seller):
+    """Falha de rede em get_orders NAO pode virar janela "concluida".
+
+    Se a busca de cancelados falhar e a janela for dada como pronta, as
+    cancelacoes somem e a receita fica inflada. O delta seguinte filtra por
+    date_last_updated numa janela nova e nunca volta pra buscar — numero errado
+    pra sempre. Estourando, a fila repesca o job.
+    """
+    _u, seller_id = test_seller
+
+    class FalhaNosCancelados(ClienteFake):
+        def get_orders(self, *, status, **kw):
+            if status == "cancelled":
+                raise RuntimeError("timeout na API do ML")
+            return super().get_orders(status=status, **kw)
+
+    cliente = FalhaNosCancelados(
+        paid=[_pedido(1)], items={"MLB1": {"title": "Fone", "category_id": "MLB1055"}}
+    )
+    with pytest.raises(RuntimeError):
+        await _ingere(pg_pool, seller_id, cliente)
+
+
+async def test_falha_em_claims_so_avisa(pg_pool, test_seller):
+    """Claim e enriquecimento, nao receita: falhar ali nao invalida a janela.
+
+    A distincao e essa — o que muda um numero que o usuario usa pra decidir
+    aborta; o que degrada um rotulo vira aviso.
+    """
+    _u, seller_id = test_seller
+
+    class FalhaNosClaims(ClienteFake):
+        def get_claims(self, **kw):
+            raise RuntimeError("500 do ML")
+
+    cliente = FalhaNosClaims(
+        paid=[_pedido(1)], items={"MLB1": {"title": "Fone", "category_id": "MLB1055"}}
+    )
+    resultado = await _ingere(pg_pool, seller_id, cliente, incluir_claims=True)
+
+    assert resultado.total_orders == 1, "o pedido tinha que ter sido gravado"
+    assert any("claims" in w for w in resultado.warnings)
+
+
+async def test_claim_com_resource_id_zero_nao_e_descartado(pg_pool, test_seller):
+    """`0` e falsy em Python, mas e um id presente.
+
+    Com `if claim.get("resource_id")`, um resource_id de 0 cairia no order_id —
+    que aqui e outro numero. O teste fixa que a checagem e de presenca.
+    """
+    _u, seller_id = test_seller
+    cliente = ClienteFake(
+        claims=[
+            {
+                "id": 9,
+                "resource_id": 0,
+                "order_id": 12345,
+                "status": "opened",
+                "date_created": "2026-07-20",
+            }
+        ]
+    )
+    await _ingere(pg_pool, seller_id, cliente, incluir_claims=True)
+    async with pg_pool.acquire() as conn:
+        gravado = await conn.fetchval(
+            "SELECT order_id FROM claims WHERE seller_id = $1 AND claim_id = 9", seller_id
+        )
+    assert gravado == 0, "resource_id 0 foi descartado por truthiness"
