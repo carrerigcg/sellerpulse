@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 
+import asyncpg
 import jwt
 import pytest
 import responses as responses_lib
@@ -136,13 +137,39 @@ async def test_callback_enfileira_backfill(client, pg_pool, test_seller):
 
 
 async def test_callback_com_state_invalido_nao_grava_nada(client, pg_pool, test_seller):
-    """O cenario do link forjado: sem state valido, nada acontece."""
+    """State malformado e recusado. NAO prova a checagem de assinatura —
+    quem prova isso e test_callback_com_state_forjado_de_uuid_cru_nao_grava_nada."""
     _u, seller_id = test_seller
     resp = client.get(
         "/ml/callback",
         params={"code": "TG-code", "state": "lixo"},
         follow_redirects=False,
     )
+    assert resp.status_code == 307
+    assert "erro=state" in resp.headers["location"]
+    assert await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load() is None
+
+
+async def test_callback_com_state_forjado_de_uuid_cru_nao_grava_nada(client, pg_pool, test_seller):
+    """O ataque de verdade: UUID bem-formado e SEM assinatura como state.
+
+    `state="lixo"` nao prova nada — ele morre no uuid.UUID() antes de chegar na
+    validacao de assinatura, e o teste passa igual se a validacao for removida
+    (verificado por mutacao). Este aqui passa pelo parse e so e recusado porque
+    a assinatura E checada. Sem essa checagem, quem descobrisse o seller_id de
+    uma vitima plugaria a PROPRIA conta do Mercado Livre no dashboard DELA.
+
+    O RequestsMock sem nada registrado e de proposito: se o callback seguir
+    adiante, a chamada ao ML estoura aqui em vez de sair pra internet de
+    verdade no meio de um teste.
+    """
+    _u, seller_id = test_seller
+    with responses_lib.RequestsMock(assert_all_requests_are_fired=False):
+        resp = client.get(
+            "/ml/callback",
+            params={"code": "TG-code", "state": str(seller_id)},
+            follow_redirects=False,
+        )
     assert resp.status_code == 307
     assert "erro=state" in resp.headers["location"]
     assert await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load() is None
@@ -184,6 +211,36 @@ async def test_callback_recusa_conta_ml_ja_conectada_em_outro_seller(
 
     assert "erro=ja-conectada" in resp.headers["location"]
     assert await tokens_mod.PostgresTokenStore(pg_pool, seller_b).load() is None
+
+
+async def test_banco_recusa_dois_sellers_com_a_mesma_conta_ml(pg_pool, test_seller, outro_seller):
+    """A trava final e do banco, nao do SELECT no callback.
+
+    O SELECT no callback e check-then-write: sob corrida, os dois passam. Esta
+    constraint e o que impede de verdade dois tenants ingerirem a mesma loja.
+    """
+    _ua, seller_a = test_seller
+    _ub, seller_b = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute("UPDATE sellers SET ml_seller_id = 555 WHERE id = $1", seller_a)
+        with pytest.raises(asyncpg.exceptions.UniqueViolationError):
+            await conn.execute("UPDATE sellers SET ml_seller_id = 555 WHERE id = $1", seller_b)
+
+
+async def test_varios_sellers_sem_conta_ml_convivem(pg_pool, test_seller, outro_seller):
+    """NULL nao colide: a constraint nao pode impedir contas sem ML conectado.
+
+    Se ela impedisse, o segundo cadastro do produto quebraria no signup — e as
+    duas fixtures deste teste ja nascem com ml_seller_id nulo.
+    """
+    _ua, seller_a = test_seller
+    _ub, seller_b = outro_seller
+    async with pg_pool.acquire() as conn:
+        nulos = await conn.fetchval(
+            "SELECT count(*) FROM sellers WHERE id = any($1::uuid[]) AND ml_seller_id IS NULL",
+            [seller_a, seller_b],
+        )
+    assert nulos == 2
 
 
 # ---------- disconnect ----------

@@ -9,9 +9,11 @@ neste. Quem prova a identidade e o `state` assinado emitido no /connect/start.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 
+import asyncpg
 from fastapi import APIRouter, Depends
 from fastapi.responses import RedirectResponse
 
@@ -24,6 +26,8 @@ from src.ml_client import MLClient
 from src.session_auth import OAuthError, exchange_code_for_tokens, sanitize_oauth_error
 
 router = APIRouter(prefix="/ml", tags=["ml"])
+
+_log = logging.getLogger(__name__)
 
 
 def _destino(caminho: str) -> str:
@@ -68,8 +72,14 @@ async def callback(
         cliente = MLClient(tokens.access_token)
         eu = await asyncio.to_thread(cliente.get, "/users/me")
     except Exception as exc:  # noqa: BLE001 — boundary de rede
-        # sanitize_oauth_error evita que um access_token acabe no log.
-        print(f"[ml:callback] falha em /users/me: {sanitize_oauth_error(str(exc))}")
+        # sanitize_oauth_error evita que um access_token acabe no log. O tipo da
+        # excecao vai junto porque e o que distingue "ML fora do ar" de
+        # "client_id errado" pra quem le o log do Render.
+        _log.warning(
+            "[ml:callback] falha em /users/me: %s: %s",
+            type(exc).__name__,
+            sanitize_oauth_error(str(exc)),
+        )
         return RedirectResponse(_destino("/dashboard/conectar?erro=perfil"))
 
     ml_seller_id = int(eu["id"])
@@ -84,12 +94,19 @@ async def callback(
         if dono is not None:
             return RedirectResponse(_destino("/dashboard/conectar?erro=ja-conectada"))
 
-        await conn.execute(
-            "UPDATE sellers SET ml_seller_id = $2, ml_nickname = $3 WHERE id = $1",
-            seller_id,
-            ml_seller_id,
-            eu.get("nickname"),
-        )
+        try:
+            await conn.execute(
+                "UPDATE sellers SET ml_seller_id = $2, ml_nickname = $3 WHERE id = $1",
+                seller_id,
+                ml_seller_id,
+                eu.get("nickname"),
+            )
+        except asyncpg.exceptions.UniqueViolationError:
+            # Dois callbacks pra mesma conta do ML no mesmo instante: os dois
+            # passam pelo SELECT acima antes de qualquer um gravar. Quem decide
+            # e a constraint uniq_ml_seller_id; o SELECT continua ali so pra dar
+            # a mensagem certa no caso comum, sem gastar um write que vai falhar.
+            return RedirectResponse(_destino("/dashboard/conectar?erro=ja-conectada"))
 
     await PostgresTokenStore(pool, seller_id).save(tokens)
     await queue.enqueue(pool, seller_id, "backfill")

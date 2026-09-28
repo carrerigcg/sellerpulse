@@ -1,8 +1,9 @@
 """Cria e prepara o banco de teste do backend.
 
 Aplica `0000_test_auth_stub.sql` (stub do `auth.users`, que no Supabase e
-nativo), `0001_init.sql` (schema multi-tenant) e `0004_ml_tokens_e_fila.sql`
-(tokens cifrados + fila de sincronizacao). As migrations 0002, 0003 e 0005 NAO
+nativo), `0001_init.sql` (schema multi-tenant), `0004_ml_tokens_e_fila.sql`
+(tokens cifrados + fila de sincronizacao) e `0006_ml_seller_id_unico.sql`
+(constraint unica em `ml_seller_id`). As migrations 0002, 0003 e 0005 NAO
 sao aplicadas: dependem de `auth.uid()`, funcao exclusiva do ambiente
 Supabase. O isolamento entre tenants que os testes exercitam e o filtro
 explicito por `seller_id` nas queries, nao a RLS.
@@ -27,7 +28,12 @@ from urllib.parse import urlparse, urlunparse
 import asyncpg
 
 DEFAULT_URL = "postgresql://postgres:postgres@localhost:5432/sellerpulse_test"
-MIGRATIONS = ("0000_test_auth_stub.sql", "0001_init.sql", "0004_ml_tokens_e_fila.sql")
+MIGRATIONS = (
+    "0000_test_auth_stub.sql",
+    "0001_init.sql",
+    "0004_ml_tokens_e_fila.sql",
+    "0006_ml_seller_id_unico.sql",
+)
 
 
 def _admin_url(url: str) -> tuple[str, str]:
