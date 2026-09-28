@@ -183,7 +183,15 @@ async def loop(pool: asyncpg.Pool, *, parar: asyncio.Event, client_factory=None)
         except Exception as exc:  # noqa: BLE001 — boundary do job
             # sanitize_oauth_error: a mensagem vai pro banco e pro endpoint de
             # status, entao nao pode carregar token.
-            await queue.fail(pool, job["id"], sanitize_oauth_error(str(exc))[:500])
+            try:
+                await queue.fail(pool, job["id"], sanitize_oauth_error(str(exc))[:500])
+            except Exception:  # noqa: BLE001
+                # Se registrar a falha tambem falhar, o loop NAO pode morrer: ele
+                # e a unica coisa que consome a fila, e ninguem o reinicia. O job
+                # fica com lease vencido e volta a ser candidato na proxima
+                # rodada; perder a mensagem de erro e barato comparado a parar
+                # de sincronizar todo mundo em silencio ate o proximo deploy.
+                _log.exception("[worker] falha ao registrar erro do job %s", job["id"])
 
 
 def worker_habilitado() -> bool:

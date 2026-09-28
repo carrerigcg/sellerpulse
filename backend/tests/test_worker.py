@@ -201,3 +201,49 @@ async def test_loop_consome_e_para_quando_sinalizado(pg_pool, test_seller):
     await asyncio.wait_for(tarefa, timeout=5)
     assert status == "done", f"job nao foi consumido (status={status})"
     assert tarefa.done()
+
+
+async def test_loop_sobrevive_a_falha_no_registro_de_erro(pg_pool, test_seller, monkeypatch):
+    """Se `queue.fail` estourar, o loop NAO pode morrer.
+
+    Ele e a unica coisa que consome a fila e ninguem o reinicia: uma excecao
+    escapando daqui para a sincronizacao de TODOS os sellers em silencio, sem
+    crash e sem log, ate o proximo deploy.
+    """
+    import asyncio
+
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await queue.enqueue(pg_pool, seller_id, "delta")
+
+    def _cliente_que_quebra(_job):
+        class Quebrado(ClienteFake):
+            def get_orders(self, **kw):
+                raise RuntimeError("erro no job")
+
+        return Quebrado()
+
+    chamadas_fail = []
+
+    async def _fail_que_quebra(*args, **kwargs):
+        chamadas_fail.append(args)
+        raise RuntimeError("banco fora do ar ao registrar a falha")
+
+    monkeypatch.setattr(runner.queue, "fail", _fail_que_quebra)
+
+    parar = asyncio.Event()
+    tarefa = asyncio.create_task(
+        runner.loop(pg_pool, parar=parar, client_factory=_cliente_que_quebra)
+    )
+    # Tempo pra pegar o job, falhar, e tentar registrar a falha.
+    for _ in range(40):
+        await asyncio.sleep(0.05)
+        if chamadas_fail:
+            break
+
+    parar.set()
+    await asyncio.wait_for(tarefa, timeout=5)
+
+    assert chamadas_fail, "o loop nem chegou a tentar registrar a falha"
+    assert tarefa.done()
+    assert tarefa.exception() is None, "o loop morreu em vez de sobreviver"
