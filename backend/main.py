@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.db import close_pool, get_pool
-from backend.routers import metrics, segmentation
+from backend.routers import metrics, ml, segmentation
 
 # Carrega backend/.env em desenvolvimento. `load_dotenv` NAO sobrescreve
 # variaveis ja presentes no ambiente, entao em producao (Render) os valores
@@ -44,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(metrics.router)
+app.include_router(ml.router)
 app.include_router(segmentation.router)
 
 
