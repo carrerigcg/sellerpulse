@@ -19,9 +19,12 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from src.auth import TokenSet
 
-# Versao da chave gravada junto de cada token. Hoje sempre 1; existe pra que
-# uma rotacao futura possa decifrar o acervo antigo com a chave antiga
-# enquanto grava o novo com a nova, sem migration de emergencia.
+# Versao da chave gravada junto de cada token. Hoje e sempre 1 e NINGUEM le de
+# volta: a coluna existe pra que uma rotacao futura seja possivel sem migration,
+# nao porque rotacao ja funcione. Pra funcionar de verdade, decifra() teria que
+# escolher a chave pela versao — via MultiFernet, que tenta uma lista de chaves
+# na ordem. Rotacionar TOKEN_ENCRYPTION_KEY hoje quebra todos os tokens ja
+# gravados de uma vez.
 KEY_VERSION_ATUAL = 1
 
 
@@ -39,8 +42,12 @@ def cifra(valor: str) -> str:
 
 
 def decifra(valor: str) -> str:
+    # _fernet() fica FORA do try: chave malformada e problema de configuracao do
+    # processo, nao de integridade desta linha. Confundir os dois manda quem
+    # depura procurar linha corrompida quando o que quebrou foi a env var.
+    fernet = _fernet()
     try:
-        return _fernet().decrypt(valor.encode()).decode()
+        return fernet.decrypt(valor.encode()).decode()
     except (InvalidToken, ValueError) as exc:
         # Mensagem sem o ciphertext: ele nao e segredo, mas jogar payload de
         # token em log e habito ruim de se ter.

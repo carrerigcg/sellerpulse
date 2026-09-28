@@ -48,12 +48,10 @@ def test_ciphertext_adulterado_levanta():
         mod.decifra(adulterado)
 
 
-def test_chave_diferente_nao_decifra():
+def test_chave_diferente_nao_decifra(monkeypatch):
     cifrado = mod.cifra("APP_USR-123-abc")
     mod._fernet.cache_clear()
-    import os
-
-    os.environ["TOKEN_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
     with pytest.raises(mod.TokenCifraError):
         mod.decifra(cifrado)
 
@@ -77,6 +75,10 @@ async def test_store_salva_e_carrega(pg_pool, test_seller):
     assert carregado is not None
     assert carregado.access_token == original.access_token
     assert carregado.refresh_token == original.refresh_token
+    # asyncpg devolve timestamptz sempre aware. Assertar explicitamente pra que,
+    # se algum dia voltar naive, o teste falhe dizendo isso em vez de estourar
+    # um TypeError obscuro na subtracao abaixo.
+    assert carregado.expires_at.tzinfo is not None
     # timestamptz volta com precisao de microssegundo; comparar com tolerancia
     assert abs((carregado.expires_at - original.expires_at).total_seconds()) < 1
 
