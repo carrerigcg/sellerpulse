@@ -76,10 +76,10 @@ def test_state_com_audience_errada_e_recusado():
         oauth.valida_state(outro)
 
 
-def test_state_vazio_ou_lixo_e_recusado():
-    for valor in ("", "nao-e-um-jwt", "a.b.c"):
-        with pytest.raises(oauth.StateInvalido):
-            oauth.valida_state(valor)
+@pytest.mark.parametrize("valor", ["", "nao-e-um-jwt", "a.b.c"])
+def test_state_vazio_ou_lixo_e_recusado(valor):
+    with pytest.raises(oauth.StateInvalido):
+        oauth.valida_state(valor)
 
 
 def test_url_de_consentimento_carrega_o_state_e_o_client_id():

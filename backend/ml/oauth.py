@@ -38,6 +38,9 @@ def emite_state(seller_id: str, *, agora: datetime | None = None) -> str:
         {
             "sub": str(seller_id),
             "aud": AUDIENCIA_STATE,
+            # `iat` nao e validado pelo PyJWT nem por valida_state — fica so pra
+            # correlacionar com log quando alguem for investigar um callback.
+            # Quem garante a janela e o `exp`.
             "iat": agora,
             "exp": agora + VALIDADE_STATE,
         },
