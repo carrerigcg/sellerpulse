@@ -1,4 +1,8 @@
+import Link from "next/link";
+
 import { ApiError, getFluxoFinanceiro, janelaAnterior, type FluxoDia } from "@/lib/api";
+
+import { DisparaDelta } from "./delta";
 
 /**
  * Executive — receita, custos e lucro do período, com variação sobre a
@@ -9,11 +13,16 @@ import { ApiError, getFluxoFinanceiro, janelaAnterior, type FluxoDia } from "@/l
  * já existem e estão testados, falta a tela.
  */
 
-// A base sintética é ancorada em agosto/2026 (o gerador em src/demo_data.py
-// usa data fixa pra ser determinístico), então um "últimos 90 dias" a partir
-// de hoje viria vazio. Enquanto a ingestão real do Mercado Livre não entra
-// (Sprint 2), o padrão aponta para onde os dados de exemplo existem.
-const PERIODO_PADRAO = { de: "2026-05-01", ate: "2026-08-02" };
+// A Sprint 2 trouxe a ingestão real do Mercado Livre, então o padrão deixa
+// de apontar pra janela fixa de agosto/2026 (onde só existia a base
+// sintética) e passa a ser os últimos 90 dias corridos a partir de hoje.
+function periodoPadrao() {
+  const hoje = new Date();
+  const noventaDiasAtras = new Date(hoje);
+  noventaDiasAtras.setDate(hoje.getDate() - 90);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
+}
 
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -25,8 +34,9 @@ export default async function ExecutivePage({
   searchParams,
 }: PageProps<"/dashboard">) {
   const params = await searchParams;
-  const de = typeof params.de === "string" ? params.de : PERIODO_PADRAO.de;
-  const ate = typeof params.ate === "string" ? params.ate : PERIODO_PADRAO.ate;
+  const padrao = periodoPadrao();
+  const de = typeof params.de === "string" ? params.de : padrao.de;
+  const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
   let fluxo: FluxoDia[] = [];
   let anterior: FluxoDia[] = [];
@@ -50,6 +60,8 @@ export default async function ExecutivePage({
 
   return (
     <>
+      <DisparaDelta />
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Executive</h1>
@@ -66,7 +78,14 @@ export default async function ExecutivePage({
         </p>
       ) : fluxo.length === 0 ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Nenhum pedido pago neste período.
+          Nenhum pedido pago neste período.{" "}
+          <Link
+            href="/dashboard/conectar"
+            className="text-accent underline hover:text-accent-hover"
+          >
+            Conectar uma conta do Mercado Livre
+          </Link>
+          .
         </p>
       ) : (
         <>
