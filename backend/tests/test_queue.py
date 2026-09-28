@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 
+import asyncpg
+import pytest
+
 from backend.jobs import queue
 
 
@@ -201,3 +204,24 @@ async def test_salva_cursor(pg_pool, test_seller):
     await queue.salva_cursor(pg_pool, job_id, {"ultimo_mes": "2026-05"})
     row = await _status(pg_pool, job_id)
     assert json.loads(row["cursor"])["ultimo_mes"] == "2026-05"
+
+
+async def test_enqueue_nao_engole_outra_violacao_de_unicidade(pg_pool, test_seller, outro_seller):
+    """Violacao de OUTRA constraint tem que estourar, nao virar "job ja ativo".
+
+    Sem checar qual constraint falhou, um bug de integridade futuro apareceria
+    como enqueue devolvendo None — indistinguivel do caso benigno, e portanto
+    invisivel.
+    """
+    _ua, seller_a = test_seller
+    _ub, seller_b = outro_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute("CREATE UNIQUE INDEX uniq_teste_kind ON sync_jobs(kind)")
+    try:
+        assert await queue.enqueue(pg_pool, seller_a, "backfill") is not None
+        # Mesmo `kind` pra outro seller: viola uniq_teste_kind, nao a do seller.
+        with pytest.raises(asyncpg.exceptions.UniqueViolationError):
+            await queue.enqueue(pg_pool, seller_b, "backfill")
+    finally:
+        async with pg_pool.acquire() as conn:
+            await conn.execute("DROP INDEX uniq_teste_kind")

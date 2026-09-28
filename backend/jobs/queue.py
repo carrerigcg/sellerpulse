@@ -45,8 +45,13 @@ async def enqueue(pool: asyncpg.Pool, seller_id: uuid.UUID, kind: str) -> int | 
                 seller_id,
                 kind,
             )
-    except asyncpg.exceptions.UniqueViolationError:
-        # Violou uniq_sync_job_ativo — ja existe job queued/running pro seller.
+    except asyncpg.exceptions.UniqueViolationError as exc:
+        # SO a violacao de uniq_sync_job_ativo significa "ja tem job ativo".
+        # Engolir qualquer unique violation reportaria um bug de integridade
+        # futuro como se fosse o caso benigno — e o sintoma e identico (None),
+        # entao ninguem notaria.
+        if exc.constraint_name != "uniq_sync_job_ativo":
+            raise
         return None
 
 
@@ -140,16 +145,20 @@ async def marca_esgotados(pool: asyncpg.Pool) -> int:
     Sem isso, um job assim ficaria 'running' com lease vencido para sempre — e
     como o indice parcial conta 'running' como ativa, o seller nao conseguiria
     enfileirar mais nada e ficaria travado sem explicacao.
+
+    Conta por `RETURNING` em vez de parsear a tag "UPDATE <n>" que o asyncpg
+    devolve: a contagem diz se um seller travado foi liberado, e nao vale
+    depender do formato de uma string de status pra saber isso.
     """
     async with pool.acquire() as conn:
-        resultado = await conn.execute(
+        liberados = await conn.fetch(
             """
             UPDATE sync_jobs SET
                 status = 'failed', finished_at = now(), leased_until = null,
                 erro = coalesce(erro, '') || ' (esgotou as tentativas)'
             WHERE status = 'running' AND leased_until < now() AND attempts >= $1
+            RETURNING id
             """,
             MAX_TENTATIVAS,
         )
-    # asyncpg devolve "UPDATE <n>".
-    return int(resultado.split()[-1])
+    return len(liberados)
