@@ -1,28 +1,17 @@
-import Link from "next/link";
-
 import { FlowChart } from "@/components/analytics/flow-chart";
 import { totalizarFluxo } from "@/components/analytics/executive-totals";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { PeriodPicker } from "@/components/analytics/period-picker";
-import { ApiError, getFluxoFinanceiro, janelaAnterior, type FluxoDia } from "@/lib/api";
-
-import { DisparaDelta } from "./delta";
+import { janelaAnterior, type FluxoDia } from "@/lib/api";
+import { getDemoFluxoFinanceiro } from "@/lib/demo";
 
 /**
- * Executive — receita, custos e lucro do período, com variação sobre a
- * janela anterior, mais o fluxo diário.
- *
- * Escopo: esta é a visão que a Sprint 1 entrega. As páginas de Produtos
- * (Pareto ABC, cohort) e Clientes (RFM) são da Sprint 3 — os endpoints
- * já existem e estão testados, falta a tela.
- *
- * Os cartões de KPI e o gráfico de fluxo vivem em `components/analytics/`
- * — a mesma versão é usada por `/demo` (Checkpoint 2 da Sprint 3).
+ * Executive da demonstração pública — mesmo conteúdo de `/dashboard`, dados
+ * de `/demo/fluxo-financeiro`. Cartões de KPI e gráfico de fluxo vêm de
+ * `components/analytics/`, os mesmos componentes da tela autenticada.
  */
 
-// A Sprint 2 trouxe a ingestão real do Mercado Livre, então o padrão deixa
-// de apontar pra janela fixa de agosto/2026 (onde só existia a base
-// sintética) e passa a ser os últimos 90 dias corridos a partir de hoje.
+// Mesmo padrão de janela das telas autenticadas: últimos 90 dias corridos.
 function periodoPadrao() {
   const hoje = new Date();
   const noventaDiasAtras = new Date(hoje);
@@ -31,9 +20,9 @@ function periodoPadrao() {
   return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
 }
 
-export default async function ExecutivePage({
+export default async function DemoExecutivePage({
   searchParams,
-}: PageProps<"/dashboard">) {
+}: PageProps<"/demo">) {
   const params = await searchParams;
   const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
@@ -46,14 +35,11 @@ export default async function ExecutivePage({
   try {
     const [antDe, antAte] = janelaAnterior(de, ate);
     [fluxo, anterior] = await Promise.all([
-      getFluxoFinanceiro(de, ate),
-      getFluxoFinanceiro(antDe, antAte),
+      getDemoFluxoFinanceiro(de, ate),
+      getDemoFluxoFinanceiro(antDe, antAte),
     ]);
-  } catch (e) {
-    erro =
-      e instanceof ApiError && e.status === 401
-        ? "Sua sessão expirou. Entre de novo."
-        : "Não foi possível carregar os dados. O backend está no ar?";
+  } catch {
+    erro = "Não foi possível carregar a demonstração agora. Tente de novo em instantes.";
   }
 
   const atual = totalizarFluxo(fluxo);
@@ -61,32 +47,21 @@ export default async function ExecutivePage({
 
   return (
     <>
-      <DisparaDelta />
-
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Executive</h1>
           <p className="mt-1 text-sm text-muted">
-            Receita, custos e resultado do período.
+            Receita, custos e resultado do período — dados de demonstração.
           </p>
         </div>
         <PeriodPicker de={de} ate={ate} />
       </div>
 
       {erro ? (
-        <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
-          {erro}
-        </p>
+        <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
       ) : fluxo.length === 0 ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Nenhum pedido pago neste período.{" "}
-          <Link
-            href="/dashboard/conectar"
-            className="text-accent underline hover:text-accent-hover"
-          >
-            Conectar uma conta do Mercado Livre
-          </Link>
-          .
+          Nenhum pedido nesta janela de demonstração. Tente outro período.
         </p>
       ) : (
         <>

@@ -22,6 +22,11 @@ import type { SegmentoRfm } from "@/lib/api";
  * Como a paleta é curta, a identidade de cada segmento nunca depende só da
  * cor: toda etiqueta carrega o nome por extenso, e o tooltip do gráfico de
  * dispersão mostra o segmento e os três scores.
+ *
+ * Movido de `app/dashboard/clientes/segmentos.ts` no Checkpoint 2 da Sprint
+ * 3: a demonstração pública (`/demo/clientes`) precisa da mesma tradução, e
+ * duplicar este arquivo por tela violaria a mesma regra de "não duplicar
+ * gráfico" que motivou extrair os componentes visuais.
  */
 export type DefinicaoSegmento = {
   chave: SegmentoRfm;

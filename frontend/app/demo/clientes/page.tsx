@@ -1,24 +1,18 @@
-import Link from "next/link";
-
 import { BuyersTable } from "@/components/analytics/buyers-table";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import { RfmChart } from "@/components/analytics/rfm-chart";
 import { RfmLegend } from "@/components/analytics/rfm-legend";
 import { SegmentBand } from "@/components/analytics/segment-band";
-import { ApiError, getRfmScores, type RfmLinha } from "@/lib/api";
+import type { RfmLinha } from "@/lib/api";
+import { getDemoRfmScores } from "@/lib/demo";
 
 /**
- * Clientes — dispersão e segmentação RFM.
- *
- * Responde quem compra de novo, quem está sumindo, e quanto isso vale. Vem
- * de um endpoint só, `/segmentation/rfm` — já existe e está testado desde
- * a Sprint 1, esta tela só consome.
- *
- * O gráfico, a faixa de segmentos e a tabela vivem em `components/analytics/`
- * — a mesma versão é usada por `/demo/clientes` (Checkpoint 2 da Sprint 3).
+ * Clientes da demonstração pública — mesmo conteúdo de `/dashboard/clientes`,
+ * dados de `/demo/rfm`. O gráfico, a faixa de segmentos e a tabela vêm de
+ * `components/analytics/`, os mesmos componentes da tela autenticada.
  */
 
-// Mesmo padrão de janela do Executive: últimos 90 dias corridos.
+// Mesmo padrão de janela das telas autenticadas: últimos 90 dias corridos.
 function periodoPadrao() {
   const hoje = new Date();
   const noventaDiasAtras = new Date(hoje);
@@ -27,9 +21,9 @@ function periodoPadrao() {
   return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
 }
 
-export default async function ClientesPage({
+export default async function DemoClientesPage({
   searchParams,
-}: PageProps<"/dashboard/clientes">) {
+}: PageProps<"/demo/clientes">) {
   const params = await searchParams;
   const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
@@ -39,12 +33,9 @@ export default async function ClientesPage({
   let erro: string | null = null;
 
   try {
-    rfm = await getRfmScores(de, ate);
-  } catch (e) {
-    erro =
-      e instanceof ApiError && e.status === 401
-        ? "Sua sessão expirou. Entre de novo."
-        : "Não foi possível carregar os dados. O backend está no ar?";
+    rfm = await getDemoRfmScores(de, ate);
+  } catch {
+    erro = "Não foi possível carregar a demonstração agora. Tente de novo em instantes.";
   }
 
   return (
@@ -60,19 +51,10 @@ export default async function ClientesPage({
       </div>
 
       {erro ? (
-        <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
-          {erro}
-        </p>
+        <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
       ) : rfm.length === 0 ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Nenhum comprador com pedido pago neste período.{" "}
-          <Link
-            href="/dashboard/conectar"
-            className="text-accent underline hover:text-accent-hover"
-          >
-            Conectar uma conta do Mercado Livre
-          </Link>
-          .
+          Nenhum comprador nesta janela de demonstração. Tente outro período.
         </p>
       ) : (
         <>

@@ -26,6 +26,10 @@ import type { AbcLinha } from "@/lib/api";
  *
  * Sem rótulo por produto no eixo X: em qualquer catálogo com mais de ~15
  * itens os rótulos colidem e viram ruído. Qual produto é aparece no tooltip.
+ *
+ * Compartilhado entre `/dashboard/produtos` (autenticado) e `/demo/produtos`
+ * (público) desde o Checkpoint 2 da Sprint 3 — as duas telas mostram o
+ * mesmo gráfico, só a fonte do dado muda.
  */
 
 const brl = new Intl.NumberFormat("pt-BR", {
@@ -41,7 +45,7 @@ const brlCompacto = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 1,
 });
 
-export function GraficoPareto({ dados }: { dados: AbcLinha[] }) {
+export function ParetoChart({ dados }: { dados: AbcLinha[] }) {
   return (
     <div className="mt-5">
       <div className="h-80 w-full">

@@ -34,8 +34,11 @@ const COLUNAS: Coluna[] = [
  * coluna, clicar de novo inverte. Estado só de ordenação (sem paginação:
  * a base de compradores de um seller não costuma passar de algumas
  * centenas por janela, `overflow-y-auto` já resolve).
+ *
+ * Compartilhado entre `/dashboard/clientes` e `/demo/clientes` desde o
+ * Checkpoint 2 da Sprint 3.
  */
-export function TabelaCompradores({ dados }: { dados: RfmLinha[] }) {
+export function BuyersTable({ dados }: { dados: RfmLinha[] }) {
   const [ordem, setOrdem] = useState<{ chave: keyof RfmLinha; direcao: "asc" | "desc" }>({
     chave: "monetary",
     direcao: "desc",
@@ -46,7 +49,10 @@ export function TabelaCompradores({ dados }: { dados: RfmLinha[] }) {
     copia.sort((a, b) => {
       const va = a[ordem.chave];
       const vb = b[ordem.chave];
-      const cmp = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb));
+      const cmp =
+        typeof va === "number" && typeof vb === "number"
+          ? va - vb
+          : String(va).localeCompare(String(vb));
       return ordem.direcao === "asc" ? cmp : -cmp;
     });
     return copia;
@@ -66,7 +72,10 @@ export function TabelaCompradores({ dados }: { dados: RfmLinha[] }) {
         <thead className="sticky top-0 bg-surface text-xs uppercase tracking-wide text-muted">
           <tr>
             {COLUNAS.map((coluna) => (
-              <th key={coluna.chave} className={`px-3 py-2 font-medium ${coluna.alinhamento === "right" ? "text-right" : ""}`}>
+              <th
+                key={coluna.chave}
+                className={`px-3 py-2 font-medium ${coluna.alinhamento === "right" ? "text-right" : ""}`}
+              >
                 <button
                   type="button"
                   onClick={() => alternarOrdem(coluna.chave)}

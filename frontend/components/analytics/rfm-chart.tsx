@@ -39,8 +39,11 @@ const brlCompacto = new Intl.NumberFormat("pt-BR", {
  * legenda automática, duplicando a faixa de segmentos que já existe embaixo
  * do gráfico. A ordem das `Cell` casa com a ordem de `dados` — é assim que
  * o Recharts liga cada célula ao ponto de mesmo índice.
+ *
+ * Compartilhado entre `/dashboard/clientes` e `/demo/clientes` desde o
+ * Checkpoint 2 da Sprint 3.
  */
-export function GraficoRfm({ dados }: { dados: RfmLinha[] }) {
+export function RfmChart({ dados }: { dados: RfmLinha[] }) {
   const maxRecencia = Math.max(...dados.map((d) => d.recency_dias), 1);
   const maxMonetary = Math.max(...dados.map((d) => d.monetary), 1);
 

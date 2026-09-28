@@ -1,27 +1,18 @@
-import Link from "next/link";
-
 import { AbcClassCards } from "@/components/analytics/abc-class-cards";
 import { AbcTable } from "@/components/analytics/abc-table";
 import { CohortHeatmap } from "@/components/analytics/cohort-heatmap";
 import { ParetoChart } from "@/components/analytics/pareto-chart";
 import { PeriodPicker } from "@/components/analytics/period-picker";
-import { ApiError, getAbcPareto, getCohortProduto, type AbcLinha, type CohortLinha } from "@/lib/api";
+import type { AbcLinha, CohortLinha } from "@/lib/api";
+import { getDemoAbcPareto, getDemoCohortProduto } from "@/lib/demo";
 
 /**
- * Produtos — curva ABC de Pareto e cohort de lançamento.
- *
- * Responde duas perguntas: quais produtos sustentam o faturamento (Pareto +
- * classes A/B/C) e se produto novo segura receita depois do pico de
- * lançamento ou só dá um estouro e desaparece (cohort).
- *
- * Os dois vêm de `/segmentation/abc` e `/segmentation/cohort` — nenhuma
- * query nova, os endpoints já existem e estão testados desde a Sprint 1.
- *
- * Os gráficos e a tabela vivem em `components/analytics/` — a mesma versão
- * é usada por `/demo/produtos` (Checkpoint 2 da Sprint 3).
+ * Produtos da demonstração pública — mesmo conteúdo de `/dashboard/produtos`,
+ * dados de `/demo/abc` e `/demo/cohort`. Os gráficos e a tabela vêm de
+ * `components/analytics/`, os mesmos componentes da tela autenticada.
  */
 
-// Mesmo padrão de janela do Executive: últimos 90 dias corridos.
+// Mesmo padrão de janela das telas autenticadas: últimos 90 dias corridos.
 function periodoPadrao() {
   const hoje = new Date();
   const noventaDiasAtras = new Date(hoje);
@@ -30,9 +21,9 @@ function periodoPadrao() {
   return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
 }
 
-export default async function ProdutosPage({
+export default async function DemoProdutosPage({
   searchParams,
-}: PageProps<"/dashboard/produtos">) {
+}: PageProps<"/demo/produtos">) {
   const params = await searchParams;
   const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
@@ -43,12 +34,12 @@ export default async function ProdutosPage({
   let erro: string | null = null;
 
   try {
-    [abc, cohort] = await Promise.all([getAbcPareto(de, ate), getCohortProduto(de, ate)]);
-  } catch (e) {
-    erro =
-      e instanceof ApiError && e.status === 401
-        ? "Sua sessão expirou. Entre de novo."
-        : "Não foi possível carregar os dados. O backend está no ar?";
+    [abc, cohort] = await Promise.all([
+      getDemoAbcPareto(de, ate),
+      getDemoCohortProduto(de, ate),
+    ]);
+  } catch {
+    erro = "Não foi possível carregar a demonstração agora. Tente de novo em instantes.";
   }
 
   return (
@@ -64,19 +55,10 @@ export default async function ProdutosPage({
       </div>
 
       {erro ? (
-        <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
-          {erro}
-        </p>
+        <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
       ) : abc.length === 0 ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Nenhum pedido pago neste período.{" "}
-          <Link
-            href="/dashboard/conectar"
-            className="text-accent underline hover:text-accent-hover"
-          >
-            Conectar uma conta do Mercado Livre
-          </Link>
-          .
+          Nenhum pedido nesta janela de demonstração. Tente outro período.
         </p>
       ) : (
         <>
