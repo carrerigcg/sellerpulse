@@ -9,12 +9,14 @@ neste. Quem prova a identidade e o `state` assinado emitido no /connect/start.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import asyncpg
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 
 from backend.db import get_pool
@@ -123,3 +125,86 @@ async def disconnect(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> N
     """
     pool = await get_pool()
     await PostgresTokenStore(pool, seller_id).delete()
+
+
+# Abaixo disso, um login nao dispara sincronizacao: o dado esta fresco o
+# bastante e cada sync gasta rate limit da API do ML.
+LIMIAR_DELTA = timedelta(hours=6)
+
+_MOTIVOS = frozenset({"manual", "login"})
+
+
+@router.post("/sync")
+async def sync(
+    motivo: str = "manual",
+    seller_id: uuid.UUID = Depends(get_current_seller_id),
+) -> dict:
+    """Enfileira um delta. QUEM DECIDE SE VALE A PENA E O SERVIDOR.
+
+    `motivo=login` respeita a janela de 6h; `motivo=manual` e ordem direta do
+    usuario e sempre enfileira. Deixar essa regra no frontend permitiria que
+    uma aba velha, ou um cliente adulterado, a ignorasse.
+    """
+    if motivo not in _MOTIVOS:
+        raise HTTPException(status_code=400, detail=f"motivo invalido: {motivo!r}")
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        seller = await conn.fetchrow(
+            "SELECT ml_seller_id, last_synced_at FROM sellers WHERE id = $1", seller_id
+        )
+    if seller is None or seller["ml_seller_id"] is None:
+        raise HTTPException(
+            status_code=409, detail="Conecte uma conta do Mercado Livre antes de sincronizar"
+        )
+
+    if motivo == "login":
+        ultimo = seller["last_synced_at"]
+        if ultimo is not None and datetime.now(UTC) - ultimo < LIMIAR_DELTA:
+            return {"enfileirado": False, "motivo": "recente"}
+
+    job_id = await queue.enqueue(pool, seller_id, "delta")
+    if job_id is None:
+        return {"enfileirado": False, "motivo": "ja-em-andamento"}
+    return {"enfileirado": True, "job_id": job_id}
+
+
+@router.get("/sync/status")
+async def sync_status(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        seller = await conn.fetchrow(
+            "SELECT ml_seller_id, ml_nickname, last_synced_at FROM sellers WHERE id = $1",
+            seller_id,
+        )
+        job = await conn.fetchrow(
+            """
+            SELECT id, kind, status, fase, processados, total, erro, warnings,
+                   created_at, finished_at
+            FROM sync_jobs WHERE seller_id = $1
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            seller_id,
+        )
+
+    return {
+        "conectado": seller is not None and seller["ml_seller_id"] is not None,
+        "apelido": seller["ml_nickname"] if seller else None,
+        "ultima_sincronizacao": (
+            seller["last_synced_at"].isoformat() if seller and seller["last_synced_at"] else None
+        ),
+        "job": None
+        if job is None
+        else {
+            "id": job["id"],
+            "kind": job["kind"],
+            "status": job["status"],
+            "fase": job["fase"],
+            "processados": job["processados"],
+            "total": job["total"],
+            "erro": job["erro"],
+            "warnings": json.loads(job["warnings"]) if job["warnings"] else [],
+            "criado_em": job["created_at"].isoformat(),
+            "concluido_em": job["finished_at"].isoformat() if job["finished_at"] else None,
+        },
+    }

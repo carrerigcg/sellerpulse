@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 
 import asyncpg
 import jwt
@@ -11,9 +12,12 @@ import responses as responses_lib
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
+from backend.jobs import queue
 from backend.main import app
 from backend.ml import oauth
 from backend.ml import tokens as tokens_mod
+from backend.ml.tokens import PostgresTokenStore
+from src.auth import TokenSet
 
 from .conftest import TEST_DATABASE_URL
 
@@ -284,3 +288,108 @@ async def test_disconnect_de_outro_seller_nao_afeta_o_meu(
         )
     client.delete("/ml/connection", headers=_auth(user_a))
     assert await tokens_mod.PostgresTokenStore(pg_pool, seller_b).load() is not None
+
+
+# ---------- sync ----------
+
+
+async def _conectado(pool, seller_id, *, ultimo_sync=None):
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sellers SET ml_seller_id = 987654, ml_nickname = 'LOJA', "
+            "last_synced_at = $2 WHERE id = $1",
+            seller_id,
+            ultimo_sync,
+        )
+    await PostgresTokenStore(pool, seller_id).save(
+        TokenSet(
+            access_token="APP_USR-x",
+            refresh_token="TG-x",
+            expires_at=datetime.now(UTC) + timedelta(hours=5),
+        )
+    )
+
+
+async def test_sync_no_login_enfileira_quando_o_dado_esta_velho(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(hours=9))
+    resp = client.post("/ml/sync", params={"motivo": "login"}, headers=_auth(user_id))
+    assert resp.status_code == 200
+    assert resp.json()["enfileirado"] is True
+
+
+async def test_sync_no_login_nao_enfileira_quando_o_dado_esta_fresco(client, pg_pool, test_seller):
+    """A janela de 6h evita queimar rate limit do ML a cada F5 do usuario."""
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(minutes=30))
+    resp = client.post("/ml/sync", params={"motivo": "login"}, headers=_auth(user_id))
+    assert resp.json() == {"enfileirado": False, "motivo": "recente"}
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 0
+
+
+async def test_sync_no_login_enfileira_se_nunca_sincronizou(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=None)
+    corpo = client.post("/ml/sync", params={"motivo": "login"}, headers=_auth(user_id)).json()
+    assert corpo["enfileirado"] is True
+
+
+async def test_sync_manual_ignora_a_janela_de_6h(client, pg_pool, test_seller):
+    """O botao e do usuario: se ele pediu, sincroniza."""
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(minutes=2))
+    resp = client.post("/ml/sync", params={"motivo": "manual"}, headers=_auth(user_id))
+    assert resp.json()["enfileirado"] is True
+
+
+async def test_sync_sem_conexao_devolve_409(client, pg_pool, test_seller):
+    user_id, _sid = test_seller
+    resp = client.post("/ml/sync", params={"motivo": "manual"}, headers=_auth(user_id))
+    assert resp.status_code == 409
+
+
+async def test_sync_com_job_em_andamento_nao_duplica(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id)
+    await queue.enqueue(pg_pool, seller_id, "backfill")
+    resp = client.post("/ml/sync", params={"motivo": "manual"}, headers=_auth(user_id))
+    assert resp.json() == {"enfileirado": False, "motivo": "ja-em-andamento"}
+
+
+async def test_sync_com_motivo_invalido_devolve_400(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id)
+    resp = client.post("/ml/sync", params={"motivo": "sei-la"}, headers=_auth(user_id))
+    assert resp.status_code == 400
+
+
+async def test_status_sem_conexao(client, pg_pool, test_seller):
+    user_id, _sid = test_seller
+    corpo = client.get("/ml/sync/status", headers=_auth(user_id)).json()
+    assert corpo["conectado"] is False
+    assert corpo["job"] is None
+
+
+async def test_status_devolve_progresso_do_job(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id)
+    job_id = await queue.enqueue(pg_pool, seller_id, "backfill")
+    await queue.claim_next(pg_pool)
+    await queue.heartbeat(pg_pool, job_id, fase="Baixando pedidos", processados=3, total=6)
+
+    corpo = client.get("/ml/sync/status", headers=_auth(user_id)).json()
+    assert corpo["conectado"] is True
+    assert corpo["apelido"] == "LOJA"
+    assert corpo["job"]["status"] == "running"
+    assert corpo["job"]["fase"] == "Baixando pedidos"
+    assert corpo["job"]["processados"] == 3
+
+
+async def test_status_nao_mostra_job_de_outro_seller(client, pg_pool, test_seller, outro_seller):
+    """Um WHERE esquecido aqui exporia atividade de outro tenant."""
+    user_a, _sa = test_seller
+    _ub, seller_b = outro_seller
+    await queue.enqueue(pg_pool, seller_b, "backfill")
+    corpo = client.get("/ml/sync/status", headers=_auth(user_a)).json()
+    assert corpo["job"] is None
