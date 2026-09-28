@@ -8,7 +8,11 @@ const PASSOS = [
   {
     numero: "1",
     titulo: "Criar conta",
-    texto: "Leva um minuto. Só email e senha, ou entrar com o Google.",
+    // Sem menção ao Google: o provider ainda não está habilitado no Supabase,
+    // e o botão devolve erro. Prometer na vitrine o que quebra no primeiro
+    // clique é pior do que não oferecer. Volta a aparecer quando o OAuth
+    // do Google estiver ligado de verdade.
+    texto: "Leva um minuto. Email e senha, e pronto.",
   },
   {
     numero: "2",
