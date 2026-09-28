@@ -54,6 +54,27 @@ def decifra(valor: str) -> str:
         raise TokenCifraError("token ilegivel: adulterado ou chave errada") from exc
 
 
+def valida_chave_de_cifra() -> None:
+    """Estoura se TOKEN_ENCRYPTION_KEY faltar ou nao for uma chave Fernet valida.
+
+    Chamada pelo lifespan da API. Existe porque a leitura da chave e preguicosa
+    (`_fernet()` so roda na primeira cifra/decifra): sem esta checagem no boot,
+    uma chave faltando ou truncada deixa o deploy subir, o health check passar,
+    e o erro aparecer como 500 no meio do callback OAuth do primeiro usuario que
+    conectar — com os tokens dele perdidos. `DATABASE_URL` ja falha no boot
+    porque o lifespan abre o pool; a chave de cifra passa a ter a mesma cortesia.
+    """
+    try:
+        _fernet()
+    except KeyError as exc:
+        raise RuntimeError("TOKEN_ENCRYPTION_KEY nao definida") from exc
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError(
+            "TOKEN_ENCRYPTION_KEY invalida: esperada uma chave Fernet "
+            "(32 bytes em base64url, como Fernet.generate_key() gera)"
+        ) from exc
+
+
 class PostgresTokenStore:
     """Le e grava o TokenSet de UM seller na tabela oauth_tokens.
 

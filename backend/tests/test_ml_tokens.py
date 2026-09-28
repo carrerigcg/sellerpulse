@@ -134,6 +134,25 @@ async def test_store_delete_remove(pg_pool, test_seller):
     assert await store.load() is None
 
 
+def test_valida_chave_de_cifra_aceita_chave_boa():
+    mod.valida_chave_de_cifra()  # a fixture autouse ja pos uma chave valida
+
+
+def test_valida_chave_de_cifra_recusa_chave_ausente(monkeypatch):
+    monkeypatch.delenv("TOKEN_ENCRYPTION_KEY", raising=False)
+    mod._fernet.cache_clear()
+    with pytest.raises(RuntimeError, match="nao definida"):
+        mod.valida_chave_de_cifra()
+
+
+def test_valida_chave_de_cifra_recusa_chave_malformada(monkeypatch):
+    """Chave truncada e o caso realista: alguem colou metade do valor no Render."""
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", "chave-que-nao-e-fernet")
+    mod._fernet.cache_clear()
+    with pytest.raises(RuntimeError, match="invalida"):
+        mod.valida_chave_de_cifra()
+
+
 async def test_store_e_isolado_entre_sellers(pg_pool, test_seller, outro_seller):
     """Token do seller A nunca aparece pro seller B.
 
