@@ -82,3 +82,26 @@ async def pg_pool_fuso_nao_utc():
     )
     yield pool
     await pool.close()
+
+
+@pytest.fixture
+async def pg_pool_concorrente():
+    """Pool com DUAS conexoes fisicas ja abertas antes do teste comecar.
+
+    Existe pra fechar um falso positivo de mutacao. O `pg_pool` normal abre com
+    `min_size=1`: numa corrida entre duas corrotinas, a primeira pega a conexao
+    ociosa na hora e a segunda tem que abrir uma conexao nova (TCP + handshake
+    de autenticacao do Postgres). Esse handshake demora mais que a secao critica
+    inteira da primeira — entao a segunda chega quando o trabalho ja terminou e
+    commitou, e o teste de concorrencia passa IGUAL com ou sem o lock. Quem
+    serializava as duas era latencia de conexao, nao `FOR UPDATE` (verificado
+    empiricamente: 5/5 verdes com o lock removido).
+
+    Com `min_size=2`, as duas conexoes existem antes da corrida e a disputa pela
+    linha e real: sem o lock, as duas renovam o token.
+    """
+    pool = await asyncpg.create_pool(
+        TEST_DATABASE_URL, min_size=2, max_size=2, server_settings={"timezone": "UTC"}
+    )
+    yield pool
+    await pool.close()
