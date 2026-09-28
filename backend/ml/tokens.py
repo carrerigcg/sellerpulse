@@ -11,9 +11,13 @@ protege de outro usuario logado; nao protege de nenhum desses casos.
 from __future__ import annotations
 
 import os
+import uuid
 from functools import lru_cache
 
+import asyncpg
 from cryptography.fernet import Fernet, InvalidToken
+
+from src.auth import TokenSet
 
 # Versao da chave gravada junto de cada token. Hoje sempre 1; existe pra que
 # uma rotacao futura possa decifrar o acervo antigo com a chave antiga
@@ -41,3 +45,57 @@ def decifra(valor: str) -> str:
         # Mensagem sem o ciphertext: ele nao e segredo, mas jogar payload de
         # token em log e habito ruim de se ter.
         raise TokenCifraError("token ilegivel: adulterado ou chave errada") from exc
+
+
+class PostgresTokenStore:
+    """Le e grava o TokenSet de UM seller na tabela oauth_tokens.
+
+    Equivalente do `src.auth.TokenStore` (que usa arquivo JSON local) para o
+    contexto multi-tenant: mesma interface conceitual (load/save), mas
+    escopada por seller_id e com os valores cifrados.
+    """
+
+    def __init__(self, pool: asyncpg.Pool, seller_id: uuid.UUID) -> None:
+        self._pool = pool
+        self._seller_id = seller_id
+
+    async def load(self) -> TokenSet | None:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT access_token_enc, refresh_token_enc, expires_at "
+                "FROM oauth_tokens WHERE seller_id = $1",
+                self._seller_id,
+            )
+        if row is None:
+            return None
+        return TokenSet(
+            access_token=decifra(row["access_token_enc"]),
+            refresh_token=decifra(row["refresh_token_enc"]),
+            expires_at=row["expires_at"],
+        )
+
+    async def save(self, tokens: TokenSet) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO oauth_tokens (
+                    seller_id, access_token_enc, refresh_token_enc,
+                    expires_at, key_version, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, now())
+                ON CONFLICT (seller_id) DO UPDATE SET
+                    access_token_enc  = excluded.access_token_enc,
+                    refresh_token_enc = excluded.refresh_token_enc,
+                    expires_at        = excluded.expires_at,
+                    key_version       = excluded.key_version,
+                    updated_at        = now()
+                """,
+                self._seller_id,
+                cifra(tokens.access_token),
+                cifra(tokens.refresh_token),
+                tokens.expires_at,
+                KEY_VERSION_ATUAL,
+            )
+
+    async def delete(self) -> None:
+        async with self._pool.acquire() as conn:
+            await conn.execute("DELETE FROM oauth_tokens WHERE seller_id = $1", self._seller_id)
