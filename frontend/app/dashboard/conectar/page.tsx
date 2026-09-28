@@ -77,16 +77,51 @@ function ConectarConteudo() {
   }, [carregarStatus]);
 
   // Faz polling enquanto houver job em andamento, e para assim que ele sair
-  // de queued/running. Deixar o intervalo rodando numa aba esquecida
-  // acordaria a instância grátis do Render a cada 3s, para sempre, de graça.
+  // de queued/running.
+  //
+  // O polling para quando a aba sai de vista. Nao e economia de banda: o plano
+  // gratuito do Render da 750 horas de instancia por mes, e uma aba esquecida
+  // pedindo status a cada 3s mantem a instancia acordada o mes inteiro (~720h)
+  // — sozinha, ela consumiria a cota e derrubaria o app pra todo mundo.
   useEffect(() => {
     const statusJob = status?.job?.status;
     if (statusJob !== "queued" && statusJob !== "running") return;
 
-    const intervalo = setInterval(() => {
-      void carregarStatus();
-    }, 3000);
-    return () => clearInterval(intervalo);
+    let intervalo: ReturnType<typeof setInterval> | null = null;
+
+    function iniciarIntervalo() {
+      intervalo = setInterval(() => {
+        void carregarStatus();
+      }, 3000);
+    }
+
+    function pararIntervalo() {
+      if (intervalo !== null) {
+        clearInterval(intervalo);
+        intervalo = null;
+      }
+    }
+
+    function aoMudarVisibilidade() {
+      if (document.hidden) {
+        pararIntervalo();
+      } else {
+        // Quem volta pra aba não deve encarar um progresso parado por até
+        // 3s — busca na hora e só depois retoma o intervalo normal.
+        void carregarStatus();
+        iniciarIntervalo();
+      }
+    }
+
+    if (!document.hidden) {
+      iniciarIntervalo();
+    }
+    document.addEventListener("visibilitychange", aoMudarVisibilidade);
+
+    return () => {
+      pararIntervalo();
+      document.removeEventListener("visibilitychange", aoMudarVisibilidade);
+    };
   }, [status?.job?.status, carregarStatus]);
 
   async function conectar() {
