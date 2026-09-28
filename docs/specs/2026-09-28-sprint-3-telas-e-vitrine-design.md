@@ -45,7 +45,7 @@ Referência visual: `adstart.com.br` — herói com CTA, problema/solução, com
 | 3 | Prova social | **Nenhuma inventada.** No lugar dela, a demonstração navegável | Números e depoimentos fictícios no estilo da referência |
 | 4 | Biblioteca de gráficos | **Recharts** para Pareto e dispersão RFM; heatmap do cohort em grid CSS | SVG na mão pros três (a Sprint 1 já previa que a lib se pagaria aqui); nivo/visx (mais peso, sem ganho) |
 | 5 | Foco no Mercado Livre | **Enquadrado como especialidade, não como limite** — linha discreta acima do título, e uma seção que trata isso como vantagem | Selo "só Mercado Livre" (lê-se como limitação) |
-| 6 | Vídeo do herói | **Imagem de fundo primeiro, vídeo por cima quando carregar** | Vídeo bloqueando a renderização (13MB trava a página em 4G) |
+| 6 | Vídeo do herói | **Arquivo `12647214_1920_1080_30fps.mp4`** (anexado pelo Guilherme, 13MB, 1920×1080 a 30fps). Imagem de fundo primeiro, vídeo por cima quando carregar | Outro vídeo; vídeo bloqueando a renderização (13MB trava a página em 4G) |
 
 ### Justificativa da decisão 3
 
