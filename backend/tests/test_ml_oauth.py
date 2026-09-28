@@ -9,12 +9,14 @@ from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
+import requests
 import responses as responses_lib
 from cryptography.fernet import Fernet
 
 from backend.ml import oauth
 from backend.ml import tokens as tokens_mod
 from src.auth import TokenSet
+from src.session_auth import OAuthError
 
 
 @pytest.fixture(autouse=True)
@@ -222,3 +224,116 @@ async def test_invalid_grant_apaga_a_conexao(pg_pool, test_seller):
             await oauth.garante_token_valido(pg_pool, seller_id)
 
     assert await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load() is None
+
+
+async def test_falha_generica_nao_apaga_token_nem_trava_o_lock(pg_pool, test_seller, monkeypatch):
+    """Erro que NAO e revogacao: token fica, lock e liberado, conexao volta.
+
+    O bug do DELETE-dentro-da-transacao foi pego por teste, nao por leitura.
+    Mesma disciplina aqui: se um OAuthError deixasse o lock preso ou a conexao
+    fora do pool, a SEGUNDA chamada abaixo travaria ou estouraria.
+    """
+    _u, seller_id = test_seller
+    await _grava_token(pg_pool, seller_id, minutos=-5)
+
+    def _falha(_refresh_token):
+        raise OAuthError("500 do lado do ML")
+
+    monkeypatch.setattr(oauth, "_refresh_http", _falha)
+    with pytest.raises(OAuthError):
+        await oauth.garante_token_valido(pg_pool, seller_id)
+
+    guardado = await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load()
+    assert guardado is not None, "erro generico nao pode apagar o token"
+    assert guardado.access_token == "APP_USR-velho"
+
+    def _sucesso(_refresh_token):
+        return TokenSet(
+            access_token="APP_USR-depois",
+            refresh_token="TG-depois",
+            expires_at=datetime.now(UTC) + timedelta(hours=6),
+        )
+
+    monkeypatch.setattr(oauth, "_refresh_http", _sucesso)
+    assert await oauth.garante_token_valido(pg_pool, seller_id) == "APP_USR-depois"
+
+
+async def test_invalid_grant_detectado_mesmo_com_corpo_longo(pg_pool, test_seller):
+    """O campo `error` depois do caractere 200 ainda conta como revogacao.
+
+    Com deteccao por substring sobre o corpo truncado, este caso passava batido:
+    a revogacao nao era vista, o token morto ficava no banco, e o backend
+    tentaria renova-lo pra sempre.
+    """
+    _u, seller_id = test_seller
+    await _grava_token(pg_pool, seller_id, minutos=-5)
+
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            "https://api.mercadolibre.com/oauth/token",
+            status=400,
+            json={"message": "x" * 400, "error": "invalid_grant"},
+        )
+        with pytest.raises(oauth.ConexaoMLRevogada):
+            await oauth.garante_token_valido(pg_pool, seller_id)
+
+    assert await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load() is None
+
+
+async def test_substring_invalid_grant_em_corpo_estruturado_nao_apaga_token(pg_pool, test_seller):
+    """Mencionar `invalid_grant` no texto nao e o mesmo que SER invalid_grant.
+
+    Falso positivo aqui apaga o token bom de um seller e o obriga a reconectar
+    sem motivo. A deteccao tem que olhar o campo, nao o texto.
+    """
+    _u, seller_id = test_seller
+    await _grava_token(pg_pool, seller_id, minutos=-5)
+
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            "https://api.mercadolibre.com/oauth/token",
+            status=500,
+            json={
+                "error": "internal_error",
+                "message": "veja a lista de erros, inclusive invalid_grant, na doc",
+            },
+        )
+        with pytest.raises(OAuthError):
+            await oauth.garante_token_valido(pg_pool, seller_id)
+
+    guardado = await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load()
+    assert guardado is not None, "erro alheio apagou o token do seller"
+
+
+async def test_timeout_de_rede_sai_como_oauth_error(pg_pool, test_seller):
+    """Timeout nao pode subir cru: quem chama trata OAuthError, nao requests.Timeout."""
+    _u, seller_id = test_seller
+    await _grava_token(pg_pool, seller_id, minutos=-5)
+
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            "https://api.mercadolibre.com/oauth/token",
+            body=requests.exceptions.ConnectTimeout("estourou"),
+        )
+        with pytest.raises(OAuthError):
+            await oauth.garante_token_valido(pg_pool, seller_id)
+
+    assert await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load() is not None
+
+
+async def test_200_com_corpo_malformado_sai_como_oauth_error(pg_pool, test_seller):
+    """200 sem access_token: KeyError cru viraria 500 sem tratamento."""
+    _u, seller_id = test_seller
+    await _grava_token(pg_pool, seller_id, minutos=-5)
+
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            "https://api.mercadolibre.com/oauth/token",
+            json={"nada": "aqui"},
+        )
+        with pytest.raises(OAuthError):
+            await oauth.garante_token_valido(pg_pool, seller_id)

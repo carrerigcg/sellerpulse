@@ -91,33 +91,72 @@ class ConexaoMLRevogada(Exception):
     """O refresh_token morreu (usuario revogou no ML). Precisa reconectar."""
 
 
+def _erro_de_refresh(resposta: requests.Response) -> Exception:
+    """Traduz uma resposta != 200 do endpoint de token do ML.
+
+    `invalid_grant` significa refresh_token morto (usuario revogou o acesso) e
+    dispara o DELETE dos tokens do seller. Por isso a deteccao le o campo
+    ESTRUTURADO do JSON, e nao procura a substring no corpo: substring erra dos
+    dois lados, e os dois lados doem. Falso negativo deixa o token morto no
+    banco e o backend tenta renovar pra sempre; falso positivo apaga token bom.
+
+    Corpo que nao e JSON cai na substring como ultimo recurso — melhor do que
+    perder uma revogacao que veio em formato inesperado.
+    """
+    corpo = sanitize_oauth_error(resposta.text)[:200]
+    try:
+        dados = resposta.json()
+    except ValueError:
+        dados = None
+    erro = dados.get("error") if isinstance(dados, dict) else None
+
+    if erro == "invalid_grant":
+        return ConexaoMLRevogada(corpo)
+    if erro is None and "invalid_grant" in corpo:
+        return ConexaoMLRevogada(corpo)
+    return OAuthError(f"Falha no refresh ({resposta.status_code}): {corpo}")
+
+
 def _refresh_http(refresh_token: str) -> TokenSet:
     """Troca refresh_token por um par novo. SINCRONO — sempre via to_thread.
+
+    Toda falha sai como ConexaoMLRevogada ou OAuthError. Isso e contrato, nao
+    zelo: quem chama trata essas duas, e um Timeout ou KeyError escapando daqui
+    viraria 500 sem tratamento no meio de um fluxo de OAuth.
 
     Separado de `garante_token_valido` pra que o teste possa substituir esta
     funcao e contar chamadas sem mexer no lock.
     """
-    resposta = requests.post(
-        ML_TOKEN_URL,
-        data={
-            "grant_type": "refresh_token",
-            "client_id": os.environ["ML_CLIENT_ID"],
-            "client_secret": os.environ["ML_CLIENT_SECRET"],
-            "refresh_token": refresh_token,
-        },
-        timeout=30,
-    )
+    try:
+        resposta = requests.post(
+            ML_TOKEN_URL,
+            data={
+                "grant_type": "refresh_token",
+                "client_id": os.environ["ML_CLIENT_ID"],
+                "client_secret": os.environ["ML_CLIENT_SECRET"],
+                "refresh_token": refresh_token,
+            },
+            timeout=30,
+        )
+    except requests.RequestException as exc:
+        # Timeout, DNS, conexao recusada: nada disso e revogacao, entao o token
+        # continua no banco e a proxima tentativa pode dar certo.
+        raise OAuthError(f"Falha de rede no refresh: {type(exc).__name__}") from exc
+
     if resposta.status_code != 200:
-        corpo = sanitize_oauth_error(resposta.text[:200])
-        if "invalid_grant" in corpo:
-            raise ConexaoMLRevogada(corpo)
-        raise OAuthError(f"Falha no refresh ({resposta.status_code}): {corpo}")
-    dados = resposta.json()
-    return TokenSet(
-        access_token=dados["access_token"],
-        refresh_token=dados["refresh_token"],
-        expires_at=datetime.now(UTC) + timedelta(seconds=int(dados["expires_in"])),
-    )
+        raise _erro_de_refresh(resposta)
+
+    try:
+        dados = resposta.json()
+        return TokenSet(
+            access_token=dados["access_token"],
+            refresh_token=dados["refresh_token"],
+            expires_at=datetime.now(UTC) + timedelta(seconds=int(dados["expires_in"])),
+        )
+    except (ValueError, KeyError, TypeError) as exc:
+        # 200 com corpo que nao serve. Sem esta traducao, um KeyError cru subiria
+        # pelo fluxo de OAuth como erro nao tratado.
+        raise OAuthError(f"Resposta de refresh malformada: {type(exc).__name__}") from exc
 
 
 async def garante_token_valido(pool: asyncpg.Pool, seller_id: uuid.UUID) -> str:
@@ -132,6 +171,12 @@ async def garante_token_valido(pool: asyncpg.Pool, seller_id: uuid.UUID) -> str:
     conexao do pool por alguns segundos, o que e aceitavel porque refresh
     acontece a cada ~6 horas por seller — o custo de NAO serializar e
     desconectar o usuario.
+
+    Uma excecao a serializacao: no caminho de revogacao o DELETE roda DEPOIS da
+    transacao, entao dois chamadores concorrentes podem ambos chegar ao ML e
+    receber invalid_grant antes de qualquer um apagar a linha. O DELETE e
+    idempotente, entao o resultado e o mesmo — so uma chamada a mais ao ML num
+    cenario que ja esta degradado.
     """
     async with pool.acquire() as conn:
         try:
