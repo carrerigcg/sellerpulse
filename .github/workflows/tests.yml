@@ -93,3 +93,46 @@ jobs:
 
       - name: Pytest
         run: python -m pytest backend/tests -v
+
+  frontend:
+    # Sem este job, duas sprints de front-end ficavam sem verificacao nenhuma:
+    # os jobs acima olham so `src/`, `tests/` e `backend/`. A Vercel quebra o
+    # deploy se o build falhar, entao nao era silencioso — mas descobrir no
+    # deploy e tarde, e nao cobre lint nem checagem de tipos num PR.
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    # O build le estas variaveis em escopo de modulo. Sao valores de fachada:
+    # nada aqui conecta em lugar nenhum, so satisfaz a leitura em tempo de
+    # build. As de verdade vivem na Vercel.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://exemplo-de-ci.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: chave-de-fachada-do-ci
+      NEXT_PUBLIC_API_URL: http://localhost:10000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          # Mesma major do ambiente de desenvolvimento (Node 24 / npm 11), que
+          # e quem gera o package-lock.json. CI rodando numa versao diferente
+          # da de quem escreve o lockfile e a mesma armadilha que escondeu um
+          # TypeError por 23 dias neste projeto: o .venv local tinha pandas 3
+          # enquanto o requirements.txt pedia <3, e so a CI via a diferenca.
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Build (inclui checagem de tipos)
+        run: npm run build

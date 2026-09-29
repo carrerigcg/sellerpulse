@@ -71,6 +71,8 @@ class MLClient:
             last_response = response
         raise MLAPIError(last_response.status_code, last_response.text[:200])
 
+    CAMPOS_DE_DATA = frozenset({"date_created", "date_last_updated"})
+
     def get_orders(
         self,
         *,
@@ -79,6 +81,7 @@ class MLClient:
         date_from: str,
         date_to: str,
         page_size: int = 50,
+        campo_data: str = "date_created",
     ) -> list[dict[str, Any]]:
         """Busca pedidos com paginação automática.
 
@@ -88,11 +91,20 @@ class MLClient:
             date_from: ISO8601, inclusive.
             date_to: ISO8601, exclusive.
             page_size: pedidos por página (max 50).
+            campo_data: qual data filtrar. 'date_created' (default) para
+                backfill histórico; 'date_last_updated' para sincronização
+                incremental, que precisa revisitar pedido antigo que mudou.
         """
+        if campo_data not in self.CAMPOS_DE_DATA:
+            # A API do ML ignora parâmetro desconhecido em silêncio: um typo
+            # aqui viraria "sem filtro de data" e traria a base inteira.
+            raise ValueError(
+                f"campo_data inválido: {campo_data!r}. Use um de {sorted(self.CAMPOS_DE_DATA)}"
+            )
         params_base: dict[str, Any] = {
             "seller": seller_id,
-            "order.date_created.from": date_from,
-            "order.date_created.to": date_to,
+            f"order.{campo_data}.from": date_from,
+            f"order.{campo_data}.to": date_to,
             "sort": "date_desc",
             "limit": page_size,
         }

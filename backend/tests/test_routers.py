@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 import jwt
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from backend.main import app
@@ -78,6 +79,11 @@ async def _order_item(pool, seller_id, order_id, item_id, qty, unit_price):
 def client(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    # O worker in-process drenaria jobs que nenhum destes testes enfileira, mas
+    # desligar deixa explicito e evita depender de comportamento acidental caso
+    # um teste futuro aqui passe a enfileirar algo.
+    monkeypatch.setenv("WORKER_IN_PROCESS", "0")
     with TestClient(app) as c:
         yield c
 

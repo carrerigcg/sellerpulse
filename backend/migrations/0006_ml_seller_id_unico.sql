@@ -1,0 +1,12 @@
+-- backend/migrations/0006_ml_seller_id_unico.sql
+-- DDL portatil: roda no Supabase E no banco de teste.
+--
+-- O callback do OAuth checa "essa conta do ML ja esta em outro seller?" com um
+-- SELECT antes de gravar. Isso e check-then-write: dois callbacks pra mesma
+-- conta no mesmo instante passam os dois pelo SELECT antes de qualquer um
+-- commitar, e os dois gravam. O resultado sao dois tenants ingerindo a mesma
+-- loja, cada um vendo numeros que nao sao dele, sem erro em lugar nenhum.
+--
+-- NULL nao colide em unique no Postgres, entao sellers sem conta conectada
+-- continuam convivendo normalmente.
+alter table sellers add constraint uniq_ml_seller_id unique (ml_seller_id);

@@ -21,6 +21,50 @@ export type FluxoDia = {
   liquido: number;
 };
 
+export type ClasseAbc = "A" | "B" | "C";
+
+export type AbcLinha = {
+  sku: string;
+  titulo: string;
+  receita: number;
+  receita_pct: number;
+  receita_acumulada_pct: number;
+  classe: ClasseAbc;
+};
+
+/** Rótulo bruto de `src/segmentation.py` (Fase 2, congelado) — não traduzir aqui. */
+export type SegmentoRfm =
+  | "Champions"
+  | "Loyal"
+  | "At Risk"
+  | "New"
+  | "Hibernating"
+  | "Others";
+
+export type RfmLinha = {
+  buyer_id: number;
+  recency_dias: number;
+  frequency: number;
+  monetary: number;
+  r_score: number;
+  f_score: number;
+  m_score: number;
+  segmento: SegmentoRfm;
+};
+
+/**
+ * Linha do pivot de cohort: `mes_lancamento` fixo + uma chave por mês
+ * corrente ("YYYY-MM"), dinâmica conforme a janela consultada. Onde o mês
+ * corrente é anterior ao de lançamento (produto não existia ainda), o
+ * backend manda `null` (era `NaN` no pandas) — diferente de um mês com
+ * receita zero, que vem como `0`. Ver `cohort_produto` em
+ * `backend/analytics/segmentation_pg.py`.
+ */
+export type CohortLinha = {
+  mes_lancamento: string;
+  [mesCorrente: string]: string | number | null;
+};
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -54,6 +98,27 @@ async function buscar<T>(caminho: string, params: Record<string, string>): Promi
 
 export function getFluxoFinanceiro(dateFrom: string, dateTo: string) {
   return buscar<FluxoDia[]>("/metrics/fluxo-financeiro", {
+    date_from: dateFrom,
+    date_to: dateTo,
+  });
+}
+
+export function getAbcPareto(dateFrom: string, dateTo: string) {
+  return buscar<AbcLinha[]>("/segmentation/abc", {
+    date_from: dateFrom,
+    date_to: dateTo,
+  });
+}
+
+export function getRfmScores(dateFrom: string, dateTo: string) {
+  return buscar<RfmLinha[]>("/segmentation/rfm", {
+    date_from: dateFrom,
+    date_to: dateTo,
+  });
+}
+
+export function getCohortProduto(dateFrom: string, dateTo: string) {
+  return buscar<CohortLinha[]>("/segmentation/cohort", {
     date_from: dateFrom,
     date_to: dateTo,
   });

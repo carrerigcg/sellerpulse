@@ -1,0 +1,12 @@
+-- backend/migrations/0007_seller_demo.sql
+-- DDL portatil: roda no Supabase E no banco de teste.
+--
+-- Os endpoints /demo/* sao a unica porta sem autenticacao do sistema, e hoje
+-- eles confiam cegamente na env var DEMO_SELLER_ID. Se ela apontasse pro
+-- seller de um cliente real — um caractere errado num deploy — o faturamento
+-- dele seria servido pra internet inteira, sem login, e com Cache-Control
+-- publico mandando qualquer CDN guardar por 5 minutos. Nada falharia.
+--
+-- Com esta coluna, o seller precisa estar MARCADO como demo. O typo passa a
+-- derrubar a demonstracao (503) em vez de vazar dado de terceiro em silencio.
+alter table sellers add column is_demo boolean not null default false;
