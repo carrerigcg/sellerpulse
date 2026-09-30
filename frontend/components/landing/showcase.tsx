@@ -19,7 +19,7 @@ import { BrowserFrame } from "./browser-frame";
 const TELAS = [
   {
     titulo: "Executive",
-    pergunta: "Quanto sobrou de verdade este mês, depois de taxa, frete e custo?",
+    pergunta: "Quanto sobrou de verdade este mês, depois da comissão do Mercado Livre?",
     desktop: { src: "/landing/demo-executive.png", width: 1104, height: 556 },
     mobile: { src: "/landing/demo-executive-mobile.png", width: 602, height: 757 },
     href: "/demo",

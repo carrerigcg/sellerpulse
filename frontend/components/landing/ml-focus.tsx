@@ -14,9 +14,14 @@ const VANTAGENS = [
       "Cada categoria tem uma comissão diferente. Ela já entra no cálculo de lucro, sem você procurar tabela nenhuma.",
   },
   {
-    titulo: "Frete",
+    // Aqui havia um card de "Frete" prometendo que o custo de envio entrava na
+    // conta. Nao entrava: o `shipping_cost` que o ML manda no pedido vem null, e
+    // o valor que aparece em `payments[].shipping_cost` e o frete que o COMPRADOR
+    // pagou, nao custo do vendedor. Descoberto na primeira ingestao real. Volta
+    // quando a API de shipments estiver integrada de verdade.
+    titulo: "Histórico completo, sem digitar nada",
     texto:
-      "Frete grátis, flex ou pago pelo comprador — o custo real de envio entra na conta de cada pedido.",
+      "Ao conectar, os últimos 6 meses de pedidos entram sozinhos — produtos e compradores já identificados.",
   },
   {
     titulo: "Cancelamentos e devoluções",
@@ -37,8 +42,8 @@ export function MlFocus() {
           </h2>
           <p className="mt-4 text-lg text-muted">
             Uma ferramenta que só precisa entender uma plataforma já chega sabendo a
-            taxa, o frete e a regra de cancelamento — sem formulário de configuração,
-            sem mapear categoria por categoria.
+            comissão de cada categoria e a regra de cancelamento — sem formulário de
+            configuração, sem mapear categoria por categoria.
           </p>
         </div>
 

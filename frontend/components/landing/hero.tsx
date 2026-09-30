@@ -55,7 +55,7 @@ export function Hero() {
 
           <p className="mt-6 text-lg text-white/80">
             Receita, produtos e clientes a partir dos seus pedidos reais no Mercado
-            Livre. Taxa, frete e cancelamento já entram na conta.
+            Livre. A comissão do Mercado Livre e os cancelamentos já entram na conta.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">

@@ -101,6 +101,16 @@ Sete seções. Quatro pontos de cadastro: herói, depois das análises, depois d
 | 3 | As três análises | Prints reais das telas, cada um com a pergunta que responde | ✅ |
 | 4 | Como funciona | Criar conta → conectar o ML → os 6 meses entram sozinhos | |
 | 5 | Feito para o Mercado Livre | Taxa, frete e cancelamento já entram na conta. Foco tratado como vantagem | ✅ |
+
+> **Correção de 2026-09-30, após a primeira ingestão real.** Esta seção prometia
+> "taxa, **frete** e cancelamento já entram na conta", e tinha um card inteiro
+> sobre frete. O frete **não entrava**: o `shipping_cost` que o Mercado Livre manda
+> no pedido vem `null`, e o valor em `payments[].shipping_cost` é o frete que o
+> *comprador* pagou — usá-lo inventaria uma despesa que o vendedor não teve. A
+> promessa foi retirada de todo o texto do produto e o card virou "histórico
+> completo, sem digitar nada", que é verdade. Volta quando a API de shipments
+> estiver integrada. A comissão, essa sim, passou a entrar (era lida de um campo
+> que nunca existiu no payload real — ver `backend/ml/ingest_pg.py`).
 | 6 | Seus dados | Token criptografado, isolamento por conta, desconectar quando quiser | |
 | 7 | Faixa final | Grátis, sem cartão | ✅ |
 

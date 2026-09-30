@@ -12,7 +12,7 @@
 const PERGUNTAS = [
   "Qual produto sustenta o faturamento, e qual só ocupa espaço?",
   "Qual cliente comprou uma vez e sumiu?",
-  "Quanto sobrou de verdade, depois de taxa, frete e cancelamento?",
+  "Quanto sobrou de verdade, depois da comissão e dos cancelamentos?",
 ];
 
 export function Problem() {
@@ -24,7 +24,7 @@ export function Problem() {
             Uma planilha no fim do mês não diz qual produto dá lucro.
           </h2>
           <p className="mt-4 text-lg text-muted">
-            Ela mostra o que entrou — não o que sobrou depois da taxa, do frete e do
+            Ela mostra o que entrou — não o que sobrou depois da comissão e dos
             cancelamento. E não avisa quando um cliente bom para de comprar.
           </p>
           <ul className="mt-8 space-y-4">
