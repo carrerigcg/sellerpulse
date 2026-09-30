@@ -62,6 +62,43 @@ class ResultadoIngestao:
     warnings: list[str] = field(default_factory=list)
 
 
+def tem_sale_fee(bruto: dict) -> bool:
+    """O pedido traz `sale_fee` em pelo menos um item?"""
+    return any(oi.get("sale_fee") is not None for oi in bruto.get("order_items") or [])
+
+
+def extrai_taxa_e_frete(bruto: dict) -> tuple[float, float]:
+    """(taxa do Mercado Livre, frete) de um pedido no formato REAL da API.
+
+    NAO "simplifique" isto de volta para `payments[].marketplace_fee` e
+    `shipping.list_cost`. Esses campos nao foram renomeados: NUNCA existiram nos
+    payloads reais do ML. O codigo os lia mesmo assim, o `.get(..., 0.0)` engolia
+    a ausencia e toda taxa e todo frete eram gravados como zero — R$ 16 mil de
+    taxa some da margem sem nenhum erro (achado na primeira ingestao real).
+
+    Onde o dado realmente esta (conferido em `raw_json` de pedidos de producao):
+
+    - taxa: `order_items[].sale_fee`, POR UNIDADE. Dois itens de R$ 36 chegaram
+      com sale_fee 4.32 (12% de 36, nao de 72), entao a taxa da linha e
+      `sale_fee * quantity`. `payments[]` traz transaction_amount, taxes_amount,
+      shipping_cost, total_paid_amount — nenhum deles e a comissao.
+    - frete: `shipping_cost` na RAIZ do pedido (costuma vir `null`). `shipping`
+      e so `{"id": ...}`. Atencao: `payments[].shipping_cost` e o frete que o
+      COMPRADOR pagou (soma no total_paid_amount), nao custo do vendedor.
+
+    Sem fallback pros nomes antigos, de proposito: um fallback pra campo que
+    nunca vem e exatamente o que escondeu o erro por meses. Ausencia vira 0.0 —
+    o aviso de `ingest_janela` cobre o caso de a ausencia ser sistematica.
+    Fica publica pra que o script de backfill reuse a mesma regra, sem copia.
+    """
+    taxa = sum(
+        (oi.get("sale_fee") or 0.0) * (oi.get("quantity") or 1)
+        for oi in bruto.get("order_items") or []
+    )
+    frete = bruto.get("shipping_cost") or 0.0
+    return round(taxa, 2), round(frete, 2)
+
+
 def _para_datetime(valor: str) -> datetime:
     """ISO 8601 do ML -> datetime aware em UTC.
 
@@ -119,6 +156,7 @@ async def ingest_janela(
 
     itens_vistos: set[str] = set()
     compradores: set[int] = set()
+    pedidos_sem_sale_fee = 0
 
     for indice, bruto in enumerate(pedidos, start=1):
         try:
@@ -130,11 +168,24 @@ async def ingest_janela(
             continue
         resultado.warnings.extend(avisos)
         resultado.total_orders += 1
+        if not tem_sale_fee(bruto):
+            pedidos_sem_sale_fee += 1
         comprador = (bruto.get("buyer") or {}).get("id")
         if comprador:
             compradores.add(int(comprador))
         if on_progress is not None:
             await on_progress("Processando pedidos", indice, len(pedidos))
+
+    # Um aviso por janela, so quando NENHUM pedido traz sale_fee. Pedido isolado
+    # sem ele existe e, avisado um a um, viraria ruido em milhares de pedidos;
+    # ausencia total e a assinatura de o ML ter mudado o payload — o mesmo modo de
+    # falha silencioso que zerou as taxas por meses.
+    if resultado.total_orders and pedidos_sem_sale_fee == resultado.total_orders:
+        resultado.warnings.append(
+            f"Nenhum dos {resultado.total_orders} pedidos da janela trouxe "
+            "order_items[].sale_fee; a taxa do ML foi gravada como 0. "
+            "O formato do payload pode ter mudado."
+        )
 
     if incluir_claims:
         try:
@@ -170,9 +221,7 @@ async def _persiste_pedido(
     """
     order_id = int(bruto["id"])
 
-    pagamentos = bruto.get("payments") or []
-    taxa = sum(p.get("marketplace_fee", 0.0) or 0.0 for p in pagamentos)
-    frete = (bruto.get("shipping") or {}).get("list_cost", 0.0) or 0.0
+    taxa, frete = extrai_taxa_e_frete(bruto)
 
     itens: list[dict] = []
     for oi in bruto.get("order_items") or []:
