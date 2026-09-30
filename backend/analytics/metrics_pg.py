@@ -28,6 +28,11 @@ import pandas as pd
 from backend.analytics._common import _parse_boundary
 from src.metrics import COST_ESTIMATE_RATE
 
+# Rotulo do balde de itens sem categoria conhecida (anuncio apagado, ou
+# categoria que nao entrou em categories_cache). Fica aqui, e nao so no SQL,
+# pra os testes e qualquer consumidor referenciarem o mesmo valor.
+SEM_CATEGORIA = "Sem categoria"
+
 _FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
 _PRODUTOS_COLUMNS = ["item_id", "title", "category_name", "unidades", "receita"]
 _CATEGORIAS_COLUMNS = ["category_id", "category_name", "unidades", "receita"]
@@ -53,16 +58,23 @@ _FLUXO_QUERY = """
 _TOP_PRODUTOS_QUERY = """
     SELECT
         oi.item_id                                 AS item_id,
-        ic.title                                    AS title,
-        cc.name                                     AS category_name,
+        -- LEFT JOIN nos dois caches: item sem linha em items_cache e anuncio
+        -- apagado (a ingestao leva 404 e nunca cacheia). Foi vendido e a
+        -- receita e real, entao ele fica no ranking: o SKU e o titulo de
+        -- fallback. Com INNER JOIN ele sumia junto com o dinheiro (11,2% numa
+        -- loja real) e esta tela divergia da Executive.
+        COALESCE(ic.title, oi.item_id)              AS title,
+        -- Categoria desconhecida e DESCONHECIDA: rotulo explicito ($5), nunca
+        -- uma categoria real emprestada. Ver _TOP_CATEGORIAS_QUERY.
+        COALESCE(cc.name, $5)                       AS category_name,
         SUM(oi.quantity)                            AS unidades,
         ROUND(SUM(oi.quantity * oi.unit_price), 2)  AS receita
     FROM order_items oi
     JOIN orders o
       ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
-    JOIN items_cache ic
+    LEFT JOIN items_cache ic
       ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
-    JOIN categories_cache cc
+    LEFT JOIN categories_cache cc
       ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id
     WHERE oi.seller_id = $1
       AND o.status = 'paid'
@@ -80,18 +92,26 @@ _TOP_PRODUTOS_QUERY = """
 # Segunda query separada — não dá pra reaproveitar o LIMIT do ranking de
 # produtos aqui: filtrar por top-N produtos distorceria os totais por
 # categoria (excluiria receita de produtos fora do top-N).
+#
+# Item sem categoria conhecida (anuncio apagado, ou categoria que nao entrou
+# em categories_cache) NAO some e NAO e jogado numa categoria real: os dois
+# erros corrompem o breakdown (o primeiro faz a soma das categorias nao bater
+# com a receita total; o segundo atribui venda a quem nao vendeu). Ele forma
+# um balde proprio, com category_id NULL (nenhum id real do ML colide) e o
+# rotulo SEM_CATEGORIA ($5). Agrupar so por cc.* junta todos os desconhecidos
+# num balde unico.
 _TOP_CATEGORIAS_QUERY = """
     SELECT
         cc.category_id                              AS category_id,
-        cc.name                                      AS category_name,
+        COALESCE(cc.name, $5)                        AS category_name,
         SUM(oi.quantity)                             AS unidades,
         ROUND(SUM(oi.quantity * oi.unit_price), 2)   AS receita
     FROM order_items oi
     JOIN orders o
       ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
-    JOIN items_cache ic
+    LEFT JOIN items_cache ic
       ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
-    JOIN categories_cache cc
+    LEFT JOIN categories_cache cc
       ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id
     WHERE oi.seller_id = $1
       AND o.status = 'paid'
@@ -157,11 +177,21 @@ async def top_produtos(
         - "produtos": DataFrame [item_id, title, category_name, unidades, receita]
         - "categorias": DataFrame [category_id, category_name, unidades, receita]
         Ambos ordenados por receita desc.
+
+        Item vendido sem linha em `items_cache` (anúncio apagado no ML) entra
+        normalmente: `title` cai pro próprio item_id e a categoria vira
+        `SEM_CATEGORIA`. Em `categorias` ele forma um balde único com
+        `category_id` None — assim a soma das categorias fecha com a receita
+        total, sem atribuir venda a uma categoria real.
     """
     dt_from = _parse_boundary(date_from)
     dt_to = _parse_boundary(date_to)
-    produtos_rows = await pool.fetch(_TOP_PRODUTOS_QUERY, seller_id, dt_from, dt_to, n)
-    categorias_rows = await pool.fetch(_TOP_CATEGORIAS_QUERY, seller_id, dt_from, dt_to, n)
+    produtos_rows = await pool.fetch(
+        _TOP_PRODUTOS_QUERY, seller_id, dt_from, dt_to, n, SEM_CATEGORIA
+    )
+    categorias_rows = await pool.fetch(
+        _TOP_CATEGORIAS_QUERY, seller_id, dt_from, dt_to, n, SEM_CATEGORIA
+    )
 
     if produtos_rows:
         produtos = pd.DataFrame([dict(r) for r in produtos_rows])
