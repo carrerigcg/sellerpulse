@@ -8,21 +8,59 @@ from datetime import UTC, datetime
 
 import pytest
 
-from backend.ml.ingest_pg import ingest_janela
+from backend.ml.ingest_pg import extrai_taxa_e_frete, ingest_janela
 
 JANELA = (datetime(2026, 7, 1, tzinfo=UTC), datetime(2026, 8, 1, tzinfo=UTC))
 
 
-def _pedido(order_id, *, item_id="MLB1", status="paid", total=100.0, buyer=555, fee=10.0):
+def _pedido(
+    order_id,
+    *,
+    item_id="MLB1",
+    status="paid",
+    total=100.0,
+    buyer=555,
+    sale_fee=6.0,
+    quantity=2,
+    shipping_cost=None,
+):
+    """Pedido no FORMATO REAL da API do ML (conferido contra `raw_json` de producao).
+
+    Este fixture ja teve as chaves que o codigo esperava (`payments[].marketplace_fee`,
+    `shipping.list_cost`) em vez das que o ML de fato manda — e por isso o bug de
+    taxa/frete zerados passou por todos os testes desde a Fase 1: o teste so
+    provava que o codigo concordava com ele mesmo. Cada campo abaixo que o codigo
+    le tem que existir assim num payload real:
+
+    - `sale_fee` mora em `order_items[]`, e e POR UNIDADE.
+    - `shipping` e so `{"id": ...}`; o custo fica em `shipping_cost` na raiz, que
+      no ML e `null` na maioria dos pedidos.
+    - `payments[]` existe mas NAO tem `marketplace_fee`.
+    """
     return {
         "id": order_id,
         "status": status,
         "date_closed": "2026-07-15T10:00:00.000-03:00",
         "total_amount": total,
-        "payments": [{"marketplace_fee": fee}],
-        "shipping": {"list_cost": 5.0},
+        "shipping_cost": shipping_cost,
+        "payments": [
+            {
+                "transaction_amount": total,
+                "total_paid_amount": total,
+                "taxes_amount": 0,
+                "shipping_cost": 0,
+            }
+        ],
+        "shipping": {"id": 47163566960},
         "buyer": {"id": buyer},
-        "order_items": [{"item": {"id": item_id}, "quantity": 2, "unit_price": 50.0}],
+        "order_items": [
+            {
+                "item": {"id": item_id},
+                "quantity": quantity,
+                "unit_price": 50.0,
+                "sale_fee": sale_fee,
+            }
+        ],
     }
 
 
@@ -72,7 +110,7 @@ async def _ingere(pool, seller_id, cliente, **kw):
 async def test_grava_pedido_itens_e_caches(pg_pool, test_seller):
     _u, seller_id = test_seller
     cliente = ClienteFake(
-        paid=[_pedido(1)],
+        paid=[_pedido(1, shipping_cost=7.5)],
         items={"MLB1": {"title": "Fone Bluetooth", "category_id": "MLB1055"}},
         categories={"MLB1055": {"name": "Celulares"}},
     )
@@ -94,12 +132,117 @@ async def test_grava_pedido_itens_e_caches(pg_pool, test_seller):
         )
         cat = await conn.fetchrow("SELECT * FROM categories_cache WHERE seller_id = $1", seller_id)
     assert float(pedido["total_amount"]) == 100.0
-    assert float(pedido["marketplace_fee"]) == 10.0
-    assert float(pedido["shipping_cost"]) == 5.0
+    assert float(pedido["marketplace_fee"]) == 12.0  # sale_fee 6.0 x 2 unidades
+    assert float(pedido["shipping_cost"]) == 7.5
     assert pedido["buyer_id"] == 555
     assert item["quantity"] == 2
     assert cache["title"] == "Fone Bluetooth"
     assert cat["name"] == "Celulares"
+
+
+async def _grava_e_le(pg_pool, seller_id, pedido):
+    cliente = ClienteFake(
+        paid=[pedido], items={"MLB1": {"title": "Fone", "category_id": "MLB1055"}}
+    )
+    resultado = await _ingere(pg_pool, seller_id, cliente)
+    async with pg_pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            "SELECT marketplace_fee, shipping_cost FROM orders "
+            "WHERE seller_id = $1 AND order_id = $2",
+            seller_id,
+            pedido["id"],
+        )
+    return resultado, float(linha["marketplace_fee"]), float(linha["shipping_cost"])
+
+
+async def test_payload_no_formato_real_do_ml_grava_taxa_diferente_de_zero(pg_pool, test_seller):
+    """Regressao do bug de producao: R$ 16 mil de taxa gravados como zero.
+
+    O codigo lia `payments[].marketplace_fee` e `shipping.list_cost`, campos que
+    NUNCA existiram na API do ML — nao foi renomeacao. Cada pedido real entrava
+    com taxa 0 e o dashboard mostrava margem inflada sem erro nenhum.
+    """
+    _u, seller_id = test_seller
+    pedido = _pedido(1, sale_fee=172.5, quantity=1, total=1500.0)
+
+    _r, taxa, _frete = await _grava_e_le(pg_pool, seller_id, pedido)
+
+    assert taxa != 0.0, "taxa do ML zerada: o codigo nao esta lendo order_items[].sale_fee"
+    assert taxa == 172.5
+
+
+async def test_taxa_e_sale_fee_vezes_quantidade(pg_pool, test_seller):
+    """`sale_fee` e por unidade: 2 pares a R$ 36 vieram com sale_fee 4.32 (12% de 36).
+
+    Somar sem multiplicar pela quantidade subconta toda venda de mais de uma
+    unidade. Duas linhas no mesmo pedido somam entre si.
+    """
+    _u, seller_id = test_seller
+    pedido = _pedido(1, sale_fee=4.32, quantity=2)
+    pedido["order_items"].append(
+        {"item": {"id": "MLB2"}, "quantity": 3, "unit_price": 10.0, "sale_fee": 1.0}
+    )
+
+    _r, taxa, _f = await _grava_e_le(pg_pool, seller_id, pedido)
+
+    assert taxa == pytest.approx(4.32 * 2 + 1.0 * 3)
+
+
+async def test_campos_que_nunca_existiram_no_ml_nao_sao_lidos(pg_pool, test_seller):
+    """Sem fallback: `marketplace_fee`/`list_cost` presentes NAO viram taxa/frete.
+
+    Um fallback pra campo que nunca vem e exatamente o que escondeu o bug por
+    meses: o valor sai zero e ninguem ve. Se um dia esses campos aparecerem, e
+    decisao consciente ler, nao um acidente.
+    """
+    _u, seller_id = test_seller
+    pedido = _pedido(1, sale_fee=None)
+    del pedido["order_items"][0]["sale_fee"]
+    pedido["payments"][0]["marketplace_fee"] = 99.0
+    pedido["shipping"]["list_cost"] = 99.0
+
+    _r, taxa, frete = await _grava_e_le(pg_pool, seller_id, pedido)
+
+    assert (taxa, frete) == (0.0, 0.0)
+
+
+def test_extrai_taxa_e_frete_tolera_nulos_do_ml():
+    """`shipping_cost` e `sale_fee` chegam como `null` em muitos pedidos reais."""
+    pedido = _pedido(1, sale_fee=None, shipping_cost=None)
+    assert extrai_taxa_e_frete(pedido) == (0.0, 0.0)
+    assert extrai_taxa_e_frete({"id": 1}) == (0.0, 0.0)
+    assert extrai_taxa_e_frete(_pedido(1, sale_fee=3.0, quantity=2, shipping_cost=8.0)) == (
+        6.0,
+        8.0,
+    )
+
+
+async def test_avisa_quando_nenhum_pedido_da_janela_tem_sale_fee(pg_pool, test_seller):
+    """Um aviso agregado por janela, nao um por pedido.
+
+    Pedido isolado sem `sale_fee` acontece e nao merece alarme (com milhares de
+    pedidos viraria ruido). Todos os pedidos da janela sem ele e a assinatura de
+    o ML ter mudado o payload — o mesmo modo de falha silencioso do bug original.
+    """
+    _u, seller_id = test_seller
+    sem_taxa = _pedido(1, sale_fee=None)
+    del sem_taxa["order_items"][0]["sale_fee"]
+    resultado, taxa, _f = await _grava_e_le(pg_pool, seller_id, sem_taxa)
+
+    assert taxa == 0.0
+    assert len([w for w in resultado.warnings if "sale_fee" in w]) == 1
+
+
+async def test_pedido_isolado_sem_sale_fee_nao_gera_aviso(pg_pool, test_seller):
+    _u, seller_id = test_seller
+    sem_taxa = _pedido(2, sale_fee=None)
+    del sem_taxa["order_items"][0]["sale_fee"]
+    cliente = ClienteFake(
+        paid=[_pedido(1), sem_taxa],
+        items={"MLB1": {"title": "Fone", "category_id": "MLB1055"}},
+    )
+    resultado = await _ingere(pg_pool, seller_id, cliente)
+    assert not [w for w in resultado.warnings if "sale_fee" in w]
 
 
 async def test_ingestao_e_idempotente(pg_pool, test_seller):
