@@ -60,12 +60,17 @@ _RFM_COLUMNS = [
 _ABC_PARETO_QUERY = """
     SELECT
         oi.item_id                                       AS sku,
-        ic.title                                          AS titulo,
+        -- Item sem linha em items_cache = anuncio apagado (a ingestao leva 404
+        -- na API de itens e nunca cacheia). Foi vendido e a receita e real,
+        -- entao ele fica: o SKU e o titulo de fallback. Com INNER JOIN ele
+        -- sumia junto com o dinheiro (11,2% numa loja real) e a tela Produtos
+        -- passava a divergir da Executive.
+        COALESCE(ic.title, oi.item_id)                    AS titulo,
         ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
     FROM order_items oi
     JOIN orders o
       ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
-    JOIN items_cache ic
+    LEFT JOIN items_cache ic
       ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
     WHERE oi.seller_id = $1
       AND o.status = 'paid'
@@ -144,6 +149,10 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
         DataFrame ordenado por receita desc com colunas:
         sku, titulo, receita, receita_pct, receita_acumulada_pct, classe.
         Vazio (colunas presentes) se período sem dados.
+
+        Item vendido sem linha em `items_cache` (anúncio apagado no ML) entra
+        no ranking com o próprio SKU como `titulo`: a receita é real e a
+        classe A/B/C tem que ser calculada sobre o total completo.
 
     Regra de classe:
         - A: receita_acumulada_pct <= 80  (produtos "cabeça")

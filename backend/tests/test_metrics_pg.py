@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pandas as pd
 import pytest
 
-from backend.analytics.metrics_pg import fluxo_financeiro, top_produtos
+from backend.analytics.metrics_pg import SEM_CATEGORIA, fluxo_financeiro, top_produtos
 
 _INSERT_ORDER = """
     INSERT INTO orders (order_id, seller_id, date_closed, status, total_amount,
@@ -297,6 +297,145 @@ async def test_top_produtos_desempate_estavel_por_item_id(pg_pool, test_seller):
     for _ in range(5):
         res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26", n=1)
         assert list(res["produtos"]["item_id"]) == ["MLB1"]
+
+
+async def _receita_bruta_dos_itens(pool, seller_id, date_from, date_to):
+    """Verdade-base: soma crua de quantity * unit_price dos itens de pedidos
+    pagos na janela, SEM passar por items_cache nem categories_cache."""
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(
+            "SELECT SUM(oi.quantity * oi.unit_price) FROM order_items oi "
+            "JOIN orders o ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id "
+            "WHERE oi.seller_id = $1 AND o.status = 'paid' "
+            "AND o.date_closed >= $2 AND o.date_closed < $3",
+            seller_id,
+            datetime.fromisoformat(date_from).replace(tzinfo=UTC),
+            datetime.fromisoformat(date_to).replace(tzinfo=UTC),
+        )
+    return float(total)
+
+
+async def test_top_produtos_mantem_item_sem_cache_e_a_receita_total(pg_pool, test_seller):
+    """Anuncio apagado no ML devolve 404 na ingestao e nunca entra em
+    items_cache — mas a venda foi real. Os INNER JOINs faziam o item sumir do
+    ranking junto com a receita, e a tela Produtos divergia da Executive.
+
+    Compara o TOTAL com a soma crua de order_items: checar so "a linha
+    aparece" passaria mesmo com a receita errada.
+    """
+    _, sid = test_seller
+    await _item(pg_pool, sid, "MLB1", "Produto em cache", "CAT1", "Categoria 1")
+    # MLB2 e MLB3 nao tem items_cache: anuncios apagados.
+    await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 450.55, 0.0, 0.0)
+    await _order_item(pg_pool, sid, 1, "MLB1", 2, 50.0)  # 100,00
+    await _order_item(pg_pool, sid, 1, "MLB2", 3, 100.0)  # 300,00
+    await _order_item(pg_pool, sid, 1, "MLB3", 1, 50.55)  # 50,55
+
+    res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26", n=100)
+    prod = res["produtos"]
+
+    assert set(prod["item_id"]) == {"MLB1", "MLB2", "MLB3"}, "item sem cache sumiu do ranking"
+    esperado = await _receita_bruta_dos_itens(pg_pool, sid, "2026-07-25", "2026-07-26")
+    assert esperado == pytest.approx(450.55)
+    assert prod["receita"].sum() == pytest.approx(esperado), "receita diverge da soma crua"
+    assert prod["unidades"].sum() == 6
+
+    por_item = prod.set_index("item_id")
+    # Fallback do titulo = o proprio SKU; o item em cache mantem o titulo real.
+    assert por_item.loc["MLB2", "title"] == "MLB2"
+    assert por_item.loc["MLB3", "title"] == "MLB3"
+    assert por_item.loc["MLB1", "title"] == "Produto em cache"
+    assert prod["title"].notna().all()
+    # O item sem cache e o maior, entao lidera o ranking.
+    assert prod.iloc[0]["item_id"] == "MLB2"
+    assert prod.iloc[0]["receita"] == pytest.approx(300.0)
+    # Categoria desconhecida e explicita, nunca herdada de outro item.
+    assert por_item.loc["MLB2", "category_name"] == SEM_CATEGORIA
+    assert por_item.loc["MLB1", "category_name"] == "Categoria 1"
+
+
+async def test_top_categorias_nao_joga_item_sem_cache_numa_categoria_real(pg_pool, test_seller):
+    """O item sem cache nao tem categoria conhecida. Joga-lo em qualquer
+    categoria real corromperia o breakdown (mesma classe de erro do bug).
+    Descarta-lo tambem: a soma das categorias deixaria de bater com a receita.
+    A saida certa e um balde proprio, sem category_id, e com o total fechando.
+    """
+    _, sid = test_seller
+    await _item(pg_pool, sid, "MLB1", "Produto A", "CAT1", "Categoria 1")
+    await _item(pg_pool, sid, "MLB2", "Produto B", "CAT2", "Categoria 2")
+    await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 1000.0, 0.0, 0.0)
+    await _order_item(pg_pool, sid, 1, "MLB1", 2, 50.0)  # 100 -> Categoria 1
+    await _order_item(pg_pool, sid, 1, "MLB2", 1, 200.0)  # 200 -> Categoria 2
+    await _order_item(pg_pool, sid, 1, "MLB404", 3, 100.0)  # 300 -> sem cache
+
+    res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26", n=100)
+    cat = res["categorias"]
+
+    esperado = await _receita_bruta_dos_itens(pg_pool, sid, "2026-07-25", "2026-07-26")
+    assert esperado == pytest.approx(600.0)
+    assert cat["receita"].sum() == pytest.approx(esperado), "categorias nao fecham com o total"
+    assert cat["unidades"].sum() == 6
+
+    # As categorias reais ficam intactas (nao absorvem a receita do item sem cache).
+    reais = cat[cat["category_id"].notna()].set_index("category_id")
+    assert reais.loc["CAT1", "receita"] == pytest.approx(100.0)
+    assert reais.loc["CAT2", "receita"] == pytest.approx(200.0)
+
+    # E o desconhecido vira exatamente um balde, sem category_id.
+    sem = cat[cat["category_id"].isna()]
+    assert len(sem) == 1
+    assert sem.iloc[0]["category_name"] == SEM_CATEGORIA
+    assert sem.iloc[0]["receita"] == pytest.approx(300.0)
+    assert sem.iloc[0]["unidades"] == 3
+    assert list(cat["category_name"])[0] == SEM_CATEGORIA  # 300 e o maior
+
+
+async def test_top_produtos_mantem_item_com_categoria_fora_do_cache(pg_pool, test_seller):
+    """Mesmo bug pelo segundo JOIN: o item esta em items_cache, mas a
+    categoria dele nao entrou em categories_cache. O titulo e conhecido e tem
+    que aparecer; a categoria e que e desconhecida. Nao pode sumir."""
+    _, sid = test_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO items_cache (seller_id, item_id, title, category_id, fetched_at) "
+            "VALUES ($1, 'MLB1', 'Produto A', 'CAT_SEM_NOME', now())",
+            sid,
+        )
+    await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 100.0, 0.0, 0.0)
+    await _order_item(pg_pool, sid, 1, "MLB1", 1, 100.0)
+
+    res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26")
+
+    prod = res["produtos"]
+    assert list(prod["item_id"]) == ["MLB1"]
+    assert prod.iloc[0]["title"] == "Produto A"  # o titulo real e conhecido
+    assert prod.iloc[0]["category_name"] == SEM_CATEGORIA
+    assert prod.iloc[0]["receita"] == pytest.approx(100.0)
+    cat = res["categorias"]
+    assert cat["receita"].sum() == pytest.approx(100.0)
+    assert cat.iloc[0]["category_id"] is None
+
+
+async def test_top_produtos_sem_cache_nao_herda_titulo_nem_categoria_de_outro_seller(
+    pg_pool, test_seller, outro_seller
+):
+    """O LEFT JOIN continua casando por seller_id: item_id e category_id do ML
+    sao globais, e o outro seller ter MLB2 em cache nao pode dar titulo ou
+    categoria a quem nao tem (nem multiplicar a linha)."""
+    _, sid = test_seller
+    _, outro = outro_seller
+    await _item(pg_pool, outro, "MLB2", "Titulo do outro", "CAT9", "Categoria do outro")
+    await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 100.0, 0.0, 0.0)
+    await _order_item(pg_pool, sid, 1, "MLB2", 1, 100.0)
+
+    res = await top_produtos(pg_pool, sid, "2026-07-25", "2026-07-26")
+
+    prod = res["produtos"]
+    assert len(prod) == 1, f"fan-out ou vazamento: esperava 1 linha, veio {len(prod)}"
+    assert prod.iloc[0]["title"] == "MLB2"
+    assert prod.iloc[0]["category_name"] == SEM_CATEGORIA
+    assert prod.iloc[0]["receita"] == pytest.approx(100.0)
+    assert res["categorias"]["receita"].sum() == pytest.approx(100.0)
 
 
 async def test_top_produtos_paridade_com_a_versao_sqlite(pg_pool, test_seller):

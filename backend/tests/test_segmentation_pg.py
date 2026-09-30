@@ -204,6 +204,79 @@ async def test_abc_pareto_paridade_com_a_versao_sqlite(pg_pool, test_seller):
     )
 
 
+async def _receita_bruta_dos_itens(pool, seller_id, date_from, date_to):
+    """Verdade-base: soma crua de quantity * unit_price dos itens de pedidos
+    pagos na janela, SEM passar por items_cache. E o numero que a tela
+    Executive mostra e que o ABC tem que reproduzir."""
+    async with pool.acquire() as conn:
+        total = await conn.fetchval(
+            "SELECT SUM(oi.quantity * oi.unit_price) FROM order_items oi "
+            "JOIN orders o ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id "
+            "WHERE oi.seller_id = $1 AND o.status = 'paid' "
+            "AND o.date_closed >= $2 AND o.date_closed < $3",
+            seller_id,
+            datetime.fromisoformat(date_from).replace(tzinfo=UTC),
+            datetime.fromisoformat(date_to).replace(tzinfo=UTC),
+        )
+    return float(total)
+
+
+async def test_abc_pareto_mantem_item_sem_cache_e_a_receita_total(pg_pool, test_seller):
+    """Anuncio apagado no ML devolve 404 na ingestao, entao nunca entra em
+    items_cache — mas a venda aconteceu e a receita e real. Um INNER JOIN
+    fazia o item sumir do ABC junto com o dinheiro (11,2% da receita numa loja
+    real), e a tela Produtos passava a divergir da Executive.
+
+    Checar so "a linha aparece" passaria mesmo com a receita errada; por isso
+    o teste compara o TOTAL com a soma crua de order_items.
+    """
+    _, sid = test_seller
+    await _item(pg_pool, sid, "MLB1", "Produto em cache")
+    # MLB2 e MLB3 nao tem items_cache: anuncios apagados.
+    await _order(pg_pool, sid, 1, "2026-07-15T10:00:00+00:00", 450.55)
+    await _order_item(pg_pool, sid, 1, "MLB1", 2, 50.0)  # 100,00
+    await _order_item(pg_pool, sid, 1, "MLB2", 3, 100.0)  # 300,00
+    await _order_item(pg_pool, sid, 1, "MLB3", 1, 50.55)  # 50,55
+
+    df = await abc_pareto(pg_pool, sid, "2026-07-01", "2026-08-01")
+
+    assert set(df["sku"]) == {"MLB1", "MLB2", "MLB3"}, "item sem cache sumiu do ABC"
+    esperado = await _receita_bruta_dos_itens(pg_pool, sid, "2026-07-01", "2026-08-01")
+    assert esperado == pytest.approx(450.55)
+    assert df["receita"].sum() == pytest.approx(esperado), "receita do ABC diverge da soma crua"
+    assert df["receita_pct"].sum() == pytest.approx(100.0, abs=0.01)
+
+    # Sem titulo em cache, o SKU e o fallback honesto (nao NULL, nao vazio).
+    por_sku = df.set_index("sku")
+    assert por_sku.loc["MLB2", "titulo"] == "MLB2"
+    assert por_sku.loc["MLB3", "titulo"] == "MLB3"
+    assert por_sku.loc["MLB1", "titulo"] == "Produto em cache"
+    assert df["titulo"].notna().all()
+
+    # A classe tem que ser calculada sobre a receita COMPLETA: o item sem
+    # cache e o maior (300 de 450,55 = 66,6%), entao lidera e e classe A.
+    assert df.iloc[0]["sku"] == "MLB2"
+    assert df.iloc[0]["classe"] == "A"
+
+
+async def test_abc_pareto_titulo_de_item_sem_cache_nao_vaza_de_outro_seller(
+    pg_pool, test_seller, outro_seller
+):
+    """O LEFT JOIN continua casando por seller_id: o item_id do ML e global, e
+    o outro seller ter MLB2 em cache nao pode dar titulo a quem nao tem."""
+    _, sid = test_seller
+    _, outro = outro_seller
+    await _item(pg_pool, outro, "MLB2", "Titulo do outro seller")
+    await _order(pg_pool, sid, 1, "2026-07-15T10:00:00+00:00", 100.0)
+    await _order_item(pg_pool, sid, 1, "MLB2", 1, 100.0)
+
+    df = await abc_pareto(pg_pool, sid, "2026-07-01", "2026-08-01")
+
+    assert len(df) == 1, f"fan-out ou vazamento: esperava 1 linha, veio {len(df)}"
+    assert df.iloc[0]["titulo"] == "MLB2"
+    assert df.iloc[0]["receita"] == pytest.approx(100.0)
+
+
 # ---------- rfm_scores ----------
 
 
