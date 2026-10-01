@@ -83,14 +83,17 @@ def _build_context(
     receita = float(fluxo_df["receita_bruta"].sum())
     taxas = float(fluxo_df["taxas_ml"].sum())
     frete = float(fluxo_df["frete"].sum())
-    liquido = float(fluxo_df["liquido"].sum())
+    # Margem de contribuição = receita − taxas − frete. É o que o relatório
+    # mostra como resultado: as três parcelas são calculadas, nenhuma estimada.
+    # Ver o comentário no topo de `src/metrics.py`.
+    margem = float(fluxo_df["margem_contribuicao"].sum())
 
     # Comparativo semana anterior — mesma duração, janela adjacente
     dias = (datetime.fromisoformat(date_to) - datetime.fromisoformat(date_from)).days
     prev_from = (datetime.fromisoformat(date_from) - timedelta(days=dias)).date().isoformat()
     prev_to = date_from
-    prev_liquido = float(fluxo_financeiro(conn, prev_from, prev_to)["liquido"].sum())
-    delta = liquido - prev_liquido
+    prev_margem = float(fluxo_financeiro(conn, prev_from, prev_to)["margem_contribuicao"].sum())
+    delta = margem - prev_margem
 
     top = top_produtos(conn, date_from, date_to, n=3)
     reput = reputacao_devolucao(conn, date_from, date_to)
@@ -105,11 +108,11 @@ def _build_context(
         "taxas_ml_short": _fmt_brl_short(taxas),
         "frete": _fmt_brl(frete),
         "frete_short": _fmt_brl_short(frete),
-        "liquido": _fmt_brl(liquido),
-        "liquido_short": _fmt_brl_short(liquido),
+        "margem": _fmt_brl(margem),
+        "margem_short": _fmt_brl_short(margem),
         "taxas_pct": pct(taxas),
         "frete_pct": pct(frete),
-        "liquido_pct": pct(liquido),
+        "margem_pct": pct(margem),
         "delta_vs_anterior": (f"+{_fmt_brl(delta)}" if delta >= 0 else f"−{_fmt_brl(abs(delta))}"),
         "delta_vs_anterior_positive": delta >= 0,
     }

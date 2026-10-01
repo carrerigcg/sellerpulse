@@ -25,6 +25,10 @@ def abc_pareto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
         sku, titulo, receita, receita_pct, receita_acumulada_pct, classe.
         Vazio (colunas presentes) se período sem dados.
 
+        Item vendido sem linha em `items_cache` (anúncio apagado no ML) entra
+        no ranking com o próprio SKU como `titulo`: a receita é real e a
+        classe A/B/C tem que ser calculada sobre o total completo.
+
     Regra de classe:
         - A: receita_acumulada_pct <= 80  (produtos "cabeça")
         - B: receita_acumulada_pct <= 95  (intermediários)
@@ -34,11 +38,18 @@ def abc_pareto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
     query = """
         SELECT
             oi.item_id                                       AS sku,
-            ic.title                                          AS titulo,
+            -- Item sem linha em items_cache = anúncio apagado (a ingestão leva
+            -- 404 na API de itens e nunca cacheia). Foi vendido e a receita é
+            -- real, então ele fica: o SKU é o título de fallback. Com INNER
+            -- JOIN ele sumia junto com o dinheiro (11,2% numa loja real), e
+            -- pior aqui do que no ranking simples — o total encolhia e as
+            -- classes A/B/C de TODOS os produtos saíam calculadas sobre uma
+            -- base menor.
+            COALESCE(ic.title, oi.item_id)                    AS titulo,
             ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
         FROM order_items oi
-        JOIN orders o        ON o.order_id = oi.order_id
-        JOIN items_cache ic  ON ic.item_id = oi.item_id
+        JOIN orders o             ON o.order_id = oi.order_id
+        LEFT JOIN items_cache ic  ON ic.item_id = oi.item_id
         WHERE o.status = 'paid'
           AND o.date_closed >= ?
           AND o.date_closed <  ?
@@ -52,7 +63,14 @@ def abc_pareto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
 
     total = df["receita"].sum()
     df["receita_pct"] = (100.0 * df["receita"] / total).round(4)
-    df["receita_acumulada_pct"] = df["receita_pct"].cumsum().round(4)
+    # Acumulado derivado da receita CRUA, não do cumsum de `receita_pct`.
+    # Somar percentuais já arredondados acumula o erro de arredondamento linha
+    # a linha: num catálogo de centenas de produtos o último valor não fecha em
+    # 100 (medido: 100,0002 no demo, 99,9911 numa loja real de 743 produtos —
+    # o desvio vai pros dois lados). O eixo direito do Pareto é 0–100% por
+    # definição, e um valor acima de 100 fazia o Recharts esticar o domínio e
+    # rotular o topo como "100.0002".
+    df["receita_acumulada_pct"] = (100.0 * df["receita"].cumsum() / total).round(4)
 
     def _classify(pct_acum: float) -> str:
         if pct_acum <= 80.0:
@@ -90,22 +108,27 @@ _RFM_COLUMNS = [
 def _score_by_quintile(series: pd.Series, ascending: bool = True) -> pd.Series:
     """Devolve score int 1-5 via quintis. `ascending=True` = maior valor → score 5.
 
-    Trata cases com < 5 valores distintos via `duplicates="drop"` e labels
-    dinâmicos. Empates recebem o mesmo score. NaN não deve ocorrer (série
+    Os quintis são calculados sobre os **valores distintos** observados, não
+    sobre as linhas. Com isso empates recebem o mesmo score por construção:
+    cada valor é pontuado uma única vez e as linhas apenas consultam o mapa.
+
+    Quando há menos de 5 valores distintos, o número de bins cai para a
+    quantidade de valores distintos e os labels são truncados (`labels[:n_bins]`).
+    O corte tira sempre o FIM da lista de labels, que depende da direção: com
+    `ascending=True` o topo marca 2 (ou 3, 4...) em vez de 5; com
+    `ascending=False` os labels já vêm invertidos, então quem encurta é o pior
+    valor, que marca 4 em vez de 1. Proposital nos dois casos: não dá para
+    distinguir 5 níveis numa série que só tem 2. NaN não deve ocorrer (série
     numérica não-nula por construção).
     """
     labels_asc = [1, 2, 3, 4, 5]
     labels = labels_asc if ascending else list(reversed(labels_asc))
-    # rank(method="first") desempata sequencialmente — evita bins vazios.
-    ranks = series.rank(method="first")
-    try:
-        binned = pd.qcut(ranks, q=5, labels=labels)
-    except ValueError:
-        # Poucas amostras distintas — cai para menos bins.
-        n_bins = min(5, ranks.nunique())
-        sub_labels = labels[:n_bins]
-        binned = pd.qcut(ranks, q=n_bins, labels=sub_labels, duplicates="drop")
-    return binned.astype(int)
+    # Ranks sobre valores distintos são sempre únicos — qcut nunca gera bins vazios.
+    distintos = pd.Series(sorted(series.unique()))
+    n_bins = min(5, len(distintos))
+    binned = pd.qcut(distintos.rank(method="first"), q=n_bins, labels=labels[:n_bins])
+    mapa = dict(zip(distintos, binned.astype(int), strict=True))
+    return series.map(mapa).astype(int)
 
 
 def _assign_segment(row: pd.Series) -> str:

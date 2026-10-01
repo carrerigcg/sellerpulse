@@ -74,8 +74,7 @@ async def test_fluxo_agrega_por_dia(pg_pool, test_seller):
     assert r["receita_bruta"] == pytest.approx(150.0)
     assert r["taxas_ml"] == pytest.approx(15.0)
     assert r["frete"] == pytest.approx(7.5)
-    assert r["custo_estimado"] == pytest.approx(150.0 * 0.55, abs=0.01)
-    assert r["liquido"] == pytest.approx(150.0 - 15.0 - 7.5 - 82.5, abs=0.01)
+    assert r["margem_contribuicao"] == pytest.approx(150.0 - 15.0 - 7.5, abs=0.01)
 
 
 async def test_fluxo_ignora_nao_pagos(pg_pool, test_seller):
@@ -94,19 +93,106 @@ async def test_fluxo_isola_por_seller(pg_pool, test_seller, outro_seller):
     assert df.empty
 
 
-async def test_fluxo_respeita_bordas_da_janela_em_utc(pg_pool, test_seller):
-    """date_to e EXCLUSIVO e o corte e em UTC, nao no fuso local."""
+async def test_fluxo_respeita_bordas_da_janela_no_fuso_do_vendedor(pg_pool, test_seller):
+    """date_to e EXCLUSIVO e o corte e no fuso do VENDEDOR, nao em UTC.
+
+    Os quatro pedidos estao escritos com offset -03:00 de proposito: e assim
+    que o vendedor le o relogio. O pedido 3 (23:59 de Brasilia) e o caso que
+    importa — em UTC ele e 02:59 do dia 26, ou seja, ficaria FORA de uma
+    janela cortada em UTC e cairia no bucket do dia 26.
+    """
     _, sid = test_seller
-    await _order(pg_pool, sid, 1, "2026-07-24T23:59:00+00:00", 10.0, 0.0, 0.0)  # fora (antes)
-    await _order(pg_pool, sid, 2, "2026-07-25T00:00:00+00:00", 20.0, 0.0, 0.0)  # dentro
-    await _order(pg_pool, sid, 3, "2026-07-25T23:59:00+00:00", 30.0, 0.0, 0.0)  # dentro
-    await _order(pg_pool, sid, 4, "2026-07-26T00:00:00+00:00", 40.0, 0.0, 0.0)  # fora (depois)
+    await _order(pg_pool, sid, 1, "2026-07-24T23:59:00-03:00", 10.0, 0.0, 0.0)  # fora (antes)
+    await _order(pg_pool, sid, 2, "2026-07-25T00:00:00-03:00", 20.0, 0.0, 0.0)  # dentro
+    await _order(pg_pool, sid, 3, "2026-07-25T23:59:00-03:00", 30.0, 0.0, 0.0)  # dentro
+    await _order(pg_pool, sid, 4, "2026-07-26T00:00:00-03:00", 40.0, 0.0, 0.0)  # fora (depois)
     df = await fluxo_financeiro(pg_pool, sid, "2026-07-25", "2026-07-26")
     assert len(df) == 1
+    assert df.iloc[0]["date"] == "2026-07-25"
     assert df.iloc[0]["receita_bruta"] == pytest.approx(50.0)
 
 
+async def test_fluxo_bucketiza_venda_da_noite_no_dia_do_vendedor(pg_pool, test_seller):
+    """Venda as 23:30 de Brasilia conta no dia 15, nao no 16.
+
+    O caso que motivou a mudanca: na loja real conectada, 123 dos 879 pedidos
+    pagos (14%) caem num dia de calendario diferente em UTC — sao as vendas do
+    pico da noite brasileira (21h-23h), que em UTC viram 00h-02h do dia
+    seguinte. 2026-06-15T23:30:00-03:00 e 2026-06-16T02:30:00Z: o vendedor
+    conta essa venda em 15 de junho.
+    """
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-06-15T23:30:00-03:00", 1210.0, 0.0, 0.0)
+    df = await fluxo_financeiro(pg_pool, sid, "2026-06-01", "2026-07-01")
+    assert list(df["date"]) == ["2026-06-15"]
+    assert df.iloc[0]["receita_bruta"] == pytest.approx(1210.0)
+
+
+async def test_fluxo_inclui_venda_da_noite_do_ultimo_dia_da_janela(pg_pool, test_seller):
+    """Pedido as 23:30 BR do ultimo dia da janela esta DENTRO dela.
+
+    A borda da janela e o bucket do dia tem que concordar: `date_from`/`date_to`
+    sem horario viram meia-noite no fuso do vendedor (`_parse_boundary`). Com a
+    borda em UTC e o bucket em Brasilia, este pedido ficaria fora da janela
+    cujo `date_to` e o dia seguinte — ou seja, o dia 15 apareceria no grafico
+    faltando a receita da noite do dia 15.
+    """
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-06-15T23:30:00-03:00", 90.0, 0.0, 0.0)
+    df = await fluxo_financeiro(pg_pool, sid, "2026-06-15", "2026-06-16")
+    assert list(df["date"]) == ["2026-06-15"]
+    assert df.iloc[0]["receita_bruta"] == pytest.approx(90.0)
+
+
+async def test_fluxo_margem_e_receita_menos_taxas_menos_frete(pg_pool, test_seller):
+    """Margem de contribuicao = receita - taxas ML - frete, ate o centavo.
+
+    Valores com centavos que nao se cancelam, pra `.round(2)` ter o que
+    arredondar — fixture redonda deixaria a formula errada passar.
+
+    2026-06-01: 1234,567 - 185,185 - 27,333 = 1022,049 -> 1.022,05
+    2026-06-02:  987,654 -  98,765 -  0,041 =  888,848 ->   888,85
+    """
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-06-01T08:15:00+00:00", 1234.567, 185.185, 27.333)
+    await _order(pg_pool, sid, 2, "2026-06-02T19:45:00+00:00", 987.654, 98.765, 0.041)
+    df = await fluxo_financeiro(pg_pool, sid, "2026-06-01", "2026-06-03")
+
+    esperado = (df["receita_bruta"] - df["taxas_ml"] - df["frete"]).round(2)
+    pd.testing.assert_series_equal(df["margem_contribuicao"], esperado, check_names=False)
+
+    por_dia = df.set_index("date")["margem_contribuicao"]
+    assert por_dia.loc["2026-06-01"] == pytest.approx(1022.05, abs=0.005)
+    assert por_dia.loc["2026-06-02"] == pytest.approx(888.85, abs=0.005)
+
+
+async def test_fluxo_margem_nao_desconta_custo_estimado(pg_pool, test_seller):
+    """Nenhum percentual de custo sai da margem.
+
+    A assercao compara contra o valor que a formula ANTIGA (com 55% de COGS)
+    daria, em vez de um limiar de razao arbitrario: e a reintroducao daquele
+    percentual que este teste tem que pegar, e nada mais.
+    """
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-06-01T08:15:00+00:00", 1234.567, 185.185, 27.333)
+    df = await fluxo_financeiro(pg_pool, sid, "2026-06-01", "2026-06-02")
+    r = df.iloc[0]
+
+    receita, taxas, frete = r["receita_bruta"], r["taxas_ml"], r["frete"]
+    com_cogs_55 = receita - taxas - frete - round(receita * 0.55, 2)
+    assert com_cogs_55 == pytest.approx(343.04, abs=0.01)  # o numero que a tela mostrava
+
+    assert r["margem_contribuicao"] == pytest.approx(receita - taxas - frete, abs=0.01)
+    assert r["margem_contribuicao"] > com_cogs_55
+    assert r["margem_contribuicao"] != pytest.approx(com_cogs_55, abs=1.0)
+
+
 async def test_fluxo_vazio_tem_as_colunas_certas(pg_pool, test_seller):
+    """Conjunto de colunas EXATO, nos dois caminhos (vazio e com dados).
+
+    A igualdade de lista, e nao um subset, e o ponto: um `custo_estimado`
+    reintroduzido quebra aqui em vez de voltar silenciosamente pra tela.
+    """
     _, sid = test_seller
     df = await fluxo_financeiro(pg_pool, sid, "2026-01-01", "2026-01-02")
     assert df.empty
@@ -115,9 +201,12 @@ async def test_fluxo_vazio_tem_as_colunas_certas(pg_pool, test_seller):
         "receita_bruta",
         "taxas_ml",
         "frete",
-        "custo_estimado",
-        "liquido",
+        "margem_contribuicao",
     ]
+
+    await _order(pg_pool, sid, 1, "2026-01-01T10:00:00+00:00", 100.0, 10.0, 5.0)
+    com_dados = await fluxo_financeiro(pg_pool, sid, "2026-01-01", "2026-01-02")
+    assert list(com_dados.columns) == list(df.columns)
 
 
 async def test_fluxo_colunas_numericas_sao_float(pg_pool, test_seller):
@@ -125,15 +214,24 @@ async def test_fluxo_colunas_numericas_sao_float(pg_pool, test_seller):
     _, sid = test_seller
     await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 100.0, 10.0, 5.0)
     df = await fluxo_financeiro(pg_pool, sid, "2026-07-25", "2026-07-26")
-    for col in ["receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]:
+    for col in ["receita_bruta", "taxas_ml", "frete", "margem_contribuicao"]:
         assert df[col].dtype.kind == "f", f"{col} deveria ser float, veio {df[col].dtype}"
 
 
 async def test_fluxo_paridade_com_a_versao_sqlite(pg_pool, test_seller):
     """O porte tem que dar os MESMOS numeros que o original em SQLite.
 
-    E o unico teste que pega erro sutil de traducao de dialeto (agregacao,
-    arredondamento, fuso). Os horarios perto da meia-noite UTC sao de proposito.
+    E o teste que pega erro sutil de traducao de dialeto: agregacao,
+    arredondamento, nomes e ordem das colunas.
+
+    O que este teste NAO cobre mais e o fuso do bucket de dia, porque as duas
+    camadas agora divergem ali DE PROPOSITO — `src/metrics.py` conta o dia em
+    UTC (`src/storage.py` normaliza `date_closed` pra UTC na escrita e a query
+    faz `substr(date_closed, 1, 10)`), e esta camada conta no fuso do vendedor.
+    Os horarios abaixo sao longe da meia-noite nos dois fusos justamente pra
+    que a paridade aqui signifique "mesma aritmetica", nao "mesmo fuso". A
+    divergencia tem teste proprio:
+    `test_fluxo_diverge_do_sqlite_no_fuso_do_dia`.
     """
     from src.metrics import fluxo_financeiro as fluxo_sqlite
     from src.storage import connect as sqlite_connect
@@ -141,10 +239,10 @@ async def test_fluxo_paridade_com_a_versao_sqlite(pg_pool, test_seller):
 
     _, sid = test_seller
     pedidos = [
-        (1, "2026-07-25T10:00:00+00:00", 100.0, 10.0, 5.0),
-        (2, "2026-07-25T23:30:00+00:00", 50.0, 5.0, 2.5),
-        (3, "2026-07-26T00:30:00+00:00", 70.0, 7.0, 3.5),
-        (4, "2026-07-26T12:00:00+00:00", 33.33, 3.33, 1.11),
+        (1, "2026-07-25T13:00:00+00:00", 100.0, 10.0, 5.0),
+        (2, "2026-07-25T20:00:00+00:00", 50.0, 5.0, 2.5),
+        (3, "2026-07-26T13:00:00+00:00", 70.0, 7.0, 3.5),
+        (4, "2026-07-26T20:00:00+00:00", 33.33, 3.33, 1.11),
     ]
 
     sconn = sqlite_connect(":memory:")
@@ -179,6 +277,50 @@ async def test_fluxo_paridade_com_a_versao_sqlite(pg_pool, test_seller):
         check_dtype=False,
         atol=1e-6,
     )
+
+
+async def test_fluxo_diverge_do_sqlite_no_fuso_do_dia(pg_pool, test_seller):
+    """A divergencia de fuso entre as duas camadas e INTENCIONAL — fixada aqui.
+
+    Mesmo instante (23:30 de Brasilia do dia 15), duas respostas diferentes:
+    `src/metrics.py` diz 16 de junho (conta o dia em UTC) e esta camada diz 15
+    (conta o dia do vendedor). Sem este teste, "alinhar as duas camadas" em
+    qualquer direcao passa sem ninguem notar; com ele, quem mudar uma das duas
+    tem que decidir conscientemente.
+    """
+    from src.metrics import fluxo_financeiro as fluxo_sqlite
+    from src.storage import connect as sqlite_connect
+    from src.storage import upsert_order
+
+    _, sid = test_seller
+    instante = "2026-06-15T23:30:00-03:00"
+
+    sconn = sqlite_connect(":memory:")
+    try:
+        upsert_order(
+            sconn,
+            {
+                "order_id": 1,
+                "date_closed": instante,
+                "status": "paid",
+                "total_amount": 90.0,
+                "marketplace_fee": 0.0,
+                "shipping_cost": 0.0,
+                "buyer_id": 1001,
+                "raw_json": "{}",
+                "items": [],
+            },
+        )
+        sconn.commit()
+        em_sqlite = fluxo_sqlite(sconn, "2026-06-01", "2026-07-01")
+    finally:
+        sconn.close()
+
+    await _order(pg_pool, sid, 1, instante, 90.0, 0.0, 0.0)
+    em_pg = await fluxo_financeiro(pg_pool, sid, "2026-06-01", "2026-07-01")
+
+    assert list(em_sqlite["date"]) == ["2026-06-16"], "a camada congelada conta o dia em UTC"
+    assert list(em_pg["date"]) == ["2026-06-15"], "esta camada conta o dia do vendedor"
 
 
 # ---------- top_produtos ----------
@@ -516,18 +658,20 @@ async def test_top_produtos_paridade_com_a_versao_sqlite(pg_pool, test_seller):
     )
 
 
-async def test_top_produtos_respeita_bordas_da_janela_em_utc(pg_pool, test_seller):
-    """date_to e EXCLUSIVO e o corte e em UTC — produtos E categorias tem
-    que concordar (uma query com `<=` no lugar de `<` faria as duas
-    divergirem entre si sem levantar excecao)."""
+async def test_top_produtos_respeita_bordas_da_janela_no_fuso_do_vendedor(pg_pool, test_seller):
+    """date_to e EXCLUSIVO e o corte e no fuso do vendedor — produtos E
+    categorias tem que concordar (uma query com `<=` no lugar de `<` faria as
+    duas divergirem entre si sem levantar excecao). Offsets -03:00 de proposito:
+    o pedido 3 (23:59 BR) e 02:59Z do dia seguinte, logo ficaria de fora de uma
+    janela cortada em UTC."""
     _, sid = test_seller
     await _item(pg_pool, sid, "MLB1", "Produto A", "CAT1", "Categoria 1")
 
     casos = [
-        (1, "2026-07-24T23:59:00+00:00", 10.0),  # fora (antes)
-        (2, "2026-07-25T00:00:00+00:00", 20.0),  # dentro
-        (3, "2026-07-25T23:59:00+00:00", 30.0),  # dentro
-        (4, "2026-07-26T00:00:00+00:00", 40.0),  # fora (depois)
+        (1, "2026-07-24T23:59:00-03:00", 10.0),  # fora (antes)
+        (2, "2026-07-25T00:00:00-03:00", 20.0),  # dentro
+        (3, "2026-07-25T23:59:00-03:00", 30.0),  # dentro
+        (4, "2026-07-26T00:00:00-03:00", 40.0),  # fora (depois)
     ]
     for order_id, date_closed, preco in casos:
         await _order(pg_pool, sid, order_id, date_closed, preco, 0.0, 0.0)
@@ -549,14 +693,16 @@ async def test_top_produtos_respeita_bordas_da_janela_em_utc(pg_pool, test_selle
 async def test_fluxo_independe_do_fuso_da_sessao(pg_pool, pg_pool_fuso_nao_utc, test_seller):
     """A agregacao por dia nao pode mudar com o TimeZone da sessao.
 
-    Protege o `AT TIME ZONE 'UTC'` do to_char. Sem ele, um pedido as 02:00Z
-    cai no dia anterior quando a sessao esta em America/Sao_Paulo (UTC-3) —
-    receita diaria errada, sem erro nenhum. O pool padrao dos testes fixa
-    UTC, entao so um pool nao-UTC expoe a regressao.
+    Protege o `AT TIME ZONE` explicito do to_char — nao o VALOR do fuso, que e
+    assunto dos testes de bucket, mas o fato de ele estar escrito na query.
+    Sem ele, `to_char` usa o fuso da SESSAO: o pedido abaixo (01:00Z do dia 26,
+    isto e, 22:00 BR do dia 25) cai no dia 26 numa sessao UTC e no dia 25 numa
+    sessao America/Sao_Paulo — receita diaria dependente de config externa, sem
+    erro nenhum. Um pool so nao expoe isso; os dois lado a lado, sim.
     """
     _, sid = test_seller
-    # 02:00Z = 23:00 do dia ANTERIOR em Sao_Paulo. E o caso critico.
-    await _order(pg_pool, sid, 1, "2026-07-25T02:00:00+00:00", 100.0, 10.0, 5.0)
+    # 01:00Z do dia 26 = 22:00 do dia 25 em Sao_Paulo. E o caso critico.
+    await _order(pg_pool, sid, 1, "2026-07-26T01:00:00+00:00", 100.0, 10.0, 5.0)
 
     em_utc = await fluxo_financeiro(pg_pool, sid, "2026-07-25", "2026-07-26")
     em_sp = await fluxo_financeiro(pg_pool_fuso_nao_utc, sid, "2026-07-25", "2026-07-26")

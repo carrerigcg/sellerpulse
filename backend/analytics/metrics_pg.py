@@ -17,6 +17,14 @@ Duas armadilhas de tradução de dialeto que este módulo trata explicitamente:
    numéricas são convertidas pra `float` explicitamente ao montar o
    DataFrame, senão o dtype vira `object` e quebra downstream (gráficos,
    serialização).
+3. Fuso do agrupamento diário: aqui o dia é contado em `FUSO_DO_VENDEDOR`
+   (America/Sao_Paulo), não em UTC. Divergência INTENCIONAL de
+   `src/metrics.py`, na mesma linha do desempate de `ORDER BY` explicado
+   abaixo: lá `date_closed` é string ISO no SQLite e a query usa
+   `substr(date_closed, 1, 10)`, sem conversão de fuso nenhuma — não existe
+   UTC pra trocar. Aquela camada está congelada na Fase 2, lê um banco de
+   demonstração local e serve o Streamlit e o PDF; mexer nela é uma mudança
+   diferente e mais arriscada, sem usuário real do outro lado.
 """
 
 from __future__ import annotations
@@ -25,24 +33,36 @@ import uuid
 
 import pandas as pd
 
-from backend.analytics._common import _parse_boundary
-from src.metrics import COST_ESTIMATE_RATE
+from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary
 
-# Rotulo do balde de itens sem categoria conhecida (anuncio apagado, ou
-# categoria que nao entrou em categories_cache). Fica aqui, e nao so no SQL,
-# pra os testes e qualquer consumidor referenciarem o mesmo valor.
-SEM_CATEGORIA = "Sem categoria"
+# `SEM_CATEGORIA` e reexportado daqui: `src/metrics.py` passou a precisar do
+# mesmo rotulo quando levou a mesma correcao de LEFT JOIN, e duas copias da
+# string em duas camadas e exatamente como as camadas divergem. O import
+# re-liga o nome neste namespace, entao quem ja importava
+# `backend.analytics.metrics_pg.SEM_CATEGORIA` continua funcionando.
+from src.metrics import SEM_CATEGORIA
 
-_FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
+# Nao existe custo estimado aqui, e nao deve voltar a existir: esta camada
+# espelha `src/metrics.py`, onde o comentario do topo explica por que o
+# percentual de COGS de 55% foi removido em vez de renomeado. A conta e
+# margem de contribuicao = receita_bruta - taxas_ml - frete, as tres parcelas
+# vindas de colunas de `orders`.
+_FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "margem_contribuicao"]
 _PRODUTOS_COLUMNS = ["item_id", "title", "category_name", "unidades", "receita"]
 _CATEGORIAS_COLUMNS = ["category_id", "category_name", "unidades", "receita"]
 
-_FLUXO_QUERY = """
+# O fuso entra por f-string (nao por parametro $n) porque e constante do
+# proprio codigo, nao entrada de usuario: nao ha superficie de injecao, e a
+# query continua legivel pra quem for ler o SQL.
+_FLUXO_QUERY = f"""
     SELECT
         -- to_char sobre timestamptz converte pro fuso da SESSAO. O pool ja
-        -- fixa server_settings={"timezone": "UTC"}, mas o AT TIME ZONE torna
-        -- essa query correta por si so, independente de config externa.
-        to_char(date_closed AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+        -- fixa server_settings={{"timezone": "UTC"}}, mas o AT TIME ZONE
+        -- explicito torna essa query correta por si so, independente de
+        -- config externa -- e, agora, o fuso declarado aqui e o do VENDEDOR
+        -- (America/Sao_Paulo): o dia do grafico tem que ser o dia em que ele
+        -- conta a venda, nao o dia UTC. Ver FUSO_DO_VENDEDOR em _common.py.
+        to_char(date_closed AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM-DD') AS date,
         SUM(total_amount)                  AS receita_bruta,
         SUM(marketplace_fee)               AS taxas_ml,
         SUM(shipping_cost)                 AS frete
@@ -128,7 +148,12 @@ _TOP_CATEGORIAS_QUERY = """
 async def fluxo_financeiro(
     pool, seller_id: uuid.UUID, date_from: str, date_to: str
 ) -> pd.DataFrame:
-    """DataFrame por dia com receita, custos e líquido para a janela dada.
+    """DataFrame por dia com receita, custos do ML e margem de contribuição.
+
+    Margem de contribuição = receita_bruta - taxas_ml - frete. Espelha
+    `src/metrics.py.fluxo_financeiro`: mesmas colunas, mesma ordem, mesmo
+    arredondamento — a paridade é testada em
+    `test_fluxo_paridade_com_a_versao_sqlite`.
 
     Args:
         pool: pool asyncpg (`backend.db.get_pool()`).
@@ -138,7 +163,7 @@ async def fluxo_financeiro(
 
     Returns:
         DataFrame com colunas: date, receita_bruta, taxas_ml, frete,
-        custo_estimado, liquido. Uma linha por dia com pedidos pagos.
+        margem_contribuicao. Uma linha por dia com pedidos pagos.
         Vazio se nenhum pedido no range.
     """
     rows = await pool.fetch(
@@ -152,10 +177,7 @@ async def fluxo_financeiro(
     for col in ("receita_bruta", "taxas_ml", "frete"):
         df[col] = df[col].astype(float)
 
-    df["custo_estimado"] = (df["receita_bruta"] * COST_ESTIMATE_RATE).round(2)
-    df["liquido"] = (
-        df["receita_bruta"] - df["taxas_ml"] - df["frete"] - df["custo_estimado"]
-    ).round(2)
+    df["margem_contribuicao"] = (df["receita_bruta"] - df["taxas_ml"] - df["frete"]).round(2)
 
     return df[_FLUXO_COLUMNS]
 

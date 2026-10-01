@@ -10,13 +10,44 @@ import sqlite3
 
 import pandas as pd
 
-# Heurística: assume COGS = 55% da receita bruta. Documentado no spec.
-# Ficará configurável quando o modo real (ingestão ML) alimentar custo real.
-COST_ESTIMATE_RATE = 0.55
+# NÃO existe custo estimado aqui, e não deve voltar a existir.
+#
+# Até aqui este módulo tinha um `COST_ESTIMATE_RATE = 0.55` aplicado a todo
+# vendedor, todo produto, toda categoria — e o resultado era exibido na tela
+# como "Lucro líquido". Numa loja real conectada, em 180 dias, esse custo
+# inventado somava R$ 76.838,62 de um "custo total" de R$ 93.638,14: 82% do
+# custo mostrado ao vendedor era um chute. Pra quem tem custo real de 40%, o
+# "lucro" errava por dezenas de milhares de reais, e a landing prometia
+# justamente o contrário ("calculado — não estimado").
+#
+# O que esta camada entrega é margem de contribuição:
+#
+#     margem_contribuicao = receita_bruta - taxas_ml - frete
+#
+# 100% calculável a partir de colunas do banco, defensável linha por linha.
+# Custo de produto é número que só o vendedor tem: quando ele puder informar,
+# entra como dado dele — nunca como percentual assumido por nós.
+#
+# Rótulo do balde de itens sem categoria conhecida (anúncio apagado, ou
+# categoria que não entrou em categories_cache). Fica aqui, e não só no SQL,
+# pra os testes e qualquer consumidor referenciarem o mesmo valor.
+#
+# Mora nesta camada (e é importado por `backend/analytics/metrics_pg.py`)
+# porque duas cópias da mesma string em duas camadas é precisamente como as
+# camadas divergem — a classe de bug que este módulo acabou de levar.
+SEM_CATEGORIA = "Sem categoria"
 
 
 def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.DataFrame:
-    """DataFrame por dia com receita, custos e líquido para a janela dada.
+    """DataFrame por dia com receita, custos do ML e margem de contribuição.
+
+    Margem de contribuição = receita_bruta - taxas_ml - frete. Só isso: as três
+    parcelas vêm de colunas de `orders`, nenhuma é estimada. Ver o comentário
+    no topo do módulo sobre por que não há custo de produto aqui.
+
+    `frete` continua na conta mesmo valendo R$ 0,00 hoje (o `shipping_cost` do
+    pedido vem null do ML; a ingestão pela API de shipments é item separado) —
+    a fórmula tem que já estar certa quando o dado chegar.
 
     Args:
         conn: conexão SQLite aberta.
@@ -25,7 +56,7 @@ def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> 
 
     Returns:
         DataFrame com colunas: date, receita_bruta, taxas_ml, frete,
-        custo_estimado, liquido. Uma linha por dia com pedidos pagos.
+        margem_contribuicao. Uma linha por dia com pedidos pagos.
         Vazio se nenhum pedido no range.
     """
     query = """
@@ -46,11 +77,8 @@ def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> 
     # "object" em vez de numérica — normaliza antes de fazer aritmética/round.
     for col in ("receita_bruta", "taxas_ml", "frete"):
         df[col] = pd.to_numeric(df[col], errors="coerce")
-    df["custo_estimado"] = (df["receita_bruta"] * COST_ESTIMATE_RATE).round(2)
-    df["liquido"] = (
-        df["receita_bruta"] - df["taxas_ml"] - df["frete"] - df["custo_estimado"]
-    ).round(2)
-    return df[["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]]
+    df["margem_contribuicao"] = (df["receita_bruta"] - df["taxas_ml"] - df["frete"]).round(2)
+    return df[["date", "receita_bruta", "taxas_ml", "frete", "margem_contribuicao"]]
 
 
 def top_produtos(
@@ -69,19 +97,33 @@ def top_produtos(
         - "produtos": DataFrame [item_id, title, category_name, unidades, receita]
         - "categorias": DataFrame [category_id, category_name, unidades, receita]
         Ambos ordenados por receita desc.
+
+        Item vendido sem linha em `items_cache` (anúncio apagado no ML) entra
+        normalmente: `title` cai pro próprio item_id e a categoria vira
+        `SEM_CATEGORIA`. Em `categorias` ele forma um balde único com
+        `category_id` None — assim a soma das categorias fecha com a receita
+        total, sem atribuir venda a uma categoria real.
     """
     produtos = pd.read_sql_query(
         """
         SELECT
             oi.item_id                                       AS item_id,
-            ic.title                                          AS title,
-            cc.name                                           AS category_name,
+            -- LEFT JOIN nos dois caches: item sem linha em items_cache é
+            -- anúncio apagado (a ingestão leva 404 na API de itens e nunca
+            -- cacheia). Foi vendido e a receita é real, então ele fica no
+            -- ranking: o SKU é o título de fallback. Com INNER JOIN ele sumia
+            -- junto com o dinheiro (11,2% numa loja real) e esta tela — e o
+            -- PDF, que consome esta mesma função — divergia da Executive.
+            COALESCE(ic.title, oi.item_id)                    AS title,
+            -- Categoria desconhecida é DESCONHECIDA: rótulo explícito, nunca
+            -- uma categoria real emprestada. Ver a query de categorias abaixo.
+            COALESCE(cc.name, ?)                              AS category_name,
             SUM(oi.quantity)                                  AS unidades,
             ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
         FROM order_items oi
-        JOIN orders o        ON o.order_id     = oi.order_id
-        JOIN items_cache ic  ON ic.item_id     = oi.item_id
-        JOIN categories_cache cc ON cc.category_id = ic.category_id
+        JOIN orders o             ON o.order_id     = oi.order_id
+        LEFT JOIN items_cache ic  ON ic.item_id     = oi.item_id
+        LEFT JOIN categories_cache cc ON cc.category_id = ic.category_id
         WHERE o.status = 'paid'
           AND o.date_closed >= ?
           AND o.date_closed <  ?
@@ -90,23 +132,35 @@ def top_produtos(
         LIMIT ?
         """,
         conn,
-        params=(date_from, date_to, n),
+        params=(SEM_CATEGORIA, date_from, date_to, n),
     )
 
     # Segunda query separada — não dá pra reaproveitar o LIMIT do ranking de
     # produtos aqui: filtrar por top-N produtos distorceria os totais por
     # categoria (excluiria receita de produtos fora do top-N).
+    #
+    # Item sem categoria conhecida (anúncio apagado, ou categoria que não
+    # entrou em categories_cache) NÃO some e NÃO é jogado numa categoria real:
+    # os dois erros corrompem o breakdown de formas diferentes (o primeiro faz
+    # a soma das categorias não bater com a receita total; o segundo atribui
+    # venda a quem não vendeu). Ele forma um balde próprio, com category_id
+    # NULL (nenhum id real do ML colide) e o rótulo SEM_CATEGORIA.
+    #
+    # O GROUP BY é por `cc.category_id, cc.name` — as colunas cruas, não a
+    # expressão com COALESCE. Agrupar pelo rótulo juntaria num balde só duas
+    # categorias reais que por acaso tenham o mesmo nome; agrupar só por cc.*
+    # junta todos os desconhecidos num balde único, que é o desejado.
     categorias = pd.read_sql_query(
         """
         SELECT
             cc.category_id                                    AS category_id,
-            cc.name                                           AS category_name,
+            COALESCE(cc.name, ?)                              AS category_name,
             SUM(oi.quantity)                                  AS unidades,
             ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
         FROM order_items oi
-        JOIN orders o        ON o.order_id     = oi.order_id
-        JOIN items_cache ic  ON ic.item_id     = oi.item_id
-        JOIN categories_cache cc ON cc.category_id = ic.category_id
+        JOIN orders o             ON o.order_id     = oi.order_id
+        LEFT JOIN items_cache ic  ON ic.item_id     = oi.item_id
+        LEFT JOIN categories_cache cc ON cc.category_id = ic.category_id
         WHERE o.status = 'paid'
           AND o.date_closed >= ?
           AND o.date_closed <  ?
@@ -115,7 +169,7 @@ def top_produtos(
         LIMIT ?
         """,
         conn,
-        params=(date_from, date_to, n),
+        params=(SEM_CATEGORIA, date_from, date_to, n),
     )
 
     return {"produtos": produtos, "categorias": categorias}

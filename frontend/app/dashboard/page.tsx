@@ -9,8 +9,8 @@ import { ApiError, getFluxoFinanceiro, janelaAnterior, type FluxoDia } from "@/l
 import { DisparaDelta } from "./delta";
 
 /**
- * Executive — receita, custos e lucro do período, com variação sobre a
- * janela anterior, mais o fluxo diário.
+ * Executive — receita, custos do Mercado Livre e margem de contribuição do
+ * período, com variação sobre a janela anterior, mais o fluxo diário.
  *
  * Escopo: esta é a visão que a Sprint 1 entrega. As páginas de Produtos
  * (Pareto ABC, cohort) e Clientes (RFM) são da Sprint 3 — os endpoints
@@ -67,7 +67,7 @@ export default async function ExecutivePage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Executive</h1>
           <p className="mt-1 text-sm text-muted">
-            Receita, custos e resultado do período.
+            Receita, custos do Mercado Livre e margem de contribuição do período.
           </p>
         </div>
         <PeriodPicker de={de} ate={ate} />
@@ -92,13 +92,21 @@ export default async function ExecutivePage({
         <>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
+            {/* "Custos do Mercado Livre", não "Custo total": este cartão é
+                comissão + frete, e chamá-lo de total seria repetir num rótulo
+                novo a mentira do custo estimado que saiu daqui. */}
             <KpiCard
-              rotulo="Custo total"
+              rotulo="Custos do Mercado Livre"
               valor={atual.custo}
               anterior={passado.custo}
               subirEhRuim
             />
-            <KpiCard rotulo="Lucro líquido" valor={atual.liquido} anterior={passado.liquido} />
+            <KpiCard
+              rotulo="Margem de contribuição"
+              valor={atual.margem}
+              anterior={passado.margem}
+              nota="receita − comissão do Mercado Livre − frete"
+            />
           </div>
 
           <section className="mt-6 rounded-xl border border-line p-5">

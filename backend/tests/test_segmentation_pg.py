@@ -124,6 +124,64 @@ async def test_abc_pareto_nao_infla_com_item_compartilhado(pg_pool, test_seller,
     assert df.iloc[0]["receita"] == pytest.approx(100.0), "receita inflada por fan-out"
 
 
+_CAUDA_LONGA_CABECA = [5000.00, 2500.00, 1200.00, 800.00, 640.00]
+_CAUDA_LONGA_ITEM = 29.90
+_CAUDA_LONGA_N = 110
+
+
+async def test_abc_pareto_acumulada_fecha_em_100_em_catalogo_grande(pg_pool, test_seller):
+    """O acumulado tem que FECHAR em 100, nao "quase" 100.
+
+    Regressao do erro de arredondamento acumulado: a formula antiga somava
+    `receita_pct` ja arredondado em 4 casas, linha a linha, e o ultimo valor
+    saia 100,0053 neste catalogo. O eixo direito do Pareto e 0-100% por
+    definicao — acima de 100 o grafico esticava o dominio e rotulava o topo
+    com decimais.
+
+    O catalogo e 5 produtos "cabeca" com receitas distintas + 110 itens de
+    cauda a R$ 29,90 (115 produtos, total R$ 13.429,00). A forma importa: com
+    receitas que dividem o total de forma exata o erro por linha e zero e o
+    defeito nao aparece; com receitas aleatorias os erros se cancelam. O que
+    acumula desvio e um bloco grande de produtos cuja fracao do total cai
+    sempre do mesmo lado do arredondamento — a cauda longa de um catalogo real.
+    """
+    _, sid = test_seller
+    receitas = list(_CAUDA_LONGA_CABECA) + [_CAUDA_LONGA_ITEM] * _CAUDA_LONGA_N
+
+    # Insercao em lote: 115 produtos via helper linha-a-linha seriam ~345
+    # round-trips e o teste ficaria lento sem nenhum ganho de clareza.
+    itens = [(sid, f"MLB{i:04d}", f"Produto {i}", "CAT1") for i in range(1, len(receitas) + 1)]
+    pedidos = [
+        (i, sid, datetime(2026, 7, 10, 10, 0, tzinfo=UTC), "paid", receita, 0.0, 0.0, 1001)
+        for i, receita in enumerate(receitas, start=1)
+    ]
+    linhas = [(sid, i, f"MLB{i:04d}", 1, receita) for i, receita in enumerate(receitas, start=1)]
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO categories_cache (seller_id, category_id, name, fetched_at) "
+            "VALUES ($1,'CAT1','Cat Um',now())",
+            sid,
+        )
+        await conn.executemany(
+            "INSERT INTO items_cache (seller_id, item_id, title, category_id, fetched_at) "
+            "VALUES ($1,$2,$3,$4,now())",
+            itens,
+        )
+        await conn.executemany(_INSERT_ORDER, pedidos)
+        await conn.executemany(
+            "INSERT INTO order_items (seller_id, order_id, item_id, quantity, unit_price) "
+            "VALUES ($1,$2,$3,$4,$5)",
+            linhas,
+        )
+
+    df = await abc_pareto(pg_pool, sid, "2026-07-01", "2026-08-01")
+
+    assert len(df) == len(receitas)
+    assert df.iloc[-1]["receita_acumulada_pct"] == pytest.approx(100.0, abs=0.001)
+    # O acumulado nunca pode passar de 100: e uma fracao do proprio total.
+    assert df["receita_acumulada_pct"].max() <= 100.0
+
+
 async def test_abc_pareto_vazio_tem_as_colunas_certas(pg_pool, test_seller):
     _, sid = test_seller
     df = await abc_pareto(pg_pool, sid, "2026-01-01", "2026-01-02")
@@ -360,6 +418,23 @@ async def test_rfm_scores_caminho_feliz_com_recencias_variadas(pg_pool, test_sel
     }
 
 
+async def test_rfm_recency_conta_a_venda_da_noite_no_dia_do_vendedor(pg_pool, test_seller):
+    """Compra as 23:30 BR de 15/06 e "ontem" quando date_to e 16/06.
+
+    Em UTC a compra e 02:30 do dia 16, a mesma data do `date_to[:10]` — a
+    recencia viria 0 ("comprou hoje") em vez de 1. Medido na loja real: 112 de
+    780 compradores tinham a recencia deslocada em 1 dia por causa disso, e
+    recencia alimenta o r_score e portanto o segmento (Champions vs At Risk).
+    """
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-06-15T23:30:00-03:00", 50.0, buyer_id=1001)
+
+    df = await rfm_scores(pg_pool, sid, "2026-06-01", "2026-06-16")
+
+    assert list(df["buyer_id"]) == [1001]
+    assert df.iloc[0]["recency_dias"] == 1
+
+
 async def test_rfm_scores_isola_por_seller(pg_pool, test_seller, outro_seller):
     _, sid = test_seller
     _, outro = outro_seller
@@ -540,30 +615,68 @@ async def test_cohort_produto_vazio(pg_pool, test_seller):
     assert pivot.empty
 
 
-async def test_cohort_produto_agrupa_mes_em_utc_na_virada_do_dia(pg_pool, test_seller):
-    """Pedido as 02:00Z do dia 1 do mes tem que cair no mes correto (agosto),
-    nao no mes anterior -- cobre o `AT TIME ZONE 'UTC'` no agrupamento
-    mensal (to_char sobre timestamptz usa o fuso da SESSAO sem ele)."""
+async def test_cohort_produto_agrupa_mes_no_fuso_do_vendedor_na_virada_do_mes(pg_pool, test_seller):
+    """Venda as 23:30 BR do ultimo dia de julho pertence a JULHO, nao a agosto.
+
+    E 02:30Z do dia 1o de agosto: em UTC esse pedido viraria o mes de
+    lancamento E o mes corrente do cohort. Medido na loja real: 3 pedidos /
+    R$ 465,00 contados em julho (UTC) pertencem a junho, e 1 pedido /
+    R$ 90,00 de agosto pertence a julho — dois meses inteiros fechando com o
+    numero errado.
+    """
     _, sid = test_seller
     await _item(pg_pool, sid, "MLB1", "Produto 1")
-    await _order(pg_pool, sid, 1, "2026-08-01T02:00:00+00:00", 90.0)
+    await _order(pg_pool, sid, 1, "2026-07-31T23:30:00-03:00", 90.0)
     await _order_item(pg_pool, sid, 1, "MLB1", 1, 90.0)
 
-    pivot = await cohort_produto(pg_pool, sid, "2026-08-01", "2026-08-02")
+    pivot = await cohort_produto(pg_pool, sid, "2026-07-01", "2026-08-01")
 
-    assert list(pivot.index) == ["2026-08"]
-    assert list(pivot.columns) == ["2026-08"]
-    assert pivot.loc["2026-08", "2026-08"] == pytest.approx(90.0)
+    assert list(pivot.index) == ["2026-07"]
+    assert list(pivot.columns) == ["2026-07"]
+    assert pivot.loc["2026-07", "2026-07"] == pytest.approx(90.0)
+
+
+async def test_cohort_as_duas_queries_usam_o_mesmo_fuso(pg_pool, test_seller):
+    """Mes de lancamento e mes corrente tem que ser calculados no MESMO fuso.
+
+    Sao duas queries diferentes (`_COHORT_LAUNCH_QUERY`, sobre o banco inteiro,
+    e `_COHORT_REVENUE_QUERY`, sobre a janela) e o pivot cruza uma com a outra.
+    Com fusos diferentes nos dois eixos, a venda de lancamento vai pra um mes e
+    a propria receita dela pra outro — receita ACIMA da diagonal, mes corrente
+    "anterior" ao lancamento, que e geometricamente impossivel num cohort.
+
+    A primeira venda esta na virada do mes de proposito: so ali um instante da
+    noite brasileira (23:30 BR = 02:30Z do dia seguinte) muda de MES. Dentro do
+    mes as duas leituras concordam — um teste com a venda no meio do mes
+    passaria com qualquer um dos dois fusos, ou seja, nao provaria nada.
+    """
+    _, sid = test_seller
+    await _item(pg_pool, sid, "MLB1", "Produto 1")
+    await _order(pg_pool, sid, 1, "2026-07-31T23:30:00-03:00", 90.0)
+    await _order_item(pg_pool, sid, 1, "MLB1", 1, 90.0)
+    await _order(pg_pool, sid, 2, "2026-08-10T12:00:00-03:00", 150.0)
+    await _order_item(pg_pool, sid, 2, "MLB1", 1, 150.0)
+
+    pivot = await cohort_produto(pg_pool, sid, "2026-07-01", "2026-09-01")
+
+    assert list(pivot.index) == ["2026-07"]
+    assert list(pivot.columns) == ["2026-07", "2026-08"]
+    assert pivot.loc["2026-07", "2026-07"] == pytest.approx(90.0)
+    assert pivot.loc["2026-07", "2026-08"] == pytest.approx(150.0)
+    # Nada acima da diagonal: nenhum mes corrente anterior ao lancamento.
+    assert [c for c in pivot.columns if c < pivot.index[0]] == []
 
 
 async def test_cohort_independe_do_fuso_da_sessao(pg_pool, pg_pool_fuso_nao_utc, test_seller):
     """O agrupamento por MES nao pode mudar com o TimeZone da sessao.
 
-    Protege o `AT TIME ZONE 'UTC'` das duas queries do cohort. Sem ele, um
-    pedido de 1o de agosto as 02:00Z e contabilizado em JULHO quando a sessao
-    esta em America/Sao_Paulo (UTC-3) — o cohort inteiro desloca de mes.
-    Verificado por mutacao: sem este teste, remover o AT TIME ZONE passa
-    despercebido, porque o pool padrao dos testes ja fixa UTC.
+    Protege o `AT TIME ZONE` explicito das duas queries do cohort — nao o VALOR
+    do fuso (assunto dos testes de bucket), mas o fato de ele estar escrito na
+    query. Sem ele, `to_char` usa o fuso da SESSAO e o pedido abaixo (02:00Z do
+    dia 1o de agosto) vai pra AGOSTO numa sessao UTC e pra JULHO numa sessao
+    America/Sao_Paulo — o cohort inteiro desloca de mes conforme config externa.
+    Verificado por mutacao: com um pool so, remover o AT TIME ZONE passa
+    despercebido.
     """
     _, sid = test_seller
     await _item(pg_pool, sid, "MLB1", "Produto A", "CAT1", "Categoria 1")
@@ -571,8 +684,8 @@ async def test_cohort_independe_do_fuso_da_sessao(pg_pool, pg_pool_fuso_nao_utc,
     await _order(pg_pool, sid, 1, "2026-08-01T02:00:00+00:00", 100.0, 0.0, 0.0)
     await _order_item(pg_pool, sid, 1, "MLB1", 1, 100.0)
 
-    em_utc = await cohort_produto(pg_pool, sid, "2026-08-01", "2026-09-01")
-    em_sp = await cohort_produto(pg_pool_fuso_nao_utc, sid, "2026-08-01", "2026-09-01")
+    em_utc = await cohort_produto(pg_pool, sid, "2026-07-01", "2026-08-01")
+    em_sp = await cohort_produto(pg_pool_fuso_nao_utc, sid, "2026-07-01", "2026-08-01")
 
     pd.testing.assert_frame_equal(em_utc, em_sp, check_dtype=False, atol=1e-6)
-    assert "2026-08" in em_utc.index
+    assert "2026-07" in em_utc.index

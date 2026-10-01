@@ -7,8 +7,6 @@ import { useState } from "react";
 import {
   Alert,
   AuthShell,
-  Divider,
-  GoogleButton,
   PageTitle,
   PrimaryButton,
   TextField,
@@ -54,20 +52,6 @@ export default function SignupPage() {
 
     router.push("/dashboard");
     router.refresh();
-  }
-
-  async function entrarComGoogle() {
-    setErro(null);
-    setCarregando(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
-    });
-    if (error) {
-      setErro("Não foi possível conectar com o Google. Tente de novo.");
-      setCarregando(false);
-    }
   }
 
   if (confirmePorEmail) {
@@ -122,11 +106,17 @@ export default function SignupPage() {
         </PrimaryButton>
       </form>
 
-      <Divider label="ou" />
+      {/* Sem "Continuar com Google" aqui: o provider do Google nao esta
+          habilitado no projeto Supabase, e `signInWithOAuth` devolve
+          "Unsupported provider: provider is not enabled" no primeiro clique.
+          Oferecer um caminho de entrada que quebra e pior do que oferecer um
+          caminho so — e esta e a tela onde a pessoa ja decidiu entrar. Mesma
+          decisao ja tomada em `components/landing/how-it-works.tsx`.
 
-      <GoogleButton onClick={entrarComGoogle} disabled={carregando}>
-        Continuar com Google
-      </GoogleButton>
+          Pra religar: criar o OAuth client no Google Cloud Console, colar
+          Client ID/Secret em Authentication > Providers > Google no Supabase,
+          e devolver o <Divider label="ou" /> com o <GoogleButton> que chama
+          supabase.auth.signInWithOAuth({ provider: "google" }). */}
 
       <p className="mt-8 text-sm text-muted">
         Já tem conta?{" "}
@@ -170,7 +160,8 @@ function PainelSignup() {
   const analises = [
     {
       titulo: "Executive",
-      texto: "Receita, custos e lucro líquido por dia, com variação sobre o período anterior.",
+      texto:
+        "Receita, comissão do Mercado Livre e margem de contribuição por dia, com variação sobre o período anterior.",
     },
     {
       titulo: "Produtos",

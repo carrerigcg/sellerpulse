@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import jwt
 import pytest
@@ -9,6 +9,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.routers._common import MAX_JANELA_DIAS, MAX_N
 
 from .conftest import TEST_DATABASE_URL
 
@@ -297,6 +298,31 @@ def test_n_invalido_devolve_400(client, test_seller, n):
         params={"date_from": "2026-07-25", "date_to": "2026-07-26", "n": n},
         headers=_auth(user_id),
     )
+    assert resp.status_code == 400
+
+
+def test_limites_de_entrada_valem_no_router_autenticado(client, test_seller):
+    """Os tetos de janela e de `n` sao os MESMOS da porta publica.
+
+    Um validador so pros dois caminhos (`routers/_common.py`): duas copias
+    divergiriam, e seria a copia esquecida que viraria o buraco. Os limites
+    tambem estao certos pra usuario logado -- nenhuma tela pede mais que isso.
+    """
+    user_id, _sid = test_seller
+    longa = {
+        "date_from": "2026-07-01",
+        "date_to": (date(2026, 7, 1) + timedelta(days=MAX_JANELA_DIAS + 1)).isoformat(),
+    }
+    for rota in ("/metrics/fluxo-financeiro", "/segmentation/abc"):
+        resp = client.get(rota, params=longa, headers=_auth(user_id))
+        assert resp.status_code == 400, f"{rota}: {resp.text}"
+
+    invertida = {"date_from": "2026-07-26", "date_to": "2026-07-25"}
+    resp = client.get("/metrics/fluxo-financeiro", params=invertida, headers=_auth(user_id))
+    assert resp.status_code == 400
+
+    acima = {"date_from": "2026-07-25", "date_to": "2026-07-26", "n": MAX_N + 1}
+    resp = client.get("/metrics/top-produtos", params=acima, headers=_auth(user_id))
     assert resp.status_code == 400
 
 

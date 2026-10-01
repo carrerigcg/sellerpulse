@@ -7,8 +7,6 @@ import { useState } from "react";
 import {
   Alert,
   AuthShell,
-  Divider,
-  GoogleButton,
   PageTitle,
   PrimaryButton,
   TextField,
@@ -51,21 +49,6 @@ export default function LoginPage() {
     }
   }
 
-  async function entrarComGoogle() {
-    setErro(null);
-    setCarregando(true);
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${window.location.origin}/dashboard` },
-    });
-    if (error) {
-      registraErroDeAuth("login:google", error);
-      setErro("Não foi possível conectar com o Google. Tente de novo.");
-      setCarregando(false);
-    }
-  }
-
   return (
     <AuthShell panel={<PainelLogin />}>
       <PageTitle
@@ -96,11 +79,17 @@ export default function LoginPage() {
         </PrimaryButton>
       </form>
 
-      <Divider label="ou" />
+      {/* Sem "Continuar com Google" aqui: o provider do Google nao esta
+          habilitado no projeto Supabase, e `signInWithOAuth` devolve
+          "Unsupported provider: provider is not enabled" no primeiro clique.
+          Oferecer um caminho de entrada que quebra e pior do que oferecer um
+          caminho so — e esta e a tela onde a pessoa ja decidiu entrar. Mesma
+          decisao ja tomada em `components/landing/how-it-works.tsx`.
 
-      <GoogleButton onClick={entrarComGoogle} disabled={carregando}>
-        Continuar com Google
-      </GoogleButton>
+          Pra religar: criar o OAuth client no Google Cloud Console, colar
+          Client ID/Secret em Authentication > Providers > Google no Supabase,
+          e devolver o <Divider label="ou" /> com o <GoogleButton> que chama
+          supabase.auth.signInWithOAuth({ provider: "google" }). */}
 
       <p className="mt-8 text-sm text-muted">
         Ainda não tem conta?{" "}
@@ -121,8 +110,8 @@ function PainelLogin() {
         <span className="text-accent">sem planilha.</span>
       </h2>
       <p className="mt-4 text-muted">
-        Receita, custos e lucro por dia. Curva ABC dos produtos. Segmentação dos
-        compradores. Tudo calculado a partir dos seus pedidos reais.
+        Receita, comissão do Mercado Livre e margem por dia. Curva ABC dos produtos.
+        Segmentação dos compradores. Tudo calculado a partir dos seus pedidos reais.
       </p>
 
       <div className="mt-10 rounded-xl border border-line bg-bg p-5 shadow-sm">

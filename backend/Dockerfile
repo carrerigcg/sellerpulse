@@ -1,5 +1,5 @@
 # Build context = RAIZ do repositorio, nao backend/.
-# O backend importa de src/ (COST_ESTIMATE_RATE, as regras de segmentacao RFM
+# O backend importa de src/ (SEM_CATEGORIA, as regras de segmentacao RFM
 # e o gerador sintetico), entao os dois diretorios precisam ir junto.
 # No Render: Root Directory = raiz do repo, Dockerfile Path = backend/Dockerfile.
 FROM python:3.11-slim

@@ -14,6 +14,8 @@ import {
 
 import type { AbcLinha } from "@/lib/api";
 
+import { TextoAnuncioRemovido, anuncioFoiRemovido } from "./anuncio-removido";
+
 /**
  * Curva de Pareto: barras de receita por produto (a ordem já vem decrescente
  * do backend) com o percentual acumulado sobreposto num segundo eixo.
@@ -66,11 +68,15 @@ export function ParetoChart({ dados }: { dados: AbcLinha[] }) {
               tickLine={false}
               width={56}
             />
+            {/* Math.round no tick porque este eixo é 0–100% por definição: se
+                algum resíduo de float sobrar no acumulado, o rótulo do topo
+                vira "100.0002%" em vez de "100%". Só o rótulo — o dado
+                plotado não é tocado. */}
             <YAxis
               yAxisId="pct"
               orientation="right"
               domain={[0, 100]}
-              tickFormatter={(v: number) => `${v}%`}
+              tickFormatter={(v: number) => `${Math.round(v)}%`}
               tick={{ fill: "var(--sp-muted)", fontSize: 11 }}
               axisLine={false}
               tickLine={false}
@@ -130,7 +136,13 @@ function TooltipPareto({
   const linha = payload[0].payload;
   return (
     <div className="rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-sm">
-      <p className="font-medium">{linha.titulo}</p>
+      {/* Sem isto o tooltip imprimia a mesma string duas vezes (título e SKU)
+          quando o anúncio não existe mais. O SKU segue na linha de baixo. */}
+      {anuncioFoiRemovido(linha) ? (
+        <TextoAnuncioRemovido />
+      ) : (
+        <p className="font-medium">{linha.titulo}</p>
+      )}
       <p className="text-muted">{linha.sku}</p>
       <p className="tabular mt-1">
         {brl.format(linha.receita)} · classe {linha.classe}

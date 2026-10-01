@@ -51,7 +51,8 @@ export default async function DemoExecutivePage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Executive</h1>
           <p className="mt-1 text-sm text-muted">
-            Receita, custos e resultado do período — dados de demonstração.
+            Receita, custos do Mercado Livre e margem de contribuição — dados de
+            demonstração.
           </p>
         </div>
         <PeriodPicker de={de} ate={ate} />
@@ -67,13 +68,20 @@ export default async function DemoExecutivePage({
         <>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
+            {/* Mesmos rótulos de `/dashboard` — a demo não pode prometer uma
+                conta diferente da que o produto entrega. */}
             <KpiCard
-              rotulo="Custo total"
+              rotulo="Custos do Mercado Livre"
               valor={atual.custo}
               anterior={passado.custo}
               subirEhRuim
             />
-            <KpiCard rotulo="Lucro líquido" valor={atual.liquido} anterior={passado.liquido} />
+            <KpiCard
+              rotulo="Margem de contribuição"
+              valor={atual.margem}
+              anterior={passado.margem}
+              nota="receita − comissão do Mercado Livre − frete"
+            />
           </div>
 
           <section className="mt-6 rounded-xl border border-line p-5">

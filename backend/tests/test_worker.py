@@ -170,6 +170,158 @@ async def test_job_de_seller_sem_conexao_falha(pg_pool, test_seller):
         await runner.executa_job(pg_pool, job)
 
 
+# ---------------------------------------------------------------------------
+# Renovacao de lease DENTRO da janela.
+#
+# Medido na ingestao real: backfill de 6 janelas em 706s = 118s por janela,
+# contra `LEASE_SEGUNDOS = 120`. O heartbeat batia uma vez por janela, ANTES de
+# `ingest_janela`, entao todo o enriquecimento N+1 (uma chamada ao ML por item
+# novo) rodava sem renovacao. Dois segundos de margem e sorte: numa loja um
+# pouco maior o lease vence no meio da janela e o job casa com `_CANDIDATO`
+# (`status = 'running' AND leased_until < now()`) enquanto ainda esta rodando.
+# ---------------------------------------------------------------------------
+
+ITEMS_FAKE = {"MLB1": {"title": "Fone", "category_id": "MLB1055"}}
+
+
+def _espia_heartbeat(monkeypatch, pool):
+    """Anota cada `queue.heartbeat`, SEM substituir o real.
+
+    O espiao chama o heartbeat de verdade e depois le `leased_until` do banco —
+    e isso que permite afirmar que o lease andou, e nao apenas que uma funcao
+    foi chamada.
+    """
+    real = queue.heartbeat
+    registros: list[dict] = []
+
+    async def espiao(p, job_id, *, fase, processados, total):
+        await real(p, job_id, fase=fase, processados=processados, total=total)
+        async with pool.acquire() as conn:
+            leased = await conn.fetchval("SELECT leased_until FROM sync_jobs WHERE id = $1", job_id)
+        registros.append({"fase": fase, "leased_until": leased})
+
+    monkeypatch.setattr(runner.queue, "heartbeat", espiao)
+    return registros
+
+
+def _renovacoes(registros):
+    """Só as renovações vindas de dentro da janela.
+
+    A `fase` delas carrega o contador de pedidos entre parenteses
+    ("Baixando 2026-04-01 a 2026-05-01 (3/5)"); as de janela e a de conclusao
+    nao tem parenteses nenhum.
+    """
+    return [r for r in registros if "(" in r["fase"]]
+
+
+async def test_lease_e_renovado_dentro_da_janela(pg_pool, test_seller, monkeypatch):
+    """O lease anda NO MEIO de uma janela, nao so entre janelas."""
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    job = await _job(pg_pool, seller_id)
+    # O intervalo real e LEASE_SEGUNDOS / 4 = 30s e o teste nao pode esperar
+    # isso. Aqui o que se prova e o fio ligado; que o throttle vale e o teste
+    # seguinte, que roda com o intervalo de produção.
+    monkeypatch.setattr(runner, "INTERVALO_HEARTBEAT", 0.0)
+    registros = _espia_heartbeat(monkeypatch, pg_pool)
+
+    cliente = ClienteFake(paid=[_pedido(1), _pedido(2), _pedido(3)], items=ITEMS_FAKE)
+    await runner.executa_job(pg_pool, job, client=cliente)
+
+    assert _renovacoes(registros), (
+        "nenhuma renovacao de dentro da janela: on_progress nao foi ligado"
+    )
+
+    # Prova que foi DENTRO de uma janela: existe renovacao entre o heartbeat que
+    # abriu a 1a janela e o que abriu a 2a.
+    aberturas = [i for i, r in enumerate(registros) if r["fase"].startswith("Baixando")]
+    aberturas = [i for i in aberturas if "(" not in registros[i]["fase"]]
+    assert len(aberturas) == 6, [r["fase"] for r in registros]
+    entre = _renovacoes(registros[aberturas[0] + 1 : aberturas[1]])
+    assert entre, "as renovacoes sairam so entre janelas, nao durante a ingestao de uma"
+
+    # E o que importa de fato: `leased_until` no banco ficou mais longe do que
+    # estava quando a janela comecou.
+    assert entre[-1]["leased_until"] > registros[aberturas[0]]["leased_until"]
+
+
+async def test_renovacao_de_lease_e_throttled(pg_pool, test_seller, monkeypatch):
+    """Renovar por pedido seriam 1.017 UPDATEs extras no Supabase por backfill.
+
+    Roda com o `INTERVALO_HEARTBEAT` de produção de proposito: uma janela que
+    termina em menos de 30s nao tem por que renovar nada — o heartbeat de
+    abertura ja vale 120s.
+    """
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    job = await _job(pg_pool, seller_id, kind="delta")  # uma janela so
+    registros = _espia_heartbeat(monkeypatch, pg_pool)
+
+    pedidos = [_pedido(i) for i in range(1, 31)]
+    await runner.executa_job(pg_pool, job, client=ClienteFake(paid=pedidos, items=ITEMS_FAKE))
+
+    renovacoes = _renovacoes(registros)
+    assert len(renovacoes) <= 1, (
+        f"{len(renovacoes)} renovacoes para {len(pedidos)} pedidos ingeridos em "
+        f"muito menos que INTERVALO_HEARTBEAT ({runner.INTERVALO_HEARTBEAT}s): "
+        "o throttle nao esta valendo e cada pedido virou um UPDATE"
+    )
+
+
+async def test_delta_tambem_renova_o_lease(pg_pool, test_seller, monkeypatch):
+    """O delta e UMA janela: sem o on_progress, a unica renovacao e a inicial.
+
+    E o caminho que roda a cada sync manual, e `MARGEM_DELTA` + dias sem sync
+    fazem a janela render pedido suficiente pra passar dos 2 minutos.
+    """
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    job = await _job(pg_pool, seller_id, kind="delta")
+    monkeypatch.setattr(runner, "INTERVALO_HEARTBEAT", 0.0)
+    registros = _espia_heartbeat(monkeypatch, pg_pool)
+
+    cliente = ClienteFake(paid=[_pedido(1), _pedido(2)], items=ITEMS_FAKE)
+    await runner.executa_job(pg_pool, job, client=cliente)
+
+    renovacoes = _renovacoes(registros)
+    assert renovacoes, "o delta nao renova o lease durante a janela"
+    # A fase que o usuario le continua sendo a da janela, com o progresso somado.
+    assert all(r["fase"].startswith("Buscando atualizacoes (") for r in renovacoes)
+
+
+async def test_falha_ao_renovar_lease_nao_mata_a_ingestao(pg_pool, test_seller, monkeypatch):
+    """Heartbeat e bookkeeping; a janela em andamento vale mais que ele.
+
+    Propagando, a excecao sairia de dentro do loop de pedidos de `ingest_janela`
+    (o try/except de la cobre so a persistencia do pedido) e abortaria uma janela
+    que estava correta — gastando uma das 3 tentativas do job por causa de um
+    UPDATE de progresso. O pior caso de engolir e o lease vencer, que e
+    justamente o cenario que a fila ja trata.
+    """
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    job = await _job(pg_pool, seller_id, kind="delta")
+    monkeypatch.setattr(runner, "INTERVALO_HEARTBEAT", 0.0)
+
+    real = queue.heartbeat
+
+    async def heartbeat_que_quebra_na_renovacao(p, job_id, *, fase, processados, total):
+        if "(" in fase:  # so as renovacoes de dentro da janela
+            raise RuntimeError("banco fora do ar ao renovar o lease")
+        return await real(p, job_id, fase=fase, processados=processados, total=total)
+
+    monkeypatch.setattr(runner.queue, "heartbeat", heartbeat_que_quebra_na_renovacao)
+
+    cliente = ClienteFake(paid=[_pedido(1), _pedido(2)], items=ITEMS_FAKE)
+    await runner.executa_job(pg_pool, job, client=cliente)
+
+    async with pg_pool.acquire() as conn:
+        status = await conn.fetchval("SELECT status FROM sync_jobs WHERE id = $1", job["id"])
+        pedidos = await conn.fetchval("SELECT count(*) FROM orders WHERE seller_id = $1", seller_id)
+    assert status == "done", "a falha no heartbeat derrubou o job"
+    assert pedidos == 2, "a falha no heartbeat descartou pedidos ja ingeridos"
+
+
 async def test_loop_consome_e_para_quando_sinalizado(pg_pool, test_seller):
     """O loop processa o que esta na fila e encerra no evento de parada.
 

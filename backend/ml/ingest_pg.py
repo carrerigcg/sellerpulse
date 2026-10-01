@@ -90,6 +90,28 @@ def extrai_taxa_e_frete(bruto: dict) -> tuple[float, float]:
     nunca vem e exatamente o que escondeu o erro por meses. Ausencia vira 0.0 —
     o aviso de `ingest_janela` cobre o caso de a ausencia ser sistematica.
     Fica publica pra que o script de backfill reuse a mesma regra, sem copia.
+
+    ONDE O FRETE REAL ESTA (levantado em 2026-10-01 pra uma sprint futura; NAO
+    implementado aqui porque e ingestao nova, nao conserto de campo):
+
+    `GET /shipments/{shipping.id}` devolve o custo. Num pedido real de producao
+    (order 2000017366224920, shipment 47500894707, mode `me2`, logistic_type
+    `xd_drop_off`):
+
+        base_cost                     226.80
+        shipping_option.list_cost     226.99
+        total_amount do pedido        181.00
+        paid_amount do pedido         407.99   = 181.00 + 226.99
+
+    Ou seja: nesse pedido o COMPRADOR pagou o frete inteiro (o `list_cost` cai
+    exatamente na diferenca entre paid_amount e total_amount), e o custo do
+    vendedor foi zero. Em frete gratis sai do bolso dele.
+
+    Dai a pergunta de negocio que precisa ser respondida ANTES de implementar:
+    o frete e custo do vendedor em quais modalidades? A conta nao e "somar o
+    frete" — e somar so o que ele bancou. O payload tem `mode`,
+    `logistic_type`, `shipping_option` e `cost_components` pra decidir isso, e
+    sao 879 chamadas a mais (uma por pedido) mais uma tabela nova.
     """
     taxa = sum(
         (oi.get("sale_fee") or 0.0) * (oi.get("quantity") or 1)
@@ -188,6 +210,22 @@ async def ingest_janela(
         )
 
     if incluir_claims:
+        # O endpoint de claims esta BLOQUEADO pra esta aplicacao. Verificado em
+        # 2026-10-01 contra a conta real, com os argumentos corretos:
+        #
+        #   403 {"code":"PA_UNAUTHORIZED_RESULT_FROM_POLICIES",
+        #        "message":"At least one policy returned UNAUTHORIZED.",
+        #        "blocked_by":"PolicyAgent"}
+        #
+        # Nao e bug nosso e nao e token expirado: e politica de nivel de
+        # aplicacao no DevCenter do ML. Registrado aqui pra ninguem gastar uma
+        # tarde depurando de novo — se um dia a permissao for liberada, a fase
+        # volta a popular `claims` sozinha, sem mudanca de codigo.
+        #
+        # Consequencia hoje: `claims` fica vazia e `reputacao_devolucao`
+        # reporta zero reclamacoes. Nenhuma tela da web usa claims, entao o
+        # impacto e so no relatorio em PDF (camada legada). O warning por
+        # janela ja deixa isso visivel na tela de conexao.
         try:
             reclamacoes = await asyncio.to_thread(
                 client.get_claims, seller_id=ml_seller_id, date_from=de, date_to=ate

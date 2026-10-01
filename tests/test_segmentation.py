@@ -185,6 +185,141 @@ def test_abc_pareto_classifica_por_regra_80_15_5(abc_conn: sqlite3.Connection) -
     assert classes_por_sku == {"A": "A", "B": "A", "C": "B", "D": "C"}
 
 
+@pytest.fixture
+def abc_conn_com_anuncio_apagado() -> sqlite3.Connection:
+    """2 produtos em items_cache + 1 anúncio apagado (sem linha no cache).
+
+    `data/demo.db` tem 0 itens vendidos sem linha em items_cache, então o
+    banco demo não exercita este caminho — daí a fixture dedicada.
+
+    Receita: MLB1 = 600, MLB404 = 300, MLB2 = 100. Total 1000.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seed_minimal_schema(conn)
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('CAT1', 'Cat Um')")
+    for item_id, title in [("MLB1", "Produto 1"), ("MLB2", "Produto 2")]:
+        conn.execute(
+            "INSERT INTO items_cache (item_id, title, category_id) VALUES (?, ?, 'CAT1')",
+            (item_id, title),
+        )
+    # MLB404 nao tem items_cache: anuncio apagado no ML.
+    for order_id, item_id, receita in [
+        (1, "MLB1", 600.0),
+        (2, "MLB404", 300.0),
+        (3, "MLB2", 100.0),
+    ]:
+        conn.execute(
+            "INSERT INTO orders (order_id, date_closed, status, total_amount, buyer_id) "
+            "VALUES (?, '2026-07-10T10:00:00', 'paid', ?, 1001)",
+            (order_id, receita),
+        )
+        conn.execute(
+            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) VALUES (?, ?, 1, ?)",
+            (order_id, item_id, receita),
+        )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_abc_pareto_mantem_item_sem_items_cache(
+    abc_conn_com_anuncio_apagado: sqlite3.Connection,
+) -> None:
+    """Anúncio apagado no ML não tem linha em items_cache — a venda foi real.
+
+    Aqui o INNER JOIN era pior do que num ranking simples: além de perder a
+    linha, o total encolhia e as classes A/B/C de TODOS os produtos saíam
+    calculadas sobre uma base menor. Compara com a soma crua de order_items,
+    porque checar só "a linha aparece" passaria mesmo com a receita errada.
+    """
+    conn = abc_conn_com_anuncio_apagado
+    cru = conn.execute(
+        "SELECT ROUND(SUM(oi.quantity*oi.unit_price),2) FROM order_items oi "
+        "JOIN orders o ON o.order_id = oi.order_id WHERE o.status='paid'"
+    ).fetchone()[0]
+    assert cru == pytest.approx(1000.0)
+
+    df = abc_pareto(conn, "2026-07-01", "2026-08-01")
+
+    assert list(df["sku"]) == ["MLB1", "MLB404", "MLB2"]
+    assert df["receita"].sum() == pytest.approx(cru), "receita diverge da soma crua"
+    # Fallback do título = o próprio SKU; quem está em cache mantém o real.
+    por_sku = df.set_index("sku")
+    assert por_sku.loc["MLB404", "titulo"] == "MLB404"
+    assert por_sku.loc["MLB1", "titulo"] == "Produto 1"
+    assert df["titulo"].notna().all()
+    # Os percentuais são calculados sobre o total COMPLETO (1000, não 700).
+    assert por_sku.loc["MLB1", "receita_pct"] == pytest.approx(60.0)
+    assert por_sku.loc["MLB404", "receita_pct"] == pytest.approx(30.0)
+    assert df.iloc[-1]["receita_acumulada_pct"] == pytest.approx(100.0)
+
+
+_CAUDA_LONGA_CABECA = [5000.00, 2500.00, 1200.00, 800.00, 640.00]
+_CAUDA_LONGA_ITEM = 29.90
+_CAUDA_LONGA_N = 110
+
+
+@pytest.fixture
+def abc_conn_cauda_longa() -> sqlite3.Connection:
+    """Catálogo grande, desenhado para EXPOR o erro acumulado de arredondamento.
+
+    5 produtos "cabeça" com receitas distintas + 110 itens de cauda vendidos a
+    R$ 29,90 cada (115 produtos, total R$ 13.429,00).
+
+    Por que esta forma e não 4 produtos redondos: o bug era somar
+    `receita_pct` já arredondado em 4 casas. Com receitas que dividem o total
+    de forma exata o erro por linha é zero e o defeito não aparece; com
+    receitas aleatórias os erros se cancelam (random walk). O que acumula
+    desvio é um bloco grande de produtos cuja fração do total cai sempre do
+    mesmo lado do arredondamento — exatamente a cauda longa de um catálogo
+    real. Aqui o acumulado final dava 100,0053 pela fórmula antiga.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seed_minimal_schema(conn)
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('CAT1', 'Cat Um')")
+
+    receitas = list(_CAUDA_LONGA_CABECA) + [_CAUDA_LONGA_ITEM] * _CAUDA_LONGA_N
+    for order_id, receita in enumerate(receitas, start=1):
+        item_id = f"MLB{order_id:04d}"
+        conn.execute(
+            "INSERT INTO items_cache (item_id, title, category_id) VALUES (?, ?, 'CAT1')",
+            (item_id, f"Produto {order_id}"),
+        )
+        conn.execute(
+            "INSERT INTO orders (order_id, date_closed, status, total_amount, buyer_id) "
+            "VALUES (?, '2026-07-10T10:00:00', 'paid', ?, 1001)",
+            (order_id, receita),
+        )
+        conn.execute(
+            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) VALUES (?, ?, 1, ?)",
+            (order_id, item_id, receita),
+        )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_abc_pareto_acumulada_fecha_em_100_em_catalogo_grande(
+    abc_conn_cauda_longa: sqlite3.Connection,
+) -> None:
+    """O acumulado tem que FECHAR em 100, não "quase" 100.
+
+    Regressão do erro de arredondamento acumulado: a fórmula antiga somava
+    `receita_pct` já arredondado linha a linha e o último valor saía 100,0053
+    neste catálogo. Como o eixo direito do Pareto é 0-100% por definição, um
+    valor acima de 100 fazia o gráfico esticar o domínio e rotular o topo com
+    decimais.
+    """
+    df = abc_pareto(abc_conn_cauda_longa, "2026-07-01", "2026-08-01")
+
+    assert len(df) == len(_CAUDA_LONGA_CABECA) + _CAUDA_LONGA_N
+    assert df.iloc[-1]["receita_acumulada_pct"] == pytest.approx(100.0, abs=0.001)
+    # O acumulado nunca pode passar de 100: é uma fração do próprio total.
+    assert df["receita_acumulada_pct"].max() <= 100.0
+
+
 def test_abc_pareto_empty_window_returns_empty_df(abc_conn: sqlite3.Connection) -> None:
     df = abc_pareto(abc_conn, "2020-01-01", "2020-01-02")
     assert df.empty
@@ -294,6 +429,89 @@ def test_rfm_empty_window_returns_empty_df(rfm_conn: sqlite3.Connection) -> None
         "m_score",
         "segmento",
     }
+
+
+@pytest.fixture
+def rfm_conn_cauda_longa() -> sqlite3.Connection:
+    """Cenário que reproduz loja real: quase todo mundo compra uma vez só.
+
+    Medido numa loja conectada de verdade (428 compradores, 6 meses): 398 tinham
+    frequency=1 e 26 tinham frequency=2. Aqui: 40 buyers com 1 compra, 3 com 2 e
+    1 com 3 — mesma forma de distribuição, escala reduzida.
+
+    Janela: date_from='2026-05-01' até date_to='2026-08-01'.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seed_minimal_schema(conn)
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('C', 'Cat')")
+    conn.execute("INSERT INTO items_cache (item_id, title, category_id) VALUES ('X', 'X', 'C')")
+
+    # (buyer_id, quantidade de compras) — cauda longa em frequency.
+    perfis: list[tuple[int, int]] = [(b, 1) for b in range(1, 41)]
+    perfis += [(41, 2), (42, 2), (43, 2), (44, 3)]
+
+    oid = 0
+    for buyer, n_compras in perfis:
+        for i in range(n_compras):
+            oid += 1
+            # Espalha datas e valores para que recency e monetary tenham variedade;
+            # o alvo do teste é frequency, que fica empatada de propósito.
+            dia = 1 + ((buyer * 2 + i * 7) % 88)
+            data = (pd.Timestamp("2026-05-01") + pd.Timedelta(days=dia)).strftime(
+                "%Y-%m-%dT10:00:00"
+            )
+            total = 50.0 + (buyer % 11) * 37.0 + i * 13.0
+            conn.execute(
+                "INSERT INTO orders (order_id, date_closed, status, total_amount, buyer_id) "
+                "VALUES (?, ?, 'paid', ?, ?)",
+                (oid, data, total, buyer),
+            )
+            conn.execute(
+                "INSERT INTO order_items (order_id, item_id, quantity, unit_price) "
+                "VALUES (?, 'X', 1, ?)",
+                (oid, total),
+            )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_rfm_empates_em_frequency_recebem_o_mesmo_score(
+    rfm_conn_cauda_longa: sqlite3.Connection,
+) -> None:
+    """Valor de entrada igual → score igual. Vale para R, F e M.
+
+    Regressão do bug de produção: `rank(method="first")` desempatava
+    sequencialmente, então os 398 compradores com frequency=1 da loja real
+    recebiam f_score de 1 a 5 — ruído puro alimentando o segmento RFM.
+    """
+    df = rfm_scores(rfm_conn_cauda_longa, "2026-05-01", "2026-08-01")
+    assert not df.empty
+
+    # A fixture precisa de fato ter empate pesado, senão o teste não prova nada.
+    assert (df["frequency"] == 1).sum() >= 30
+
+    for valor, score in [
+        ("frequency", "f_score"),
+        ("recency_dias", "r_score"),
+        ("monetary", "m_score"),
+    ]:
+        nunique_por_valor = df.groupby(valor)[score].nunique()
+        assert nunique_por_valor.max() == 1, (
+            f"{valor} iguais produziram {score} diferentes: "
+            f"{nunique_por_valor[nunique_por_valor > 1].to_dict()}"
+        )
+
+
+def test_rfm_cauda_longa_mantem_scores_entre_1_e_5(
+    rfm_conn_cauda_longa: sqlite3.Connection,
+) -> None:
+    """Contrato antigo segue valendo mesmo com distribuição degenerada."""
+    df = rfm_scores(rfm_conn_cauda_longa, "2026-05-01", "2026-08-01")
+    for score in ["r_score", "f_score", "m_score"]:
+        assert df[score].between(1, 5).all()
+        assert df[score].dtype.kind == "i", f"{score} deveria ser int, é {df[score].dtype}"
 
 
 @pytest.fixture
