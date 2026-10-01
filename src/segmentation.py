@@ -96,7 +96,10 @@ def _score_by_quintile(series: pd.Series, ascending: bool = True) -> pd.Series:
 
     Quando há menos de 5 valores distintos, o número de bins cai para a
     quantidade de valores distintos e os labels são truncados (`labels[:n_bins]`).
-    O topo então marca 2 (ou 3, 4...) em vez de 5 — proposital: não dá para
+    O corte tira sempre o FIM da lista de labels, que depende da direção: com
+    `ascending=True` o topo marca 2 (ou 3, 4...) em vez de 5; com
+    `ascending=False` os labels já vêm invertidos, então quem encurta é o pior
+    valor, que marca 4 em vez de 1. Proposital nos dois casos: não dá para
     distinguir 5 níveis numa série que só tem 2. NaN não deve ocorrer (série
     numérica não-nula por construção).
     """
