@@ -171,7 +171,14 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
 
     total = df["receita"].sum()
     df["receita_pct"] = (100.0 * df["receita"] / total).round(4)
-    df["receita_acumulada_pct"] = df["receita_pct"].cumsum().round(4)
+    # Acumulado derivado da receita CRUA, nao do cumsum de `receita_pct`.
+    # Somar percentuais ja arredondados acumula o erro de arredondamento linha
+    # a linha: num catalogo de centenas de produtos o ultimo valor nao fecha em
+    # 100 (medido: 100,0002 no demo, 99,9911 numa loja real de 743 produtos —
+    # o desvio vai pros dois lados). O eixo direito do Pareto e 0-100% por
+    # definicao, e um valor acima de 100 fazia o Recharts esticar o dominio e
+    # rotular o topo como "100.0002".
+    df["receita_acumulada_pct"] = (100.0 * df["receita"].cumsum() / total).round(4)
 
     def _classify(pct_acum: float) -> str:
         if pct_acum <= 80.0:

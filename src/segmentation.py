@@ -52,7 +52,14 @@ def abc_pareto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
 
     total = df["receita"].sum()
     df["receita_pct"] = (100.0 * df["receita"] / total).round(4)
-    df["receita_acumulada_pct"] = df["receita_pct"].cumsum().round(4)
+    # Acumulado derivado da receita CRUA, não do cumsum de `receita_pct`.
+    # Somar percentuais já arredondados acumula o erro de arredondamento linha
+    # a linha: num catálogo de centenas de produtos o último valor não fecha em
+    # 100 (medido: 100,0002 no demo, 99,9911 numa loja real de 743 produtos —
+    # o desvio vai pros dois lados). O eixo direito do Pareto é 0–100% por
+    # definição, e um valor acima de 100 fazia o Recharts esticar o domínio e
+    # rotular o topo como "100.0002".
+    df["receita_acumulada_pct"] = (100.0 * df["receita"].cumsum() / total).round(4)
 
     def _classify(pct_acum: float) -> str:
         if pct_acum <= 80.0:

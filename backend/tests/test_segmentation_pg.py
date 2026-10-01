@@ -124,6 +124,64 @@ async def test_abc_pareto_nao_infla_com_item_compartilhado(pg_pool, test_seller,
     assert df.iloc[0]["receita"] == pytest.approx(100.0), "receita inflada por fan-out"
 
 
+_CAUDA_LONGA_CABECA = [5000.00, 2500.00, 1200.00, 800.00, 640.00]
+_CAUDA_LONGA_ITEM = 29.90
+_CAUDA_LONGA_N = 110
+
+
+async def test_abc_pareto_acumulada_fecha_em_100_em_catalogo_grande(pg_pool, test_seller):
+    """O acumulado tem que FECHAR em 100, nao "quase" 100.
+
+    Regressao do erro de arredondamento acumulado: a formula antiga somava
+    `receita_pct` ja arredondado em 4 casas, linha a linha, e o ultimo valor
+    saia 100,0053 neste catalogo. O eixo direito do Pareto e 0-100% por
+    definicao — acima de 100 o grafico esticava o dominio e rotulava o topo
+    com decimais.
+
+    O catalogo e 5 produtos "cabeca" com receitas distintas + 110 itens de
+    cauda a R$ 29,90 (115 produtos, total R$ 13.429,00). A forma importa: com
+    receitas que dividem o total de forma exata o erro por linha e zero e o
+    defeito nao aparece; com receitas aleatorias os erros se cancelam. O que
+    acumula desvio e um bloco grande de produtos cuja fracao do total cai
+    sempre do mesmo lado do arredondamento — a cauda longa de um catalogo real.
+    """
+    _, sid = test_seller
+    receitas = list(_CAUDA_LONGA_CABECA) + [_CAUDA_LONGA_ITEM] * _CAUDA_LONGA_N
+
+    # Insercao em lote: 115 produtos via helper linha-a-linha seriam ~345
+    # round-trips e o teste ficaria lento sem nenhum ganho de clareza.
+    itens = [(sid, f"MLB{i:04d}", f"Produto {i}", "CAT1") for i in range(1, len(receitas) + 1)]
+    pedidos = [
+        (i, sid, datetime(2026, 7, 10, 10, 0, tzinfo=UTC), "paid", receita, 0.0, 0.0, 1001)
+        for i, receita in enumerate(receitas, start=1)
+    ]
+    linhas = [(sid, i, f"MLB{i:04d}", 1, receita) for i, receita in enumerate(receitas, start=1)]
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO categories_cache (seller_id, category_id, name, fetched_at) "
+            "VALUES ($1,'CAT1','Cat Um',now())",
+            sid,
+        )
+        await conn.executemany(
+            "INSERT INTO items_cache (seller_id, item_id, title, category_id, fetched_at) "
+            "VALUES ($1,$2,$3,$4,now())",
+            itens,
+        )
+        await conn.executemany(_INSERT_ORDER, pedidos)
+        await conn.executemany(
+            "INSERT INTO order_items (seller_id, order_id, item_id, quantity, unit_price) "
+            "VALUES ($1,$2,$3,$4,$5)",
+            linhas,
+        )
+
+    df = await abc_pareto(pg_pool, sid, "2026-07-01", "2026-08-01")
+
+    assert len(df) == len(receitas)
+    assert df.iloc[-1]["receita_acumulada_pct"] == pytest.approx(100.0, abs=0.001)
+    # O acumulado nunca pode passar de 100: e uma fracao do proprio total.
+    assert df["receita_acumulada_pct"].max() <= 100.0
+
+
 async def test_abc_pareto_vazio_tem_as_colunas_certas(pg_pool, test_seller):
     _, sid = test_seller
     df = await abc_pareto(pg_pool, sid, "2026-01-01", "2026-01-02")

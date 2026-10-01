@@ -68,11 +68,15 @@ export function ParetoChart({ dados }: { dados: AbcLinha[] }) {
               tickLine={false}
               width={56}
             />
+            {/* Math.round no tick porque este eixo é 0–100% por definição: se
+                algum resíduo de float sobrar no acumulado, o rótulo do topo
+                vira "100.0002%" em vez de "100%". Só o rótulo — o dado
+                plotado não é tocado. */}
             <YAxis
               yAxisId="pct"
               orientation="right"
               domain={[0, 100]}
-              tickFormatter={(v: number) => `${v}%`}
+              tickFormatter={(v: number) => `${Math.round(v)}%`}
               tick={{ fill: "var(--sp-muted)", fontSize: 11 }}
               axisLine={false}
               tickLine={false}

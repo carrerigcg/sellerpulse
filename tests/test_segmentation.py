@@ -185,6 +185,71 @@ def test_abc_pareto_classifica_por_regra_80_15_5(abc_conn: sqlite3.Connection) -
     assert classes_por_sku == {"A": "A", "B": "A", "C": "B", "D": "C"}
 
 
+_CAUDA_LONGA_CABECA = [5000.00, 2500.00, 1200.00, 800.00, 640.00]
+_CAUDA_LONGA_ITEM = 29.90
+_CAUDA_LONGA_N = 110
+
+
+@pytest.fixture
+def abc_conn_cauda_longa() -> sqlite3.Connection:
+    """Catálogo grande, desenhado para EXPOR o erro acumulado de arredondamento.
+
+    5 produtos "cabeça" com receitas distintas + 110 itens de cauda vendidos a
+    R$ 29,90 cada (115 produtos, total R$ 13.429,00).
+
+    Por que esta forma e não 4 produtos redondos: o bug era somar
+    `receita_pct` já arredondado em 4 casas. Com receitas que dividem o total
+    de forma exata o erro por linha é zero e o defeito não aparece; com
+    receitas aleatórias os erros se cancelam (random walk). O que acumula
+    desvio é um bloco grande de produtos cuja fração do total cai sempre do
+    mesmo lado do arredondamento — exatamente a cauda longa de um catálogo
+    real. Aqui o acumulado final dava 100,0053 pela fórmula antiga.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seed_minimal_schema(conn)
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('CAT1', 'Cat Um')")
+
+    receitas = list(_CAUDA_LONGA_CABECA) + [_CAUDA_LONGA_ITEM] * _CAUDA_LONGA_N
+    for order_id, receita in enumerate(receitas, start=1):
+        item_id = f"MLB{order_id:04d}"
+        conn.execute(
+            "INSERT INTO items_cache (item_id, title, category_id) VALUES (?, ?, 'CAT1')",
+            (item_id, f"Produto {order_id}"),
+        )
+        conn.execute(
+            "INSERT INTO orders (order_id, date_closed, status, total_amount, buyer_id) "
+            "VALUES (?, '2026-07-10T10:00:00', 'paid', ?, 1001)",
+            (order_id, receita),
+        )
+        conn.execute(
+            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) VALUES (?, ?, 1, ?)",
+            (order_id, item_id, receita),
+        )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_abc_pareto_acumulada_fecha_em_100_em_catalogo_grande(
+    abc_conn_cauda_longa: sqlite3.Connection,
+) -> None:
+    """O acumulado tem que FECHAR em 100, não "quase" 100.
+
+    Regressão do erro de arredondamento acumulado: a fórmula antiga somava
+    `receita_pct` já arredondado linha a linha e o último valor saía 100,0053
+    neste catálogo. Como o eixo direito do Pareto é 0-100% por definição, um
+    valor acima de 100 fazia o gráfico esticar o domínio e rotular o topo com
+    decimais.
+    """
+    df = abc_pareto(abc_conn_cauda_longa, "2026-07-01", "2026-08-01")
+
+    assert len(df) == len(_CAUDA_LONGA_CABECA) + _CAUDA_LONGA_N
+    assert df.iloc[-1]["receita_acumulada_pct"] == pytest.approx(100.0, abs=0.001)
+    # O acumulado nunca pode passar de 100: é uma fração do próprio total.
+    assert df["receita_acumulada_pct"].max() <= 100.0
+
+
 def test_abc_pareto_empty_window_returns_empty_df(abc_conn: sqlite3.Connection) -> None:
     df = abc_pareto(abc_conn, "2020-01-01", "2020-01-02")
     assert df.empty
