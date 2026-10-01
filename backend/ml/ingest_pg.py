@@ -188,6 +188,22 @@ async def ingest_janela(
         )
 
     if incluir_claims:
+        # O endpoint de claims esta BLOQUEADO pra esta aplicacao. Verificado em
+        # 2026-10-01 contra a conta real, com os argumentos corretos:
+        #
+        #   403 {"code":"PA_UNAUTHORIZED_RESULT_FROM_POLICIES",
+        #        "message":"At least one policy returned UNAUTHORIZED.",
+        #        "blocked_by":"PolicyAgent"}
+        #
+        # Nao e bug nosso e nao e token expirado: e politica de nivel de
+        # aplicacao no DevCenter do ML. Registrado aqui pra ninguem gastar uma
+        # tarde depurando de novo — se um dia a permissao for liberada, a fase
+        # volta a popular `claims` sozinha, sem mudanca de codigo.
+        #
+        # Consequencia hoje: `claims` fica vazia e `reputacao_devolucao`
+        # reporta zero reclamacoes. Nenhuma tela da web usa claims, entao o
+        # impacto e so no relatorio em PDF (camada legada). O warning por
+        # janela ja deixa isso visivel na tela de conexao.
         try:
             reclamacoes = await asyncio.to_thread(
                 client.get_claims, seller_id=ml_seller_id, date_from=de, date_to=ate
