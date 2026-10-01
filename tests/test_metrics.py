@@ -372,6 +372,116 @@ def test_top_categorias_reconcilia_com_a_receita_paga_total(
     assert res["produtos"]["receita"].sum() == pytest.approx(res["categorias"]["receita"].sum())
 
 
+@pytest.fixture
+def conn_com_homonimos_e_categoria_chamada_sem_categoria() -> sqlite3.Connection:
+    """Banco que separa o RÓTULO da IDENTIDADE de uma categoria.
+
+    O `GROUP BY cc.category_id, cc.name` da query de categorias agrupa pelas
+    colunas CRUAS, não pela expressão `COALESCE(cc.name, SEM_CATEGORIA)`. Esta
+    fixture monta os dois cenários em que a diferença aparece:
+
+    - MLB1000 é uma categoria REAL do Mercado Livre cujo nome é, literalmente,
+      "Sem categoria" — o mesmo texto que o rótulo do balde de desconhecidos.
+      Ela tem id real e receita real, e não pode ser confundida com o balde.
+    - MLB1276 e MLB1574 são duas categorias reais DIFERENTES que por acaso têm
+      o mesmo nome (homônimas — no ML acontece em ramos distintos da árvore).
+    - MLB999 é anúncio apagado: nenhuma linha em items_cache, logo nenhuma
+      categoria. É o único que pertence ao balde de desconhecidos.
+
+    Receitas deliberadamente distintas e que não se somam umas nas outras, pra
+    que qualquer fusão indevida de baldes mude um número:
+    111,00 (categoria real "Sem categoria") + 260,00 + 210,00 (homônimas) +
+    47,00 (desconhecido) = R$ 628,00, 7 unidades.
+    """
+    conn = connect(":memory:")
+    upsert_category_cache(conn, "MLB1000", SEM_CATEGORIA)
+    upsert_category_cache(conn, "MLB1276", "Esportes e Fitness")
+    upsert_category_cache(conn, "MLB1574", "Esportes e Fitness")
+    for item_id, titulo, cat_id in [
+        ("MLB101", "Item da categoria chamada Sem categoria", "MLB1000"),
+        ("MLB201", "Bicicleta Ergométrica", "MLB1276"),
+        ("MLB202", "Corda de Pular", "MLB1574"),
+    ]:
+        upsert_item_cache(conn, item_id, titulo, cat_id)
+    # MLB999 de proposito NAO entra em items_cache: anuncio apagado no ML.
+
+    pedidos = [
+        (1, "2026-07-05T10:00:00+00:00", [("MLB101", 1, 111.00)]),
+        (2, "2026-07-06T10:00:00+00:00", [("MLB201", 2, 130.00)]),
+        (3, "2026-07-07T10:00:00+00:00", [("MLB202", 3, 70.00)]),
+        (4, "2026-07-08T10:00:00+00:00", [("MLB999", 1, 47.00)]),
+    ]
+    for order_id, date_closed, itens in pedidos:
+        upsert_order(
+            conn,
+            {
+                "order_id": order_id,
+                "date_closed": date_closed,
+                "status": "paid",
+                "total_amount": sum(q * p for _, q, p in itens),
+                "marketplace_fee": 0.0,
+                "shipping_cost": 0.0,
+                "buyer_id": 1001,
+                "raw_json": "{}",
+                "items": [{"item_id": i, "quantity": q, "unit_price": p} for i, q, p in itens],
+            },
+        )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_top_categorias_agrupa_por_id_e_nao_pelo_rotulo(
+    conn_com_homonimos_e_categoria_chamada_sem_categoria: sqlite3.Connection,
+) -> None:
+    """Agrupar pelo rótulo (`COALESCE`) em vez das colunas cruas funde baldes.
+
+    É o caso que o comentário da query defende e que nenhum teste cobria: um
+    `GROUP BY category_name` passava nos 300+ testes da suíte. Ele produziria
+    dois erros diferentes de uma vez — uma categoria real chamada "Sem
+    categoria" engolida pelo balde de desconhecidos (receita atribuída a uma
+    categoria que não vendeu aquilo, e o balde deixando de ser identificável
+    pelo `category_id` NULL), e duas categorias homônimas somadas numa linha
+    só, com um dos dois `category_id` sumindo do relatório.
+    """
+    conn = conn_com_homonimos_e_categoria_chamada_sem_categoria
+    cat = top_produtos(conn, "2026-07-01", "2026-08-01", n=100)["categorias"]
+
+    # Quatro baldes: tres categorias reais + um balde de desconhecidos.
+    assert len(cat) == 4
+
+    por_id = cat[cat["category_id"].notna()].set_index("category_id")
+
+    # 1) A categoria REAL chamada "Sem categoria" mantem id e receita proprios.
+    assert "MLB1000" in por_id.index
+    assert por_id.loc["MLB1000", "category_name"] == SEM_CATEGORIA
+    assert por_id.loc["MLB1000", "receita"] == pytest.approx(111.0)
+    assert por_id.loc["MLB1000", "unidades"] == 1
+
+    # 2) O balde de desconhecidos e uma linha SEPARADA, com category_id nulo.
+    sem_id = cat[cat["category_id"].isna()]
+    assert len(sem_id) == 1
+    assert sem_id.iloc[0]["category_name"] == SEM_CATEGORIA
+    assert sem_id.iloc[0]["receita"] == pytest.approx(47.0)
+    assert sem_id.iloc[0]["unidades"] == 1
+    # O rotulo aparece duas vezes, em duas linhas distintas: e exatamente a
+    # colisao que agrupar pelas colunas cruas resolve.
+    assert list(cat["category_name"]).count(SEM_CATEGORIA) == 2
+
+    # 3) Homonimas NAO se fundem: dois ids, duas receitas.
+    homonimas = cat[cat["category_name"] == "Esportes e Fitness"]
+    assert len(homonimas) == 2
+    assert set(homonimas["category_id"]) == {"MLB1276", "MLB1574"}
+    assert por_id.loc["MLB1276", "receita"] == pytest.approx(260.0)
+    assert por_id.loc["MLB1574", "receita"] == pytest.approx(210.0)
+
+    # 4) E o ranking inteiro continua fechando com a receita paga crua.
+    esperado = _receita_crua(conn, "2026-07-01", "2026-08-01")
+    assert esperado == pytest.approx(628.0)
+    assert cat["receita"].sum() == pytest.approx(esperado)
+    assert cat["unidades"].sum() == 7
+
+
 def test_reputacao_devolucao_returns_expected_keys(
     demo_conn: sqlite3.Connection,
 ) -> None:
