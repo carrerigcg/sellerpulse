@@ -12,6 +12,31 @@ TEST_DATABASE_URL = os.environ.get(
 )
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _refresh_da_demo_desligado_por_padrao():
+    """Desliga o refresh da demo em TODA a suite, por padrao.
+
+    `backend/main.py` roda `load_dotenv(backend/.env)` no import, e esse arquivo
+    guarda o `DEMO_SELLER_ID` de PRODUCAO. O refresh executa
+    `DELETE FROM orders WHERE seller_id = $1` -- entao um teste de lifespan que
+    esquecesse de apontar `DATABASE_URL` pro banco de teste regeneraria a demo
+    publica de verdade. A trava `is_demo` nao pegaria esse caso: o seller de
+    producao E uma demo, ela protege contra apagar um cliente real, nao contra
+    apontar pro banco errado.
+
+    Desligar aqui torna a escolha explicita: quem testa o refresh LIGA com
+    `monkeypatch.setenv`, que tem precedencia dentro do teste. O default da
+    suite passa a ser o seguro, em vez de depender de cada teste lembrar.
+    """
+    anterior = os.environ.get("DEMO_REFRESH_IN_PROCESS")
+    os.environ["DEMO_REFRESH_IN_PROCESS"] = "0"
+    yield
+    if anterior is None:
+        os.environ.pop("DEMO_REFRESH_IN_PROCESS", None)
+    else:
+        os.environ["DEMO_REFRESH_IN_PROCESS"] = anterior
+
+
 @pytest.fixture
 async def pg_pool():
     # server_settings espelha backend/db.py: sem UTC fixo, o Postgres local
