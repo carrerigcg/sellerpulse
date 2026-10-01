@@ -17,6 +17,7 @@ import contextlib
 import json
 import logging
 import os
+import time
 from datetime import UTC, datetime, timedelta
 
 import asyncpg
@@ -42,6 +43,21 @@ JANELA_DELTA_PADRAO = timedelta(days=7)
 
 INTERVALO_OCIOSO = 5.0
 
+# Intervalo minimo entre renovacoes de lease DENTRO de uma janela. Derivado do
+# lease (backend/jobs/queue.py) e nao um numero solto: tem que ser
+# confortavelmente MENOR que ele, senao nao serve de nada. Um quarto do lease da
+# tres chances de renovar antes de vencer — uma renovacao que demore (o UPDATE
+# vai pro Supabase, pela internet) ou um pedido mais lento que a media nao
+# derrubam o lease sozinhos.
+#
+# Por que ter intervalo em vez de renovar a cada pedido: a loja real tem 1.017
+# pedidos num backfill, e renovar por pedido seriam 1.017 UPDATEs extras contra o
+# Supabase pra sustentar um lease de 2 minutos. O criterio e o tempo decorrido
+# porque o lease e um orcamento de TEMPO — contar pedidos nao diz nada sobre
+# quanto dele ja foi gasto (um pedido com item novo faz chamada ao ML, um pedido
+# com item cacheado nao faz nenhuma).
+INTERVALO_HEARTBEAT = queue.LEASE_SEGUNDOS / 4
+
 
 def janelas(
     ancora: datetime, *, quantidade: int = JANELAS_BACKFILL
@@ -60,6 +76,62 @@ def janelas(
         )
         for i in range(quantidade)
     ]
+
+
+def _renova_lease_durante_a_janela(pool, job_id: int, *, fase: str, processados: int, total: int):
+    """Monta o `on_progress` que `ingest_janela` chama a cada pedido.
+
+    Por que existe: o heartbeat batia UMA vez por janela, ANTES de
+    `ingest_janela`. Medido na ingestao real da loja, um backfill de 6 janelas
+    levou 706s — 118s por janela contra um `LEASE_SEGUNDOS` de 120. Todo o
+    enriquecimento N+1 (uma chamada ao ML por item novo; 834 itens distintos
+    nessa loja) roda dentro da janela, sem renovacao nenhuma. Dois segundos de
+    margem e sorte, nao projeto: numa loja um pouco maior o lease vence no meio
+    da janela e o job passa a casar com `_CANDIDATO` (`status = 'running' AND
+    leased_until < now()`) enquanto ainda esta rodando — outro worker reclama o
+    mesmo job e ingere o mesmo periodo em paralelo.
+
+    Levantar `LEASE_SEGUNDOS` nao resolve: o lease e curto de proposito, pra que
+    um job orfao (instancia hibernou) volte rapido pra fila. Renovar durante o
+    trabalho atende aos dois lados.
+
+    `fase`/`processados`/`total` sao os da JANELA, nao do pedido. A barra de
+    progresso do endpoint de status (routers/ml.py) le `processados`/`total`, que
+    contam janelas; trocar por contagem de pedidos faria a escala mudar no meio
+    do job. O progresso dentro da janela entra so no texto da `fase`, que assim
+    continua dizendo o periodo que esta baixando — o que o usuario de fato le.
+    """
+    ultima = time.monotonic()
+
+    async def on_progress(_fase_do_ingest: str, pedido: int, pedidos: int) -> None:
+        # `monotonic` e nao `now()`: isto mede intervalo decorrido, e ajuste de
+        # relogio do sistema nao pode fazer a renovacao parar de acontecer.
+        nonlocal ultima
+        agora = time.monotonic()
+        if agora - ultima < INTERVALO_HEARTBEAT:
+            return
+        # Marca ANTES de tentar: se o UPDATE falhar, a proxima tentativa espera o
+        # intervalo cheio em vez de martelar um banco que ja esta em apuros.
+        ultima = agora
+        try:
+            await queue.heartbeat(
+                pool,
+                job_id,
+                fase=f"{fase} ({pedido}/{pedidos})",
+                processados=processados,
+                total=total,
+            )
+        except Exception as exc:  # noqa: BLE001 — boundary do heartbeat
+            # Engolir e deliberado. Falhar aqui propagaria de dentro do loop de
+            # pedidos de `ingest_janela` (o try/except de la cobre so a
+            # persistencia do pedido) e abortaria uma janela que estava sendo
+            # ingerida corretamente, gastando uma das 3 tentativas do job por
+            # causa de um UPDATE de bookkeeping. O pior caso de engolir e o lease
+            # vencer — exatamente o cenario que a fila ja sabe tratar, porque o
+            # upsert e idempotente e a janela e refeita.
+            _log.warning("[worker] falha ao renovar lease do job %s: %s", job_id, exc)
+
+    return on_progress
 
 
 async def _contexto_do_seller(pool: asyncpg.Pool, seller_id) -> tuple[int, datetime | None]:
@@ -105,13 +177,8 @@ async def _backfill(pool, job, client, ml_seller_id, seller_id) -> None:
     avisos: list[str] = []
     for indice in range(feitas, len(todas)):
         de, ate = todas[indice]
-        await queue.heartbeat(
-            pool,
-            job["id"],
-            fase=f"Baixando {de.date()} a {ate.date()}",
-            processados=indice,
-            total=len(todas),
-        )
+        fase = f"Baixando {de.date()} a {ate.date()}"
+        await queue.heartbeat(pool, job["id"], fase=fase, processados=indice, total=len(todas))
         resultado = await ingest_janela(
             pool,
             seller_id,
@@ -122,6 +189,13 @@ async def _backfill(pool, job, client, ml_seller_id, seller_id) -> None:
             # Claims so na ultima janela: o endpoint do ML nao e paginado por
             # mes, entao pedir em cada uma traria os mesmos dados 6x.
             incluir_claims=(indice == len(todas) - 1),
+            # O heartbeat acima cobre so o INICIO da janela. Uma janela da loja
+            # real leva 118s contra um lease de 120 — sem renovar durante a
+            # ingestao, o lease vence no meio e o job volta a ser candidato
+            # enquanto ainda roda.
+            on_progress=_renova_lease_durante_a_janela(
+                pool, job["id"], fase=fase, processados=indice, total=len(todas)
+            ),
         )
         avisos.extend(resultado.warnings)
         # Grava o progresso SO depois da janela inteira ter sido ingerida: se
@@ -136,7 +210,8 @@ async def _delta(pool, job, client, ml_seller_id, seller_id, last_synced_at) -> 
     agora = datetime.now(UTC)
     desde = (last_synced_at - MARGEM_DELTA) if last_synced_at else (agora - JANELA_DELTA_PADRAO)
 
-    await queue.heartbeat(pool, job["id"], fase="Buscando atualizacoes", processados=0, total=1)
+    fase = "Buscando atualizacoes"
+    await queue.heartbeat(pool, job["id"], fase=fase, processados=0, total=1)
     resultado = await ingest_janela(
         pool,
         seller_id,
@@ -147,6 +222,12 @@ async def _delta(pool, job, client, ml_seller_id, seller_id, last_synced_at) -> 
         # Sem isto, venda cancelada depois da janela original nunca voltaria.
         campo_data="date_last_updated",
         incluir_claims=True,
+        # Vale aqui tambem: o delta e UMA janela, entao a unica renovacao de
+        # lease que existe e esta. Um delta depois de dias sem sync (ou com
+        # `MARGEM_DELTA` pegando muito pedido alterado) passa dos 2 minutos.
+        on_progress=_renova_lease_durante_a_janela(
+            pool, job["id"], fase=fase, processados=0, total=1
+        ),
     )
     await _conclui(pool, job, seller_id, resultado.warnings, 1)
 
