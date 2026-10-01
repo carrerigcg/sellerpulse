@@ -261,12 +261,19 @@ function ProgressoJob({ job }: { job: StatusJob }) {
     job.total > 0 ? Math.min(100, Math.round((job.processados / job.total) * 100)) : null;
   const rotuloFase = job.kind === "backfill" ? "Importação inicial" : "Sincronização";
 
+  // Um job 'queued' chega aqui sem `fase` e com total 0, então caía na mesma
+  // barra pulsando de um job rodando — a tela dizia "Importação inicial" e
+  // parecia estar trabalhando quando na verdade estava esperando a vez. O
+  // worker roda um job por vez para todos os vendedores, então essa espera
+  // existe de verdade e pode durar o tempo de uma importação inteira.
+  const naFila = job.status === "queued";
+
   return (
     <div className="mt-4 border-t border-line pt-4">
       <div className="flex items-center justify-between text-xs text-muted">
         <span>
           {rotuloFase}
-          {job.fase ? ` — ${job.fase}` : ""}
+          {naFila ? " — na fila, aguardando a vez" : job.fase ? ` — ${job.fase}` : ""}
         </span>
         {pct !== null && <span className="tabular">{pct}%</span>}
       </div>
