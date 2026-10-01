@@ -1,7 +1,7 @@
 import type { AbcLinha } from "@/lib/api";
 
 import { abcClassBadgeClass } from "./abc-class-badge";
-import { AnuncioRemovidoPill, anuncioRemovido } from "./anuncio-removido";
+import { AnuncioRemovidoPill, anuncioFoiRemovido } from "./anuncio-removido";
 
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -33,7 +33,7 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
               {/* Repetir o SKU como título é o que confunde: a coluna ao lado
                   já o mostra. Trocar pelo rótulo diz por que o nome falta. */}
               <td className="max-w-xs truncate px-3 py-2">
-                {anuncioRemovido(linha) ? <AnuncioRemovidoPill /> : linha.titulo}
+                {anuncioFoiRemovido(linha) ? <AnuncioRemovidoPill /> : linha.titulo}
               </td>
               <td className="tabular px-3 py-2 text-right">{brl.format(linha.receita)}</td>
               <td className="tabular px-3 py-2 text-right">{pct.format(linha.receita_pct)}%</td>

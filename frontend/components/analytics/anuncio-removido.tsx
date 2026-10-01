@@ -12,20 +12,42 @@ import type { AbcLinha } from "@/lib/api";
  * anúncio não existe mais. Daí o rótulo neutro — sem laranja (que neste
  * produto significa ação) e sem cor de alerta.
  */
-export function anuncioRemovido(linha: AbcLinha): boolean {
+export function anuncioFoiRemovido(linha: AbcLinha): boolean {
   return linha.titulo === linha.sku;
 }
 
+/** Texto do rótulo, num lugar só — a pílula e o tooltip usam o mesmo. */
+const ROTULO = "anúncio removido";
+
+/** Frase inteira no `title`: explica sem ocupar espaço nenhum na tela. */
+const EXPLICACAO = "Este anúncio não existe mais no Mercado Livre. A venda e a receita são reais.";
+
 /**
- * Entra no lugar do título repetido. Fica no mesmo registro visual da classe
- * C (`bg-surface text-muted border border-line`), que é o tom mais apagado
- * já existente; `whitespace-nowrap` impede que as duas palavras quebrem a
- * célula da tabela na largura de celular.
+ * Entra no lugar do título repetido NA TABELA, onde o fundo é branco e a
+ * borda da pílula de fato a delimita. `whitespace-nowrap` impede que as duas
+ * palavras quebrem a célula na largura de celular.
+ *
+ * Não serve pro tooltip do Pareto: lá o container já é `bg-surface`, então o
+ * preenchimento da pílula fica na mesma cor do fundo (contraste 1,00:1) e
+ * sobra só a borda, que lida como artefato de renderização. Ali usa-se
+ * `TextoAnuncioRemovido`.
  */
 export function AnuncioRemovidoPill() {
   return (
-    <span className="inline-block whitespace-nowrap rounded-full border border-line bg-surface px-2 py-0.5 text-xs text-muted">
-      anúncio removido
+    <span
+      title={EXPLICACAO}
+      className="inline-block whitespace-nowrap rounded-full border border-line bg-surface px-2 py-0.5 text-xs text-muted"
+    >
+      {ROTULO}
     </span>
+  );
+}
+
+/** A mesma informação sem a pílula, pra quando o fundo já é `bg-surface`. */
+export function TextoAnuncioRemovido() {
+  return (
+    <p title={EXPLICACAO} className="text-muted">
+      {ROTULO}
+    </p>
   );
 }
