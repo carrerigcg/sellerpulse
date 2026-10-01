@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.routers._common import MAX_JANELA_DIAS, MAX_N
 
 from .conftest import TEST_DATABASE_URL
 
@@ -183,8 +184,12 @@ async def test_demo_recusa_seller_nao_marcado_como_demo(monkeypatch, pg_pool, ou
     monkeypatch.setenv("DEMO_SELLER_ID", str(seller_nao_demo))
 
     with TestClient(app) as c:
+        # A janela era 2026-01-01 -> 2027-01-01 (365 dias). Encurtada porque
+        # `validate_window` passou a ter teto de duracao: com 365 dias isto
+        # viraria 400 na validacao e nunca exercitaria a trava do is_demo, que e
+        # o que o teste existe pra provar.
         resp = c.get(
-            "/demo/fluxo-financeiro", params={"date_from": "2026-01-01", "date_to": "2027-01-01"}
+            "/demo/fluxo-financeiro", params={"date_from": "2026-01-01", "date_to": "2026-11-01"}
         )
     assert resp.status_code == 503
     assert "9999" not in resp.text, "faturamento do seller vazou na resposta"
@@ -384,3 +389,104 @@ async def test_demo_cohort_janela_vazia_devolve_lista_vazia(client_demo):
     resp = client.get("/demo/cohort", params={"date_from": "2020-01-01", "date_to": "2020-02-01"})
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+# ---------------------------------------------------------------------------
+# Limites de entrada (backend/routers/_common.py).
+#
+# A trava 3 do modulo (Cache-Control publico) so protege o free tier enquanto a
+# chave de cache for estavel: como a chave inclui date_from/date_to, variar as
+# datas a cada request gera chave nova toda vez e fura o cache dos DOIS lados
+# (max-age da resposta e revalidate de 1h da Vercel). Sem teto de janela, um
+# loop trivial mantem a instancia do Render acordada de graca e queima a cota
+# mensal. Testado aqui porque /demo e a porta sem autenticacao, mas o validador
+# e o mesmo dos routers autenticados -- de proposito, pros dois caminhos nao
+# divergirem.
+# ---------------------------------------------------------------------------
+
+_INICIO = date(2026, 7, 1)
+
+
+def _janela(dias: int) -> dict[str, str]:
+    """Params de uma janela de exatamente `dias` dias, derivada do teto."""
+    return {
+        "date_from": _INICIO.isoformat(),
+        "date_to": (_INICIO + timedelta(days=dias)).isoformat(),
+    }
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"date_from": "2026-08-01", "date_to": "2026-07-01"},  # invertida
+        {"date_from": "2026-07-01", "date_to": "2026-07-01"},  # duracao zero
+    ],
+    ids=["invertida", "duracao-zero"],
+)
+def test_demo_recusa_janela_nao_ordenada(client_demo, params):
+    """Janela invertida devolvia 200 com lista vazia.
+
+    O dashboard mostra lista vazia como "nenhuma venda no periodo" -- que e
+    indistinguivel de um periodo ruim de verdade, quando a verdade e que o
+    cliente pediu nada. Erro de entrada tem que ser dito como erro de entrada.
+    """
+    client, _sid = client_demo
+    resp = client.get("/demo/fluxo-financeiro", params=params)
+    assert resp.status_code == 400, resp.text
+    assert "anterior" in resp.json()["detail"]
+
+
+def test_demo_recusa_janela_longa_demais(client_demo):
+    client, _sid = client_demo
+    resp = client.get("/demo/fluxo-financeiro", params=_janela(MAX_JANELA_DIAS + 1))
+    assert resp.status_code == 400, resp.text
+    assert str(MAX_JANELA_DIAS) in resp.json()["detail"]
+
+
+def test_demo_recusa_janela_de_dois_seculos(client_demo):
+    """A sondagem concreta da auditoria: parseia, logo era aceita.
+
+    `1900-01-01` a `2100-01-01` passava pela validacao antiga (as duas datas sao
+    ISO 8601 validas) e virava uma chave de cache nova a cada variacao.
+    """
+    client, _sid = client_demo
+    resp = client.get(
+        "/demo/fluxo-financeiro", params={"date_from": "1900-01-01", "date_to": "2100-01-01"}
+    )
+    assert resp.status_code == 400, resp.text
+
+
+def test_demo_aceita_a_janela_maxima(client_demo):
+    """Borda de dentro: exatamente o teto ainda e 200, nao 400 nem 500."""
+    client, _sid = client_demo
+    resp = client.get("/demo/fluxo-financeiro", params=_janela(MAX_JANELA_DIAS))
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.parametrize("dias", [1, 83, 90], ids=["minima", "demo-semeada", "padrao-frontend"])
+def test_demo_aceita_as_janelas_dos_callers_reais(client_demo, dias):
+    """As janelas que existem de verdade continuam passando.
+
+    90 dias e o `periodoPadrao()` de toda tela (autenticada e publica), e e
+    tambem a duracao que `janelaAnterior` repete pra comparacao -- ela nunca
+    soma as duas. 83 dias e o intervalo da base de demo semeada (2026-05-09 a
+    2026-07-31). 1 dia e a janela mais curta que ainda faz sentido.
+    """
+    client, _sid = client_demo
+    resp = client.get("/demo/fluxo-financeiro", params=_janela(dias))
+    assert resp.status_code == 200, resp.text
+
+
+def test_demo_recusa_n_acima_do_teto(client_demo):
+    """`n` sem teto e `LIMIT` arbitrario: trabalho ilimitado por request."""
+    client, _sid = client_demo
+    resp = client.get("/demo/top-produtos", params={**_janela(30), "n": MAX_N + 1})
+    assert resp.status_code == 400, resp.text
+    assert str(MAX_N) in resp.json()["detail"]
+
+
+def test_demo_aceita_n_no_teto(client_demo):
+    """Borda de dentro do `n`."""
+    client, _sid = client_demo
+    resp = client.get("/demo/top-produtos", params={**_janela(30), "n": MAX_N})
+    assert resp.status_code == 200, resp.text

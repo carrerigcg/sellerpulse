@@ -11,6 +11,10 @@ funcionando sem criar conta. Tres travas, todas por construcao:
    faturamento de qualquer vendedor cadastrado.
 3. Cache-Control publico. A resposta e identica pra todo mundo, entao cachear
    e de graca e protege o free tier de abuso e de cold start.
+4. Entrada limitada (`routers/_common.py`): a janela tem teto de duracao e `n`
+   tem teto de tamanho. Sem isso o item 3 nao protege nada — cada par de datas
+   e uma chave de cache nova, entao variar as datas fura o cache dos dois lados
+   (resposta e Vercel) e mantem a instancia do Render acordada de graca.
 """
 
 from __future__ import annotations
