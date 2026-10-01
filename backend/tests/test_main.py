@@ -63,6 +63,73 @@ async def test_worker_para_no_shutdown(monkeypatch, pg_pool):
     assert tarefa.done()
 
 
+async def test_lifespan_sobe_o_refresh_da_demo_por_default(monkeypatch, pg_pool):
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.delenv("DEMO_REFRESH_IN_PROCESS", raising=False)
+    # Sem DEMO_SELLER_ID o refresh e no-op -- o que esta sob teste aqui e o
+    # agendamento da task, nao a regeneracao.
+    monkeypatch.delenv("DEMO_SELLER_ID", raising=False)
+    async with lifespan(app):
+        tarefas = [t for t in asyncio.all_tasks() if t.get_name() == "sellerpulse-demo-refresh"]
+        assert len(tarefas) == 1
+
+
+async def test_lifespan_respeita_o_desligamento_do_refresh_da_demo(monkeypatch, pg_pool):
+    """Os testes de /demo dependem disto: o refresh comeca com um DELETE nos
+    pedidos do seller marcado como demo, que e o mesmo que eles populam."""
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("DEMO_REFRESH_IN_PROCESS", "0")
+    async with lifespan(app):
+        assert not [t for t in asyncio.all_tasks() if t.get_name() == "sellerpulse-demo-refresh"]
+
+
+async def test_refresh_da_demo_nao_vaza_task_no_shutdown(monkeypatch, pg_pool):
+    """Task vazada pendura o shutdown e o Render mata o container no deploy.
+
+    Troca o refresh por um que nunca termina sozinho: se o lifespan nao
+    cancelar e aguardar, a task sobrevive ao bloco.
+    """
+    import backend.main as main_mod
+
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.delenv("DEMO_REFRESH_IN_PROCESS", raising=False)
+
+    async def _refresh_que_nunca_acaba(pool):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(main_mod, "_refresca_demo", _refresh_que_nunca_acaba)
+
+    async with lifespan(app):
+        tarefa = next(t for t in asyncio.all_tasks() if t.get_name() == "sellerpulse-demo-refresh")
+    assert tarefa.done()
+
+
+async def test_refresh_da_demo_que_estoura_nao_derruba_o_boot(monkeypatch, pg_pool):
+    """A demo e vitrine; a API serve cliente pago. Excecao no refresh tem que
+    ficar no log, nunca no caminho do boot."""
+    import backend.main as main_mod
+
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.delenv("DEMO_REFRESH_IN_PROCESS", raising=False)
+
+    async def _refresh_que_estoura(pool):
+        raise RuntimeError("banco fora do ar")
+
+    monkeypatch.setattr(main_mod, "regenera_demo_se_vencida", _refresh_que_estoura)
+
+    async with lifespan(app):
+        tarefa = next(t for t in asyncio.all_tasks() if t.get_name() == "sellerpulse-demo-refresh")
+        await tarefa
+    # A excecao foi engolida pelo wrapper: a task termina normalmente e o
+    # lifespan nao propaga nada.
+    assert tarefa.done()
+    assert tarefa.exception() is None
+
+
 async def test_lifespan_recusa_subir_sem_chave_de_cifra(monkeypatch, pg_pool):
     """Deploy com chave faltando tem que morrer no boot, nao no primeiro usuario."""
     from backend.ml import tokens as tokens_mod

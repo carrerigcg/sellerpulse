@@ -44,6 +44,11 @@ def _ambiente(monkeypatch):
     # O lifespan valida a chave de cifra no boot desde a Task 11.
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
     monkeypatch.setenv("WORKER_IN_PROCESS", "0")
+    # Sem isto o lifespan sobe o refresh da demo, que comeca com
+    # `DELETE FROM orders WHERE seller_id = ...` -- no seller que estes testes
+    # marcam como demo e acabaram de popular com datas fixas. A task
+    # apagaria as linhas conferidas aqui no meio do teste.
+    monkeypatch.setenv("DEMO_REFRESH_IN_PROCESS", "0")
 
 
 @pytest.fixture

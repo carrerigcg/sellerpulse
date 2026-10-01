@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.db import close_pool, get_pool
+from backend.demo_refresh import regenera_demo_se_vencida
 from backend.ml.tokens import valida_chave_de_cifra
 from backend.routers import demo, metrics, ml, segmentation
 from backend.worker.runner import loop as worker_loop
@@ -20,6 +23,34 @@ from backend.worker.runner import worker_habilitado
 # da plataforma continuam valendo e a ausencia do arquivo e inofensiva.
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
+_log = logging.getLogger(__name__)
+
+
+def demo_refresh_habilitado() -> bool:
+    """Desligavel por env, no mesmo formato do `worker_habilitado()`.
+
+    Os testes de `/demo` DESLIGAM: eles inserem pedidos com datas fixas e
+    conferem o resultado, e um refresh rodando em paralelo apagaria justamente
+    essas linhas (`regenera_demo` comeca com DELETE). Quem roda local contra o
+    Supabase de producao tambem vai querer desligar.
+    """
+    return os.environ.get("DEMO_REFRESH_IN_PROCESS", "1") != "0"
+
+
+async def _refresca_demo(pool) -> None:
+    """Wrapper que NAO deixa o refresh da demo derrubar a API.
+
+    A demo e vitrine; a API serve clientes pagos. Qualquer excecao aqui (banco
+    fora, schema velho, seller apontado errado) nao pode virar boot quebrado.
+    Loga nos dois caminhos de proposito: um refresh que para de funcionar em
+    silencio e exatamente o bug que esta feature existe pra consertar.
+    """
+    try:
+        status = await regenera_demo_se_vencida(pool)
+        _log.info("[demo] refresh da demo: %s", status)
+    except Exception:  # noqa: BLE001 — boundary da task de fundo
+        _log.exception("[demo] refresh da demo falhou")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,6 +59,11 @@ async def lifespan(app: FastAPI):
     O worker mora aqui porque o plano gratuito do Render nao tem Background
     Worker. `WORKER_IN_PROCESS=0` desliga — usado nos testes de router, que
     precisam que ninguem drene a fila que eles acabaram de popular.
+
+    O refresh da demo tambem sai daqui, em task de fundo. Nunca no caminho
+    sincrono do boot: o free tier do Render hiberna e o visitante que acorda a
+    instancia ja espera ~25s: somar a regeneracao de ~780 pedidos a essa
+    espera faria a pagina de aquisicao parecer quebrada.
     """
     # Falha no boot, nao no primeiro usuario. Sem isto, uma chave de cifra
     # faltando ou malformada deixa o deploy subir e o health check passar, e o
@@ -40,6 +76,10 @@ async def lifespan(app: FastAPI):
     tarefa: asyncio.Task | None = None
     if worker_habilitado():
         tarefa = asyncio.create_task(worker_loop(pool, parar=parar), name="sellerpulse-worker")
+
+    tarefa_demo: asyncio.Task | None = None
+    if demo_refresh_habilitado():
+        tarefa_demo = asyncio.create_task(_refresca_demo(pool), name="sellerpulse-demo-refresh")
     try:
         yield
     finally:
@@ -48,6 +88,16 @@ async def lifespan(app: FastAPI):
             # Espera de verdade: task vazada deixaria o processo pendurado no
             # shutdown, e o Render mataria o container a forca no deploy.
             await tarefa
+        if tarefa_demo is not None:
+            # Diferente do worker, esta task nao tem evento de parada: ela e uma
+            # transacao unica que nao da pra interromper num ponto seguro. Entao
+            # cancela e espera o cancelamento ser processado — o `await` e o que
+            # garante que a task nao sobrevive ao shutdown. O rollback da
+            # transacao em andamento fica com o asyncpg/Postgres: a demo com dado
+            # velho e um resultado aceitavel, demo vazia nao seria.
+            tarefa_demo.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await tarefa_demo
         await close_pool()
 
 

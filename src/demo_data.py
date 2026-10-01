@@ -101,13 +101,28 @@ def generate_orders(
     catalog: dict[str, list[dict[str, Any]]],
     seed: int,
     weeks_back: int,
+    anchor: datetime = ANCHOR_DATE,
 ) -> list[dict[str, Any]]:
     """Gera lista de pedidos determinística para as `weeks_back` semanas
-    anteriores a `ANCHOR_DATE`.
+    anteriores a `anchor`.
 
     Volume: Poisson-like via `rng.gauss` clampado. ~5% cancelamento.
     Cada pedido tem 1-3 itens amostrados do catálogo com peso decrescente
     (produtos com índice menor vendem mais → gera curva ABC natural).
+
+    Por que `anchor` tem default em vez de ser obrigatório: `data/demo.db` é
+    versionado no repo e tem que sair byte-idêntico a cada `regerar-dados`
+    (ver `generate_demo_db`), e `tests/test_pdf_renderer/` guarda um golden
+    HTML que depende destes números exatos. Passar `datetime.now()` como
+    default faria os dois divergirem a cada execução. Quem precisa de dado
+    "até hoje" — o seller de demonstração no Postgres — passa `anchor`
+    explicitamente; o default existe pra manter congelado tudo que é
+    comparado contra arquivo commitado. NÃO troque o default por `now()`.
+
+    Só as DATAS dependem de `anchor`. `order_id` vem de `order_id_counter`,
+    derivado da sequência do RNG — dois anchors diferentes produzem os MESMOS
+    order_ids. Isso é o que torna o `ON CONFLICT DO NOTHING` do
+    `backend/seed.py` inútil pra refresh (ver `backend/demo_refresh.py`).
     """
     rng = random.Random(seed)
     products = catalog["products"]
@@ -117,7 +132,7 @@ def generate_orders(
     orders: list[dict[str, Any]] = []
     order_id_counter = 1_000_000
     for week_offset in range(weeks_back):
-        week_start = ANCHOR_DATE - timedelta(days=(weeks_back - week_offset) * 7)
+        week_start = anchor - timedelta(days=(weeks_back - week_offset) * 7)
         n_orders_this_week = max(
             5, int(rng.gauss(ORDERS_PER_WEEK_MEAN, ORDERS_PER_WEEK_MEAN * 0.2))
         )
