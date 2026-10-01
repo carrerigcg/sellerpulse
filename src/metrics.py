@@ -10,23 +10,44 @@ import sqlite3
 
 import pandas as pd
 
-# Heurística: assume COGS = 55% da receita bruta. Documentado no spec.
-# Ficará configurável quando o modo real (ingestão ML) alimentar custo real.
-COST_ESTIMATE_RATE = 0.55
-
+# NÃO existe custo estimado aqui, e não deve voltar a existir.
+#
+# Até aqui este módulo tinha um `COST_ESTIMATE_RATE = 0.55` aplicado a todo
+# vendedor, todo produto, toda categoria — e o resultado era exibido na tela
+# como "Lucro líquido". Numa loja real conectada, em 180 dias, esse custo
+# inventado somava R$ 76.838,62 de um "custo total" de R$ 93.638,14: 82% do
+# custo mostrado ao vendedor era um chute. Pra quem tem custo real de 40%, o
+# "lucro" errava por dezenas de milhares de reais, e a landing prometia
+# justamente o contrário ("calculado — não estimado").
+#
+# O que esta camada entrega é margem de contribuição:
+#
+#     margem_contribuicao = receita_bruta - taxas_ml - frete
+#
+# 100% calculável a partir de colunas do banco, defensável linha por linha.
+# Custo de produto é número que só o vendedor tem: quando ele puder informar,
+# entra como dado dele — nunca como percentual assumido por nós.
+#
 # Rótulo do balde de itens sem categoria conhecida (anúncio apagado, ou
 # categoria que não entrou em categories_cache). Fica aqui, e não só no SQL,
 # pra os testes e qualquer consumidor referenciarem o mesmo valor.
 #
-# Mora nesta camada (e é importado por `backend/analytics/metrics_pg.py`, que
-# já importa `COST_ESTIMATE_RATE` daqui) porque duas cópias da mesma string em
-# duas camadas é precisamente como as camadas divergem — a classe de bug que
-# este módulo acabou de levar.
+# Mora nesta camada (e é importado por `backend/analytics/metrics_pg.py`)
+# porque duas cópias da mesma string em duas camadas é precisamente como as
+# camadas divergem — a classe de bug que este módulo acabou de levar.
 SEM_CATEGORIA = "Sem categoria"
 
 
 def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.DataFrame:
-    """DataFrame por dia com receita, custos e líquido para a janela dada.
+    """DataFrame por dia com receita, custos do ML e margem de contribuição.
+
+    Margem de contribuição = receita_bruta - taxas_ml - frete. Só isso: as três
+    parcelas vêm de colunas de `orders`, nenhuma é estimada. Ver o comentário
+    no topo do módulo sobre por que não há custo de produto aqui.
+
+    `frete` continua na conta mesmo valendo R$ 0,00 hoje (o `shipping_cost` do
+    pedido vem null do ML; a ingestão pela API de shipments é item separado) —
+    a fórmula tem que já estar certa quando o dado chegar.
 
     Args:
         conn: conexão SQLite aberta.
@@ -35,7 +56,7 @@ def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> 
 
     Returns:
         DataFrame com colunas: date, receita_bruta, taxas_ml, frete,
-        custo_estimado, liquido. Uma linha por dia com pedidos pagos.
+        margem_contribuicao. Uma linha por dia com pedidos pagos.
         Vazio se nenhum pedido no range.
     """
     query = """
@@ -56,11 +77,8 @@ def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> 
     # "object" em vez de numérica — normaliza antes de fazer aritmética/round.
     for col in ("receita_bruta", "taxas_ml", "frete"):
         df[col] = pd.to_numeric(df[col], errors="coerce")
-    df["custo_estimado"] = (df["receita_bruta"] * COST_ESTIMATE_RATE).round(2)
-    df["liquido"] = (
-        df["receita_bruta"] - df["taxas_ml"] - df["frete"] - df["custo_estimado"]
-    ).round(2)
-    return df[["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]]
+    df["margem_contribuicao"] = (df["receita_bruta"] - df["taxas_ml"] - df["frete"]).round(2)
+    return df[["date", "receita_bruta", "taxas_ml", "frete", "margem_contribuicao"]]
 
 
 def top_produtos(

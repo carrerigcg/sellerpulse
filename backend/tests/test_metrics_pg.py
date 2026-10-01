@@ -74,8 +74,7 @@ async def test_fluxo_agrega_por_dia(pg_pool, test_seller):
     assert r["receita_bruta"] == pytest.approx(150.0)
     assert r["taxas_ml"] == pytest.approx(15.0)
     assert r["frete"] == pytest.approx(7.5)
-    assert r["custo_estimado"] == pytest.approx(150.0 * 0.55, abs=0.01)
-    assert r["liquido"] == pytest.approx(150.0 - 15.0 - 7.5 - 82.5, abs=0.01)
+    assert r["margem_contribuicao"] == pytest.approx(150.0 - 15.0 - 7.5, abs=0.01)
 
 
 async def test_fluxo_ignora_nao_pagos(pg_pool, test_seller):
@@ -106,7 +105,55 @@ async def test_fluxo_respeita_bordas_da_janela_em_utc(pg_pool, test_seller):
     assert df.iloc[0]["receita_bruta"] == pytest.approx(50.0)
 
 
+async def test_fluxo_margem_e_receita_menos_taxas_menos_frete(pg_pool, test_seller):
+    """Margem de contribuicao = receita - taxas ML - frete, ate o centavo.
+
+    Valores com centavos que nao se cancelam, pra `.round(2)` ter o que
+    arredondar — fixture redonda deixaria a formula errada passar.
+
+    2026-06-01: 1234,567 - 185,185 - 27,333 = 1022,049 -> 1.022,05
+    2026-06-02:  987,654 -  98,765 -  0,041 =  888,848 ->   888,85
+    """
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-06-01T08:15:00+00:00", 1234.567, 185.185, 27.333)
+    await _order(pg_pool, sid, 2, "2026-06-02T19:45:00+00:00", 987.654, 98.765, 0.041)
+    df = await fluxo_financeiro(pg_pool, sid, "2026-06-01", "2026-06-03")
+
+    esperado = (df["receita_bruta"] - df["taxas_ml"] - df["frete"]).round(2)
+    pd.testing.assert_series_equal(df["margem_contribuicao"], esperado, check_names=False)
+
+    por_dia = df.set_index("date")["margem_contribuicao"]
+    assert por_dia.loc["2026-06-01"] == pytest.approx(1022.05, abs=0.005)
+    assert por_dia.loc["2026-06-02"] == pytest.approx(888.85, abs=0.005)
+
+
+async def test_fluxo_margem_nao_desconta_custo_estimado(pg_pool, test_seller):
+    """Nenhum percentual de custo sai da margem.
+
+    A assercao compara contra o valor que a formula ANTIGA (com 55% de COGS)
+    daria, em vez de um limiar de razao arbitrario: e a reintroducao daquele
+    percentual que este teste tem que pegar, e nada mais.
+    """
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-06-01T08:15:00+00:00", 1234.567, 185.185, 27.333)
+    df = await fluxo_financeiro(pg_pool, sid, "2026-06-01", "2026-06-02")
+    r = df.iloc[0]
+
+    receita, taxas, frete = r["receita_bruta"], r["taxas_ml"], r["frete"]
+    com_cogs_55 = receita - taxas - frete - round(receita * 0.55, 2)
+    assert com_cogs_55 == pytest.approx(343.04, abs=0.01)  # o numero que a tela mostrava
+
+    assert r["margem_contribuicao"] == pytest.approx(receita - taxas - frete, abs=0.01)
+    assert r["margem_contribuicao"] > com_cogs_55
+    assert r["margem_contribuicao"] != pytest.approx(com_cogs_55, abs=1.0)
+
+
 async def test_fluxo_vazio_tem_as_colunas_certas(pg_pool, test_seller):
+    """Conjunto de colunas EXATO, nos dois caminhos (vazio e com dados).
+
+    A igualdade de lista, e nao um subset, e o ponto: um `custo_estimado`
+    reintroduzido quebra aqui em vez de voltar silenciosamente pra tela.
+    """
     _, sid = test_seller
     df = await fluxo_financeiro(pg_pool, sid, "2026-01-01", "2026-01-02")
     assert df.empty
@@ -115,9 +162,12 @@ async def test_fluxo_vazio_tem_as_colunas_certas(pg_pool, test_seller):
         "receita_bruta",
         "taxas_ml",
         "frete",
-        "custo_estimado",
-        "liquido",
+        "margem_contribuicao",
     ]
+
+    await _order(pg_pool, sid, 1, "2026-01-01T10:00:00+00:00", 100.0, 10.0, 5.0)
+    com_dados = await fluxo_financeiro(pg_pool, sid, "2026-01-01", "2026-01-02")
+    assert list(com_dados.columns) == list(df.columns)
 
 
 async def test_fluxo_colunas_numericas_sao_float(pg_pool, test_seller):
@@ -125,7 +175,7 @@ async def test_fluxo_colunas_numericas_sao_float(pg_pool, test_seller):
     _, sid = test_seller
     await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 100.0, 10.0, 5.0)
     df = await fluxo_financeiro(pg_pool, sid, "2026-07-25", "2026-07-26")
-    for col in ["receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]:
+    for col in ["receita_bruta", "taxas_ml", "frete", "margem_contribuicao"]:
         assert df[col].dtype.kind == "f", f"{col} deveria ser float, veio {df[col].dtype}"
 
 

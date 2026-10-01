@@ -349,6 +349,18 @@
       gap: 4px;
     }
 
+    /* A fórmula fica embaixo do número porque "margem de contribuição" é
+       vocabulário de contabilidade: o vendedor do Mercado Livre não deveria
+       ter que procurar o que significa. Discreta de propósito — é legenda,
+       não destaque. */
+    .hero-formula {
+      font-size: 9pt;
+      color: var(--gray-500);
+      font-weight: 400;
+      margin-top: 3mm;
+      letter-spacing: 0.01em;
+    }
+
     .hero-number .currency {
       font-size: 26pt;
       font-weight: 400;
@@ -1007,8 +1019,9 @@
 
     <section class="hero">
       <div>
-        <div class="hero-label">Resultado líquido da semana</div>
-        <div class="hero-number">{{ fluxo.liquido }}</div>
+        <div class="hero-label">Margem de contribuição da semana</div>
+        <div class="hero-number">{{ fluxo.margem }}</div>
+        <div class="hero-formula">receita − comissão do Mercado Livre − frete</div>
       </div>
       <div class="hero-side">
         <span class="delta {{ 'up' if fluxo.delta_vs_anterior_positive else 'down' }}">
@@ -1042,7 +1055,7 @@
           </span>
           Composição do resultado
         </div>
-        <div class="section-h-meta">Receita · custos · líquido</div>
+        <div class="section-h-meta">Receita · custos do ML · margem</div>
       </div>
 
       <div class="breakdown-wrap">
@@ -1060,8 +1073,8 @@
             <span class="val">− {{ fluxo.frete }}</span>
           </div>
           <div class="breakdown-line total">
-            <span class="lbl">Líquido recebido</span>
-            <span class="val">{{ fluxo.liquido }}</span>
+            <span class="lbl">Margem de contribuição</span>
+            <span class="val">{{ fluxo.margem }}</span>
           </div>
         </div>
 
@@ -1082,9 +1095,9 @@
             <span class="val">−{{ fluxo.frete_short }}</span>
           </div>
           <div class="wf-row net">
-            <span class="lbl">Líquido</span>
-            <span class="wf-bar net" style="width: {{ fluxo.liquido_pct }}%;"></span>
-            <span class="val">{{ fluxo.liquido_short }}</span>
+            <span class="lbl">Margem</span>
+            <span class="wf-bar net" style="width: {{ fluxo.margem_pct }}%;"></span>
+            <span class="val">{{ fluxo.margem_short }}</span>
           </div>
         </div>
       </div>
@@ -1359,7 +1372,7 @@
         <li class="summary-item">
           <span class="summary-item-num">01</span>
           <span>
-            <strong>Resultado líquido</strong> e composição de custos detalhados na Página 1.
+            <strong>Margem de contribuição</strong> e composição dos custos do Mercado Livre na Página 1.
           </span>
         </li>
         <li class="summary-item">

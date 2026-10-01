@@ -9,13 +9,14 @@ import pandas as pd
 import pytest
 
 from src.metrics import (
-    COST_ESTIMATE_RATE,
     SEM_CATEGORIA,
     fluxo_financeiro,
     reputacao_devolucao,
     top_produtos,
 )
 from src.storage import connect, upsert_category_cache, upsert_item_cache, upsert_order
+
+_FLUXO_COLUNAS = {"date", "receita_bruta", "taxas_ml", "frete", "margem_contribuicao"}
 
 
 @pytest.fixture(scope="module")
@@ -29,28 +30,103 @@ def demo_conn() -> sqlite3.Connection:
     conn.close()
 
 
+@pytest.fixture
+def conn_valores_quebrados() -> sqlite3.Connection:
+    """Pedidos com centavos que não se cancelam — fixture que não combina com o código.
+
+    Números redondos deixam um teste de margem passar mesmo com a fórmula
+    errada (0,00 de frete, taxa igual em todo dia). Aqui cada dia tem taxa e
+    frete diferentes, com terceira casa decimal no produto quantidade × preço,
+    pra que `.round(2)` de fato tenha o que arredondar.
+
+    Dia 2026-06-01: 1234,567 − 185,185 − 27,333 = 1022,049 → 1.022,05
+    Dia 2026-06-02:  987,654 −  98,765 −  0,041 =  888,848 →   888,85
+    """
+    conn = connect(":memory:")
+    pedidos = [
+        (1, "2026-06-01T08:15:00+00:00", 1234.567, 185.185, 27.333),
+        (2, "2026-06-02T19:45:00+00:00", 987.654, 98.765, 0.041),
+    ]
+    for order_id, date_closed, total, fee, ship in pedidos:
+        upsert_order(
+            conn,
+            {
+                "order_id": order_id,
+                "date_closed": date_closed,
+                "status": "paid",
+                "total_amount": total,
+                "marketplace_fee": fee,
+                "shipping_cost": ship,
+                "buyer_id": 1001,
+                "raw_json": "{}",
+                "items": [],
+            },
+        )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
 def test_fluxo_financeiro_returns_dataframe_with_expected_columns(
     demo_conn: sqlite3.Connection,
 ) -> None:
+    """O conjunto de colunas é EXATAMENTE este — nem uma a mais.
+
+    A igualdade (e não `issubset`) é o ponto: se alguém reintroduzir um
+    `custo_estimado` estimado por percentual, este teste quebra na hora em vez
+    de deixar a coluna inventada passar de volta pra tela.
+    """
     df = fluxo_financeiro(demo_conn, "2026-07-25", "2026-08-01")
     assert isinstance(df, pd.DataFrame)
-    assert set(df.columns) == {
+    assert set(df.columns) == _FLUXO_COLUNAS
+    assert list(df.columns) == [
         "date",
         "receita_bruta",
         "taxas_ml",
         "frete",
-        "custo_estimado",
-        "liquido",
-    }
+        "margem_contribuicao",
+    ]
 
 
-def test_fluxo_financeiro_custo_estimado_applies_rate(
-    demo_conn: sqlite3.Connection,
+def test_fluxo_financeiro_margem_e_receita_menos_taxas_menos_frete(
+    conn_valores_quebrados: sqlite3.Connection,
 ) -> None:
-    """Custo estimado é receita_bruta × COST_ESTIMATE_RATE (arredondado 2)."""
-    df = fluxo_financeiro(demo_conn, "2026-05-01", "2026-08-01")
-    expected = (df["receita_bruta"] * COST_ESTIMATE_RATE).round(2)
-    pd.testing.assert_series_equal(df["custo_estimado"], expected, check_names=False)
+    """Margem de contribuição = receita − taxas ML − frete, até o centavo.
+
+    Substitui `test_fluxo_financeiro_custo_estimado_applies_rate`, que
+    verificava a heurística de COGS 55% — removida porque era número inventado
+    sendo exibido como "Lucro líquido".
+    """
+    df = fluxo_financeiro(conn_valores_quebrados, "2026-06-01", "2026-06-03")
+    esperado = (df["receita_bruta"] - df["taxas_ml"] - df["frete"]).round(2)
+    pd.testing.assert_series_equal(df["margem_contribuicao"], esperado, check_names=False)
+
+    # E contra valores calculados a mão, pra o teste não ser a própria fórmula
+    # repetida (foi assim que um bug de receita sobreviveu meses neste repo).
+    por_dia = df.set_index("date")["margem_contribuicao"]
+    assert por_dia.loc["2026-06-01"] == pytest.approx(1022.05, abs=0.005)
+    assert por_dia.loc["2026-06-02"] == pytest.approx(888.85, abs=0.005)
+
+
+def test_fluxo_financeiro_margem_nao_desconta_custo_estimado(
+    conn_valores_quebrados: sqlite3.Connection,
+) -> None:
+    """Nenhum percentual de custo é subtraído da margem.
+
+    A asserção compara contra o valor que a fórmula ANTIGA (com 55% de COGS)
+    daria, em vez de um limiar de razão arbitrário: é a reintrodução daquele
+    percentual que este teste tem que pegar, e nada mais.
+    """
+    df = fluxo_financeiro(conn_valores_quebrados, "2026-06-01", "2026-06-03")
+    receita = float(df["receita_bruta"].sum())
+    margem = float(df["margem_contribuicao"].sum())
+    taxas_e_frete = float((df["taxas_ml"] + df["frete"]).sum())
+
+    com_cogs_55 = receita - taxas_e_frete - round(receita * 0.55, 2)
+    assert margem == pytest.approx(receita - taxas_e_frete, abs=0.01)
+    assert margem > com_cogs_55
+    # A diferença é exatamente o custo que era inventado — hoje, nada.
+    assert margem - com_cogs_55 == pytest.approx(round(receita * 0.55, 2), abs=0.01)
 
 
 def test_fluxo_financeiro_only_paid_orders(demo_conn: sqlite3.Connection) -> None:
@@ -63,11 +139,13 @@ def test_fluxo_financeiro_only_paid_orders(demo_conn: sqlite3.Connection) -> Non
     assert df["receita_bruta"].sum() == pytest.approx(manual)
 
 
-def test_fluxo_financeiro_liquido_is_lower_than_receita(
+def test_fluxo_financeiro_margem_is_lower_than_receita(
     demo_conn: sqlite3.Connection,
 ) -> None:
+    """Substitui o antigo teste sobre `liquido`: a margem ainda é menor que a
+    receita, porque taxas do ML sempre saem dela."""
     df = fluxo_financeiro(demo_conn, "2026-05-01", "2026-08-01")
-    assert (df["liquido"] < df["receita_bruta"]).all()
+    assert (df["margem_contribuicao"] < df["receita_bruta"]).all()
 
 
 def test_fluxo_financeiro_empty_window_returns_empty_df(
@@ -75,14 +153,7 @@ def test_fluxo_financeiro_empty_window_returns_empty_df(
 ) -> None:
     df = fluxo_financeiro(demo_conn, "2020-01-01", "2020-01-02")
     assert df.empty
-    assert set(df.columns) == {
-        "date",
-        "receita_bruta",
-        "taxas_ml",
-        "frete",
-        "custo_estimado",
-        "liquido",
-    }
+    assert set(df.columns) == _FLUXO_COLUNAS
 
 
 def test_top_produtos_returns_dict_with_two_dataframes(

@@ -32,9 +32,14 @@ from backend.analytics._common import _parse_boundary
 # string em duas camadas e exatamente como as camadas divergem. O import
 # re-liga o nome neste namespace, entao quem ja importava
 # `backend.analytics.metrics_pg.SEM_CATEGORIA` continua funcionando.
-from src.metrics import COST_ESTIMATE_RATE, SEM_CATEGORIA
+from src.metrics import SEM_CATEGORIA
 
-_FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
+# Nao existe custo estimado aqui, e nao deve voltar a existir: esta camada
+# espelha `src/metrics.py`, onde o comentario do topo explica por que o
+# percentual de COGS de 55% foi removido em vez de renomeado. A conta e
+# margem de contribuicao = receita_bruta - taxas_ml - frete, as tres parcelas
+# vindas de colunas de `orders`.
+_FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "margem_contribuicao"]
 _PRODUTOS_COLUMNS = ["item_id", "title", "category_name", "unidades", "receita"]
 _CATEGORIAS_COLUMNS = ["category_id", "category_name", "unidades", "receita"]
 
@@ -129,7 +134,12 @@ _TOP_CATEGORIAS_QUERY = """
 async def fluxo_financeiro(
     pool, seller_id: uuid.UUID, date_from: str, date_to: str
 ) -> pd.DataFrame:
-    """DataFrame por dia com receita, custos e líquido para a janela dada.
+    """DataFrame por dia com receita, custos do ML e margem de contribuição.
+
+    Margem de contribuição = receita_bruta - taxas_ml - frete. Espelha
+    `src/metrics.py.fluxo_financeiro`: mesmas colunas, mesma ordem, mesmo
+    arredondamento — a paridade é testada em
+    `test_fluxo_paridade_com_a_versao_sqlite`.
 
     Args:
         pool: pool asyncpg (`backend.db.get_pool()`).
@@ -139,7 +149,7 @@ async def fluxo_financeiro(
 
     Returns:
         DataFrame com colunas: date, receita_bruta, taxas_ml, frete,
-        custo_estimado, liquido. Uma linha por dia com pedidos pagos.
+        margem_contribuicao. Uma linha por dia com pedidos pagos.
         Vazio se nenhum pedido no range.
     """
     rows = await pool.fetch(
@@ -153,10 +163,7 @@ async def fluxo_financeiro(
     for col in ("receita_bruta", "taxas_ml", "frete"):
         df[col] = df[col].astype(float)
 
-    df["custo_estimado"] = (df["receita_bruta"] * COST_ESTIMATE_RATE).round(2)
-    df["liquido"] = (
-        df["receita_bruta"] - df["taxas_ml"] - df["frete"] - df["custo_estimado"]
-    ).round(2)
+    df["margem_contribuicao"] = (df["receita_bruta"] - df["taxas_ml"] - df["frete"]).round(2)
 
     return df[_FLUXO_COLUMNS]
 

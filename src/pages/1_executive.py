@@ -16,13 +16,12 @@ from src.dashboard_helpers import get_active_conn, get_window, is_session_conn, 
 from src.metrics import fluxo_financeiro, reputacao_devolucao
 from src.pages._shared import previous_window
 
-_COMPONENTES = ["receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
+_COMPONENTES = ["receita_bruta", "taxas_ml", "frete", "margem_contribuicao"]
 _ROTULOS = {
     "receita_bruta": "Receita bruta",
     "taxas_ml": "Taxas ML",
     "frete": "Frete",
-    "custo_estimado": "Custo estimado",
-    "liquido": "Líquido",
+    "margem_contribuicao": "Margem de contribuição",
 }
 
 
@@ -47,13 +46,17 @@ def _load_reputacao(date_from: str, date_to: str, source: str) -> dict:
 
 
 def _totais(fluxo: pd.DataFrame) -> tuple[float, float, float]:
-    """(receita bruta, custo total, lucro líquido) do período."""
+    """(receita bruta, custos do Mercado Livre, margem de contribuição) do período.
+
+    O custo aqui é só comissão do ML + frete. Não existe mais a parcela de custo
+    estimado por percentual — ver o comentário no topo de `src/metrics.py`.
+    """
     if fluxo.empty:
         return 0.0, 0.0, 0.0
     receita = float(fluxo["receita_bruta"].sum())
-    custo = float((fluxo["taxas_ml"] + fluxo["frete"] + fluxo["custo_estimado"]).sum())
-    liquido = float(fluxo["liquido"].sum())
-    return receita, custo, liquido
+    custo = float((fluxo["taxas_ml"] + fluxo["frete"]).sum())
+    margem = float(fluxo["margem_contribuicao"].sum())
+    return receita, custo, margem
 
 
 def _delta(atual: float, anterior: float) -> tuple[str | None, bool | None]:
@@ -65,33 +68,47 @@ def _delta(atual: float, anterior: float) -> tuple[str | None, bool | None]:
 
 
 def _render_kpis(fluxo: pd.DataFrame, reput: dict, date_from: str, date_to: str) -> None:
-    receita, custo, liquido = _totais(fluxo)
+    receita, custo, margem = _totais(fluxo)
     prev_from, prev_to = previous_window(date_from, date_to)
-    receita_ant, custo_ant, liquido_ant = _totais(_load_fluxo(prev_from, prev_to, source_key()))
+    receita_ant, custo_ant, margem_ant = _totais(_load_fluxo(prev_from, prev_to, source_key()))
 
     d_receita, subiu_receita = _delta(receita, receita_ant)
     d_custo, subiu_custo = _delta(custo, custo_ant)
-    d_liquido, subiu_liquido = _delta(liquido, liquido_ant)
+    d_margem, subiu_margem = _delta(margem, margem_ant)
 
     theme.kpi_row(
         [
             theme.Kpi("Receita bruta", f"R$ {receita:,.2f}", "revenue", d_receita, subiu_receita),
             # Custo é o único KPI em que subir é resultado pior: o sinal inverte.
+            # "Custos do Mercado Livre", não "Custo total": sem o custo estimado
+            # este tile é só comissão + frete, e chamar isso de total seria a
+            # mesma mentira num rótulo novo.
             theme.Kpi(
-                "Custo total",
+                "Custos do Mercado Livre",
                 f"R$ {custo:,.2f}",
                 "cost",
                 d_custo,
                 None if subiu_custo is None else not subiu_custo,
             ),
-            theme.Kpi("Lucro líquido", f"R$ {liquido:,.2f}", "profit", d_liquido, subiu_liquido),
+            # Ícone "profit" (carteira) continua certo: é o dinheiro que fica
+            # com o vendedor depois do que o ML cobra.
+            theme.Kpi(
+                "Margem de contribuição",
+                f"R$ {margem:,.2f}",
+                "profit",
+                d_margem,
+                subiu_margem,
+            ),
             theme.Kpi("Nível ML", str(reput.get("nivel_ml", "—")), "level"),
         ]
     )
 
 
 def _render_fluxo_chart(fluxo: pd.DataFrame) -> None:
-    with theme.card("Fluxo financeiro por dia", "Composição diária de receita e custos"):
+    with theme.card(
+        "Fluxo financeiro por dia",
+        "Composição diária: receita, comissão do Mercado Livre, frete e margem",
+    ):
         if fluxo.empty:
             st.info("Sem pedidos pagos no período selecionado.")
             return
@@ -119,7 +136,8 @@ def _main() -> None:
     date_from, date_to = get_window()
     theme.page_header(
         "Executive Summary",
-        "Receita, custos e resultado do período — com variação sobre a janela anterior.",
+        "Margem de contribuição = receita − comissão do Mercado Livre − frete, "
+        "com variação sobre a janela anterior.",
         f"{date_from} — {date_to}",
     )
 
