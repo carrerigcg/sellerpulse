@@ -25,14 +25,22 @@ Armadilhas de tradução de dialeto tratadas explicitamente aqui:
    numéricas são convertidas pra `float` explicitamente ao montar o
    DataFrame.
 3. `to_char` sobre `timestamptz` usa o fuso da SESSÃO. Toda formatação de
-   mês (`cohort_produto`) usa `AT TIME ZONE 'UTC'` explicitamente — o pool
-   já fixa `server_settings={"timezone": "UTC"}`, mas isso torna a query
-   correta por si só, independente de config externa.
+   mês (`cohort_produto`) declara `AT TIME ZONE` explicitamente — o pool já
+   fixa `server_settings={"timezone": "UTC"}`, mas isso torna a query
+   correta por si só, independente de config externa. O fuso declarado é o
+   do VENDEDOR (`FUSO_DO_VENDEDOR`, America/Sao_Paulo), não UTC: o mês do
+   cohort tem que ser o mês em que o vendedor conta a venda. Divergência
+   INTENCIONAL de `src/segmentation.py`, que lê SQLite onde `date_closed` é
+   string ISO e a query usa `strftime`/`substr` sem conversão de fuso
+   nenhuma — lá não existe UTC pra trocar. Aquela camada está congelada na
+   Fase 2 e serve o Streamlit e o PDF a partir de um banco de demonstração
+   local.
 4. O cálculo de `recency_dias` em `rfm_scores` trunca pra DATA (descarta
    hora), igual ao original em SQLite (`ultima_compra.str[:10]`). Sem essa
    truncagem, uma compra às 14:30 de ontem daria 0 dias de recência em vez
    de 1 — asyncpg devolve `MAX(date_closed)` como `datetime` completo, não
-   como string ISO truncada.
+   como string ISO truncada. A truncagem acontece no fuso do vendedor pelo
+   mesmo motivo do item 3.
 """
 
 from __future__ import annotations
@@ -41,7 +49,7 @@ import uuid
 
 import pandas as pd
 
-from backend.analytics._common import _parse_boundary
+from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary
 from src.segmentation import _assign_segment, _score_by_quintile
 
 _ABC_COLUMNS = ["sku", "titulo", "receita", "receita_pct", "receita_acumulada_pct", "classe"]
@@ -106,12 +114,17 @@ _RFM_BASE_QUERY = """
 """
 
 # "Mes de lancamento" = menor date_closed do item NO BANCO INTEIRO (sem
-# filtro de janela), igual ao original. AT TIME ZONE 'UTC' explicito porque
-# to_char sobre timestamptz usa o fuso da sessao.
-_COHORT_LAUNCH_QUERY = """
+# filtro de janela), igual ao original. AT TIME ZONE explicito porque to_char
+# sobre timestamptz usa o fuso da sessao; o fuso e o do VENDEDOR porque o mes
+# de lancamento e o mes em que ELE viu a primeira venda (medido na loja real:
+# 3 de 744 itens trocam de mes de lancamento entre UTC e Brasilia).
+#
+# O fuso entra por f-string (nao por parametro $n) porque e constante do
+# proprio codigo, nao entrada de usuario: nao ha superficie de injecao.
+_COHORT_LAUNCH_QUERY = f"""
     SELECT
         oi.item_id,
-        to_char(MIN(o.date_closed) AT TIME ZONE 'UTC', 'YYYY-MM') AS mes_lancamento
+        to_char(MIN(o.date_closed) AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM') AS mes_lancamento
     FROM order_items oi
     JOIN orders o
       ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
@@ -120,10 +133,14 @@ _COHORT_LAUNCH_QUERY = """
     GROUP BY oi.item_id
 """
 
-_COHORT_REVENUE_QUERY = """
+# Mesmo fuso do _COHORT_LAUNCH_QUERY -- obrigatoriamente: o pivot cruza
+# mes_lancamento com mes_corrente, e dois fusos diferentes nos dois eixos
+# colocariam receita acima da diagonal (mes corrente "anterior" ao
+# lancamento) em pedidos da virada do dia.
+_COHORT_REVENUE_QUERY = f"""
     SELECT
         oi.item_id,
-        to_char(o.date_closed AT TIME ZONE 'UTC', 'YYYY-MM')     AS mes_corrente,
+        to_char(o.date_closed AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM') AS mes_corrente,
         ROUND(SUM(oi.quantity * oi.unit_price), 2)               AS receita
     FROM order_items oi
     JOIN orders o
@@ -218,12 +235,26 @@ async def rfm_scores(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     df["monetary"] = df["monetary"].astype(float)
     df["frequency"] = df["frequency"].astype(int)
 
-    # Recency em dias — trunca pra DATA em UTC, igual ao original (que usa
+    # Recency em dias — trunca pra DATA, igual ao original (que usa
     # ultima_compra.str[:10]). asyncpg devolve `ultima_compra` como datetime
     # tz-aware (o pool fixa a sessao em UTC), nao como string ISO: sem
     # truncar aqui, uma compra as 14:30 de ontem daria 0 dias de recencia em
-    # vez de 1.
-    ultima = pd.to_datetime(df["ultima_compra"], utc=True).dt.tz_localize(None).dt.normalize()
+    # vez de 1. Essa razao continua valendo; o que mudou e ONDE a truncagem
+    # acontece.
+    #
+    # A truncagem e no fuso do VENDEDOR, e os dois lados da subtracao tem que
+    # estar nele: `date_to[:10]` e uma data de calendario que o chamador
+    # escreveu pensando em Brasilia, e truncar `ultima_compra` em UTC
+    # comparava "hoje em Brasilia" com "ontem/hoje em UTC". Medido na loja
+    # real: 112 de 780 compradores tinham recency_dias deslocada em 1 dia,
+    # todos os da venda da noite (21h-23h BRT viram 00h-02h UTC do dia
+    # seguinte).
+    ultima = (
+        pd.to_datetime(df["ultima_compra"], utc=True)
+        .dt.tz_convert(FUSO_DO_VENDEDOR)
+        .dt.tz_localize(None)
+        .dt.normalize()
+    )
     date_to_ts = pd.Timestamp(date_to[:10])
     df["recency_dias"] = (date_to_ts - ultima).dt.days.astype(int)
 

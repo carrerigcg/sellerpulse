@@ -17,6 +17,14 @@ Duas armadilhas de tradução de dialeto que este módulo trata explicitamente:
    numéricas são convertidas pra `float` explicitamente ao montar o
    DataFrame, senão o dtype vira `object` e quebra downstream (gráficos,
    serialização).
+3. Fuso do agrupamento diário: aqui o dia é contado em `FUSO_DO_VENDEDOR`
+   (America/Sao_Paulo), não em UTC. Divergência INTENCIONAL de
+   `src/metrics.py`, na mesma linha do desempate de `ORDER BY` explicado
+   abaixo: lá `date_closed` é string ISO no SQLite e a query usa
+   `substr(date_closed, 1, 10)`, sem conversão de fuso nenhuma — não existe
+   UTC pra trocar. Aquela camada está congelada na Fase 2, lê um banco de
+   demonstração local e serve o Streamlit e o PDF; mexer nela é uma mudança
+   diferente e mais arriscada, sem usuário real do outro lado.
 """
 
 from __future__ import annotations
@@ -25,7 +33,7 @@ import uuid
 
 import pandas as pd
 
-from backend.analytics._common import _parse_boundary
+from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary
 
 # `SEM_CATEGORIA` e reexportado daqui: `src/metrics.py` passou a precisar do
 # mesmo rotulo quando levou a mesma correcao de LEFT JOIN, e duas copias da
@@ -43,12 +51,18 @@ _FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "margem_contribu
 _PRODUTOS_COLUMNS = ["item_id", "title", "category_name", "unidades", "receita"]
 _CATEGORIAS_COLUMNS = ["category_id", "category_name", "unidades", "receita"]
 
-_FLUXO_QUERY = """
+# O fuso entra por f-string (nao por parametro $n) porque e constante do
+# proprio codigo, nao entrada de usuario: nao ha superficie de injecao, e a
+# query continua legivel pra quem for ler o SQL.
+_FLUXO_QUERY = f"""
     SELECT
         -- to_char sobre timestamptz converte pro fuso da SESSAO. O pool ja
-        -- fixa server_settings={"timezone": "UTC"}, mas o AT TIME ZONE torna
-        -- essa query correta por si so, independente de config externa.
-        to_char(date_closed AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+        -- fixa server_settings={{"timezone": "UTC"}}, mas o AT TIME ZONE
+        -- explicito torna essa query correta por si so, independente de
+        -- config externa -- e, agora, o fuso declarado aqui e o do VENDEDOR
+        -- (America/Sao_Paulo): o dia do grafico tem que ser o dia em que ele
+        -- conta a venda, nao o dia UTC. Ver FUSO_DO_VENDEDOR em _common.py.
+        to_char(date_closed AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM-DD') AS date,
         SUM(total_amount)                  AS receita_bruta,
         SUM(marketplace_fee)               AS taxas_ml,
         SUM(shipping_cost)                 AS frete
