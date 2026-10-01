@@ -4,7 +4,7 @@ import { CohortHeatmap } from "@/components/analytics/cohort-heatmap";
 import { ParetoChart } from "@/components/analytics/pareto-chart";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import type { AbcLinha, CohortLinha } from "@/lib/api";
-import { getDemoAbcPareto, getDemoCohortProduto } from "@/lib/demo";
+import { DEMO_PERIODO_PADRAO, getDemoAbcPareto, getDemoCohortProduto } from "@/lib/demo";
 
 /**
  * Produtos da demonstração pública — mesmo conteúdo de `/dashboard/produtos`,
@@ -12,20 +12,11 @@ import { getDemoAbcPareto, getDemoCohortProduto } from "@/lib/demo";
  * `components/analytics/`, os mesmos componentes da tela autenticada.
  */
 
-// Mesmo padrão de janela das telas autenticadas: últimos 90 dias corridos.
-function periodoPadrao() {
-  const hoje = new Date();
-  const noventaDiasAtras = new Date(hoje);
-  noventaDiasAtras.setDate(hoje.getDate() - 90);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
-}
-
 export default async function DemoProdutosPage({
   searchParams,
 }: PageProps<"/demo/produtos">) {
   const params = await searchParams;
-  const padrao = periodoPadrao();
+  const padrao = DEMO_PERIODO_PADRAO;
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 

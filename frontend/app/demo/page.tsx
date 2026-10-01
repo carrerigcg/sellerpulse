@@ -3,7 +3,7 @@ import { totalizarFluxo } from "@/components/analytics/executive-totals";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import { janelaAnterior, type FluxoDia } from "@/lib/api";
-import { getDemoFluxoFinanceiro } from "@/lib/demo";
+import { DEMO_PERIODO_PADRAO, getDemoFluxoFinanceiro } from "@/lib/demo";
 
 /**
  * Executive da demonstração pública — mesmo conteúdo de `/dashboard`, dados
@@ -11,20 +11,11 @@ import { getDemoFluxoFinanceiro } from "@/lib/demo";
  * `components/analytics/`, os mesmos componentes da tela autenticada.
  */
 
-// Mesmo padrão de janela das telas autenticadas: últimos 90 dias corridos.
-function periodoPadrao() {
-  const hoje = new Date();
-  const noventaDiasAtras = new Date(hoje);
-  noventaDiasAtras.setDate(hoje.getDate() - 90);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
-}
-
 export default async function DemoExecutivePage({
   searchParams,
 }: PageProps<"/demo">) {
   const params = await searchParams;
-  const padrao = periodoPadrao();
+  const padrao = DEMO_PERIODO_PADRAO;
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
