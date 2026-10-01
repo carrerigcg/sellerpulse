@@ -185,6 +185,76 @@ def test_abc_pareto_classifica_por_regra_80_15_5(abc_conn: sqlite3.Connection) -
     assert classes_por_sku == {"A": "A", "B": "A", "C": "B", "D": "C"}
 
 
+@pytest.fixture
+def abc_conn_com_anuncio_apagado() -> sqlite3.Connection:
+    """2 produtos em items_cache + 1 anúncio apagado (sem linha no cache).
+
+    `data/demo.db` tem 0 itens vendidos sem linha em items_cache, então o
+    banco demo não exercita este caminho — daí a fixture dedicada.
+
+    Receita: MLB1 = 600, MLB404 = 300, MLB2 = 100. Total 1000.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seed_minimal_schema(conn)
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('CAT1', 'Cat Um')")
+    for item_id, title in [("MLB1", "Produto 1"), ("MLB2", "Produto 2")]:
+        conn.execute(
+            "INSERT INTO items_cache (item_id, title, category_id) VALUES (?, ?, 'CAT1')",
+            (item_id, title),
+        )
+    # MLB404 nao tem items_cache: anuncio apagado no ML.
+    for order_id, item_id, receita in [
+        (1, "MLB1", 600.0),
+        (2, "MLB404", 300.0),
+        (3, "MLB2", 100.0),
+    ]:
+        conn.execute(
+            "INSERT INTO orders (order_id, date_closed, status, total_amount, buyer_id) "
+            "VALUES (?, '2026-07-10T10:00:00', 'paid', ?, 1001)",
+            (order_id, receita),
+        )
+        conn.execute(
+            "INSERT INTO order_items (order_id, item_id, quantity, unit_price) VALUES (?, ?, 1, ?)",
+            (order_id, item_id, receita),
+        )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_abc_pareto_mantem_item_sem_items_cache(
+    abc_conn_com_anuncio_apagado: sqlite3.Connection,
+) -> None:
+    """Anúncio apagado no ML não tem linha em items_cache — a venda foi real.
+
+    Aqui o INNER JOIN era pior do que num ranking simples: além de perder a
+    linha, o total encolhia e as classes A/B/C de TODOS os produtos saíam
+    calculadas sobre uma base menor. Compara com a soma crua de order_items,
+    porque checar só "a linha aparece" passaria mesmo com a receita errada.
+    """
+    conn = abc_conn_com_anuncio_apagado
+    cru = conn.execute(
+        "SELECT ROUND(SUM(oi.quantity*oi.unit_price),2) FROM order_items oi "
+        "JOIN orders o ON o.order_id = oi.order_id WHERE o.status='paid'"
+    ).fetchone()[0]
+    assert cru == pytest.approx(1000.0)
+
+    df = abc_pareto(conn, "2026-07-01", "2026-08-01")
+
+    assert list(df["sku"]) == ["MLB1", "MLB404", "MLB2"]
+    assert df["receita"].sum() == pytest.approx(cru), "receita diverge da soma crua"
+    # Fallback do título = o próprio SKU; quem está em cache mantém o real.
+    por_sku = df.set_index("sku")
+    assert por_sku.loc["MLB404", "titulo"] == "MLB404"
+    assert por_sku.loc["MLB1", "titulo"] == "Produto 1"
+    assert df["titulo"].notna().all()
+    # Os percentuais são calculados sobre o total COMPLETO (1000, não 700).
+    assert por_sku.loc["MLB1", "receita_pct"] == pytest.approx(60.0)
+    assert por_sku.loc["MLB404", "receita_pct"] == pytest.approx(30.0)
+    assert df.iloc[-1]["receita_acumulada_pct"] == pytest.approx(100.0)
+
+
 _CAUDA_LONGA_CABECA = [5000.00, 2500.00, 1200.00, 800.00, 640.00]
 _CAUDA_LONGA_ITEM = 29.90
 _CAUDA_LONGA_N = 110

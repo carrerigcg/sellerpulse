@@ -14,6 +14,16 @@ import pandas as pd
 # Ficará configurável quando o modo real (ingestão ML) alimentar custo real.
 COST_ESTIMATE_RATE = 0.55
 
+# Rótulo do balde de itens sem categoria conhecida (anúncio apagado, ou
+# categoria que não entrou em categories_cache). Fica aqui, e não só no SQL,
+# pra os testes e qualquer consumidor referenciarem o mesmo valor.
+#
+# Mora nesta camada (e é importado por `backend/analytics/metrics_pg.py`, que
+# já importa `COST_ESTIMATE_RATE` daqui) porque duas cópias da mesma string em
+# duas camadas é precisamente como as camadas divergem — a classe de bug que
+# este módulo acabou de levar.
+SEM_CATEGORIA = "Sem categoria"
+
 
 def fluxo_financeiro(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.DataFrame:
     """DataFrame por dia com receita, custos e líquido para a janela dada.
@@ -69,19 +79,33 @@ def top_produtos(
         - "produtos": DataFrame [item_id, title, category_name, unidades, receita]
         - "categorias": DataFrame [category_id, category_name, unidades, receita]
         Ambos ordenados por receita desc.
+
+        Item vendido sem linha em `items_cache` (anúncio apagado no ML) entra
+        normalmente: `title` cai pro próprio item_id e a categoria vira
+        `SEM_CATEGORIA`. Em `categorias` ele forma um balde único com
+        `category_id` None — assim a soma das categorias fecha com a receita
+        total, sem atribuir venda a uma categoria real.
     """
     produtos = pd.read_sql_query(
         """
         SELECT
             oi.item_id                                       AS item_id,
-            ic.title                                          AS title,
-            cc.name                                           AS category_name,
+            -- LEFT JOIN nos dois caches: item sem linha em items_cache é
+            -- anúncio apagado (a ingestão leva 404 na API de itens e nunca
+            -- cacheia). Foi vendido e a receita é real, então ele fica no
+            -- ranking: o SKU é o título de fallback. Com INNER JOIN ele sumia
+            -- junto com o dinheiro (11,2% numa loja real) e esta tela — e o
+            -- PDF, que consome esta mesma função — divergia da Executive.
+            COALESCE(ic.title, oi.item_id)                    AS title,
+            -- Categoria desconhecida é DESCONHECIDA: rótulo explícito, nunca
+            -- uma categoria real emprestada. Ver a query de categorias abaixo.
+            COALESCE(cc.name, ?)                              AS category_name,
             SUM(oi.quantity)                                  AS unidades,
             ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
         FROM order_items oi
-        JOIN orders o        ON o.order_id     = oi.order_id
-        JOIN items_cache ic  ON ic.item_id     = oi.item_id
-        JOIN categories_cache cc ON cc.category_id = ic.category_id
+        JOIN orders o             ON o.order_id     = oi.order_id
+        LEFT JOIN items_cache ic  ON ic.item_id     = oi.item_id
+        LEFT JOIN categories_cache cc ON cc.category_id = ic.category_id
         WHERE o.status = 'paid'
           AND o.date_closed >= ?
           AND o.date_closed <  ?
@@ -90,23 +114,35 @@ def top_produtos(
         LIMIT ?
         """,
         conn,
-        params=(date_from, date_to, n),
+        params=(SEM_CATEGORIA, date_from, date_to, n),
     )
 
     # Segunda query separada — não dá pra reaproveitar o LIMIT do ranking de
     # produtos aqui: filtrar por top-N produtos distorceria os totais por
     # categoria (excluiria receita de produtos fora do top-N).
+    #
+    # Item sem categoria conhecida (anúncio apagado, ou categoria que não
+    # entrou em categories_cache) NÃO some e NÃO é jogado numa categoria real:
+    # os dois erros corrompem o breakdown de formas diferentes (o primeiro faz
+    # a soma das categorias não bater com a receita total; o segundo atribui
+    # venda a quem não vendeu). Ele forma um balde próprio, com category_id
+    # NULL (nenhum id real do ML colide) e o rótulo SEM_CATEGORIA.
+    #
+    # O GROUP BY é por `cc.category_id, cc.name` — as colunas cruas, não a
+    # expressão com COALESCE. Agrupar pelo rótulo juntaria num balde só duas
+    # categorias reais que por acaso tenham o mesmo nome; agrupar só por cc.*
+    # junta todos os desconhecidos num balde único, que é o desejado.
     categorias = pd.read_sql_query(
         """
         SELECT
             cc.category_id                                    AS category_id,
-            cc.name                                           AS category_name,
+            COALESCE(cc.name, ?)                              AS category_name,
             SUM(oi.quantity)                                  AS unidades,
             ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
         FROM order_items oi
-        JOIN orders o        ON o.order_id     = oi.order_id
-        JOIN items_cache ic  ON ic.item_id     = oi.item_id
-        JOIN categories_cache cc ON cc.category_id = ic.category_id
+        JOIN orders o             ON o.order_id     = oi.order_id
+        LEFT JOIN items_cache ic  ON ic.item_id     = oi.item_id
+        LEFT JOIN categories_cache cc ON cc.category_id = ic.category_id
         WHERE o.status = 'paid'
           AND o.date_closed >= ?
           AND o.date_closed <  ?
@@ -115,7 +151,7 @@ def top_produtos(
         LIMIT ?
         """,
         conn,
-        params=(date_from, date_to, n),
+        params=(SEM_CATEGORIA, date_from, date_to, n),
     )
 
     return {"produtos": produtos, "categorias": categorias}

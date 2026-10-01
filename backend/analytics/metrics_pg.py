@@ -26,12 +26,13 @@ import uuid
 import pandas as pd
 
 from backend.analytics._common import _parse_boundary
-from src.metrics import COST_ESTIMATE_RATE
 
-# Rotulo do balde de itens sem categoria conhecida (anuncio apagado, ou
-# categoria que nao entrou em categories_cache). Fica aqui, e nao so no SQL,
-# pra os testes e qualquer consumidor referenciarem o mesmo valor.
-SEM_CATEGORIA = "Sem categoria"
+# `SEM_CATEGORIA` e reexportado daqui: `src/metrics.py` passou a precisar do
+# mesmo rotulo quando levou a mesma correcao de LEFT JOIN, e duas copias da
+# string em duas camadas e exatamente como as camadas divergem. O import
+# re-liga o nome neste namespace, entao quem ja importava
+# `backend.analytics.metrics_pg.SEM_CATEGORIA` continua funcionando.
+from src.metrics import COST_ESTIMATE_RATE, SEM_CATEGORIA
 
 _FLUXO_COLUMNS = ["date", "receita_bruta", "taxas_ml", "frete", "custo_estimado", "liquido"]
 _PRODUTOS_COLUMNS = ["item_id", "title", "category_name", "unidades", "receita"]
