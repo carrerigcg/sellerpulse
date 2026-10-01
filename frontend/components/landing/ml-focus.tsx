@@ -11,7 +11,7 @@ const VANTAGENS = [
   {
     titulo: "Taxas do Mercado Livre",
     texto:
-      "Cada categoria tem uma comissão diferente. Ela já entra no cálculo de lucro, sem você procurar tabela nenhuma.",
+      "Cada categoria tem uma comissão diferente. Ela já entra no cálculo da margem, sem você procurar tabela nenhuma.",
   },
   {
     // Aqui havia um card de "Frete" prometendo que o custo de envio entrava na

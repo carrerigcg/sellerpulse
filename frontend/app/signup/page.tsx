@@ -160,7 +160,8 @@ function PainelSignup() {
   const analises = [
     {
       titulo: "Executive",
-      texto: "Receita, custos e lucro líquido por dia, com variação sobre o período anterior.",
+      texto:
+        "Receita, comissão do Mercado Livre e margem de contribuição por dia, com variação sobre o período anterior.",
     },
     {
       titulo: "Produtos",

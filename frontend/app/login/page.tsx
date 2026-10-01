@@ -110,8 +110,8 @@ function PainelLogin() {
         <span className="text-accent">sem planilha.</span>
       </h2>
       <p className="mt-4 text-muted">
-        Receita, custos e lucro por dia. Curva ABC dos produtos. Segmentação dos
-        compradores. Tudo calculado a partir dos seus pedidos reais.
+        Receita, comissão do Mercado Livre e margem por dia. Curva ABC dos produtos.
+        Segmentação dos compradores. Tudo calculado a partir dos seus pedidos reais.
       </p>
 
       <div className="mt-10 rounded-xl border border-line bg-bg p-5 shadow-sm">

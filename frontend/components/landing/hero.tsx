@@ -49,13 +49,18 @@ export function Hero() {
           </p>
 
           <h1 className="mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
-            O lucro da sua loja, <span className="text-accent">calculado</span> — não
-            estimado.
+            A sua margem no Mercado Livre, <span className="text-accent">calculada</span> — não
+            estimada.
           </h1>
 
+          {/* A última frase assume o limite em voz alta: é ela que torna o
+              resto crível. Não suavizar — o produto já prometeu "calculado"
+              enquanto chutava 55% de custo, e foi assim que a headline virou
+              mentira. */}
           <p className="mt-6 text-lg text-white/80">
-            Receita, produtos e clientes a partir dos seus pedidos reais no Mercado
-            Livre. A comissão do Mercado Livre e os cancelamentos já entram na conta.
+            Receita menos a comissão do Mercado Livre e o frete, a partir dos seus
+            pedidos reais. O custo do seu produto é o único número que a gente não
+            chuta.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">

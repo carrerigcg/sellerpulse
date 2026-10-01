@@ -17,8 +17,12 @@ export type FluxoDia = {
   receita_bruta: number;
   taxas_ml: number;
   frete: number;
-  custo_estimado: number;
-  liquido: number;
+  /**
+   * receita_bruta − taxas_ml − frete. Não existe mais um `custo_estimado`
+   * (55% da receita chutados) nem o `liquido` que saía dele — ver o
+   * comentário no topo de `src/metrics.py`.
+   */
+  margem_contribuicao: number;
 };
 
 export type ClasseAbc = "A" | "B" | "C";
