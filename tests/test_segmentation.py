@@ -297,6 +297,89 @@ def test_rfm_empty_window_returns_empty_df(rfm_conn: sqlite3.Connection) -> None
 
 
 @pytest.fixture
+def rfm_conn_cauda_longa() -> sqlite3.Connection:
+    """Cenário que reproduz loja real: quase todo mundo compra uma vez só.
+
+    Medido numa loja conectada de verdade (428 compradores, 6 meses): 398 tinham
+    frequency=1 e 26 tinham frequency=2. Aqui: 40 buyers com 1 compra, 3 com 2 e
+    1 com 3 — mesma forma de distribuição, escala reduzida.
+
+    Janela: date_from='2026-05-01' até date_to='2026-08-01'.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    _seed_minimal_schema(conn)
+    conn.execute("INSERT INTO categories_cache (category_id, name) VALUES ('C', 'Cat')")
+    conn.execute("INSERT INTO items_cache (item_id, title, category_id) VALUES ('X', 'X', 'C')")
+
+    # (buyer_id, quantidade de compras) — cauda longa em frequency.
+    perfis: list[tuple[int, int]] = [(b, 1) for b in range(1, 41)]
+    perfis += [(41, 2), (42, 2), (43, 2), (44, 3)]
+
+    oid = 0
+    for buyer, n_compras in perfis:
+        for i in range(n_compras):
+            oid += 1
+            # Espalha datas e valores para que recency e monetary tenham variedade;
+            # o alvo do teste é frequency, que fica empatada de propósito.
+            dia = 1 + ((buyer * 2 + i * 7) % 88)
+            data = (pd.Timestamp("2026-05-01") + pd.Timedelta(days=dia)).strftime(
+                "%Y-%m-%dT10:00:00"
+            )
+            total = 50.0 + (buyer % 11) * 37.0 + i * 13.0
+            conn.execute(
+                "INSERT INTO orders (order_id, date_closed, status, total_amount, buyer_id) "
+                "VALUES (?, ?, 'paid', ?, ?)",
+                (oid, data, total, buyer),
+            )
+            conn.execute(
+                "INSERT INTO order_items (order_id, item_id, quantity, unit_price) "
+                "VALUES (?, 'X', 1, ?)",
+                (oid, total),
+            )
+    conn.commit()
+    yield conn
+    conn.close()
+
+
+def test_rfm_empates_em_frequency_recebem_o_mesmo_score(
+    rfm_conn_cauda_longa: sqlite3.Connection,
+) -> None:
+    """Valor de entrada igual → score igual. Vale para R, F e M.
+
+    Regressão do bug de produção: `rank(method="first")` desempatava
+    sequencialmente, então os 398 compradores com frequency=1 da loja real
+    recebiam f_score de 1 a 5 — ruído puro alimentando o segmento RFM.
+    """
+    df = rfm_scores(rfm_conn_cauda_longa, "2026-05-01", "2026-08-01")
+    assert not df.empty
+
+    # A fixture precisa de fato ter empate pesado, senão o teste não prova nada.
+    assert (df["frequency"] == 1).sum() >= 30
+
+    for valor, score in [
+        ("frequency", "f_score"),
+        ("recency_dias", "r_score"),
+        ("monetary", "m_score"),
+    ]:
+        nunique_por_valor = df.groupby(valor)[score].nunique()
+        assert nunique_por_valor.max() == 1, (
+            f"{valor} iguais produziram {score} diferentes: "
+            f"{nunique_por_valor[nunique_por_valor > 1].to_dict()}"
+        )
+
+
+def test_rfm_cauda_longa_mantem_scores_entre_1_e_5(
+    rfm_conn_cauda_longa: sqlite3.Connection,
+) -> None:
+    """Contrato antigo segue valendo mesmo com distribuição degenerada."""
+    df = rfm_scores(rfm_conn_cauda_longa, "2026-05-01", "2026-08-01")
+    for score in ["r_score", "f_score", "m_score"]:
+        assert df[score].between(1, 5).all()
+        assert df[score].dtype.kind == "i", f"{score} deveria ser int, é {df[score].dtype}"
+
+
+@pytest.fixture
 def cohort_conn() -> sqlite3.Connection:
     """Cenário controlado para cohort:
     - Produto P1 lança em jan/2026, vende em jan/fev/mar

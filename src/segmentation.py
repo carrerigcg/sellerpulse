@@ -90,22 +90,24 @@ _RFM_COLUMNS = [
 def _score_by_quintile(series: pd.Series, ascending: bool = True) -> pd.Series:
     """Devolve score int 1-5 via quintis. `ascending=True` = maior valor → score 5.
 
-    Trata cases com < 5 valores distintos via `duplicates="drop"` e labels
-    dinâmicos. Empates recebem o mesmo score. NaN não deve ocorrer (série
+    Os quintis são calculados sobre os **valores distintos** observados, não
+    sobre as linhas. Com isso empates recebem o mesmo score por construção:
+    cada valor é pontuado uma única vez e as linhas apenas consultam o mapa.
+
+    Quando há menos de 5 valores distintos, o número de bins cai para a
+    quantidade de valores distintos e os labels são truncados (`labels[:n_bins]`).
+    O topo então marca 2 (ou 3, 4...) em vez de 5 — proposital: não dá para
+    distinguir 5 níveis numa série que só tem 2. NaN não deve ocorrer (série
     numérica não-nula por construção).
     """
     labels_asc = [1, 2, 3, 4, 5]
     labels = labels_asc if ascending else list(reversed(labels_asc))
-    # rank(method="first") desempata sequencialmente — evita bins vazios.
-    ranks = series.rank(method="first")
-    try:
-        binned = pd.qcut(ranks, q=5, labels=labels)
-    except ValueError:
-        # Poucas amostras distintas — cai para menos bins.
-        n_bins = min(5, ranks.nunique())
-        sub_labels = labels[:n_bins]
-        binned = pd.qcut(ranks, q=n_bins, labels=sub_labels, duplicates="drop")
-    return binned.astype(int)
+    # Ranks sobre valores distintos são sempre únicos — qcut nunca gera bins vazios.
+    distintos = pd.Series(sorted(series.unique()))
+    n_bins = min(5, len(distintos))
+    binned = pd.qcut(distintos.rank(method="first"), q=n_bins, labels=labels[:n_bins])
+    mapa = dict(zip(distintos, binned.astype(int), strict=True))
+    return series.map(mapa).astype(int)
 
 
 def _assign_segment(row: pd.Series) -> str:
