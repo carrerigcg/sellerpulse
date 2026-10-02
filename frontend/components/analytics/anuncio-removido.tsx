@@ -24,8 +24,14 @@ const EXPLICACAO = "Este anúncio não existe mais no Mercado Livre. A venda e a
 
 /**
  * Entra no lugar do título repetido NA TABELA, onde o fundo é branco e a
- * borda da pílula de fato a delimita. `whitespace-nowrap` impede que as duas
- * palavras quebrem a célula na largura de celular.
+ * borda da pílula de fato a delimita.
+ *
+ * O `whitespace-nowrap` agora só vale a partir de `sm`. Ele existia pra
+ * impedir que as duas palavras quebrassem, mas desde que a coluna Título
+ * passou a ter largura proporcional no celular (ver `abc-table.tsx`) ele
+ * virava o problema: medida inteira a pílula ocupa 139px contra os ~91px da
+ * coluna, e sem poder quebrar ela estourava a célula. No celular ela quebra
+ * em duas linhas; da borda pra cima nada muda.
  *
  * Não serve pro tooltip do Pareto: lá o container já é `bg-surface`, então o
  * preenchimento da pílula fica na mesma cor do fundo (contraste 1,00:1) e
@@ -36,7 +42,7 @@ export function AnuncioRemovidoPill() {
   return (
     <span
       title={EXPLICACAO}
-      className="inline-block whitespace-nowrap rounded-full border border-line bg-surface px-2 py-0.5 text-xs text-muted"
+      className="inline-block break-words rounded-full border border-line bg-surface px-2 py-0.5 text-xs text-muted sm:whitespace-nowrap"
     >
       {ROTULO}
     </span>

@@ -23,12 +23,23 @@ type Coluna = {
    * de visão — some com o resumo e sobra a matéria-prima.
    */
   soNoDesktop?: boolean;
+  /**
+   * Rótulo curto pro celular. Aqui quem manda na largura da coluna é o
+   * cabeçalho, não o dado: "Frequência" ocupa 103px pra mostrar números de
+   * um dígito. Encurtar o rótulo estreita a coluna sem esconder nada.
+   */
+  rotuloCurto?: string;
 };
 
 const COLUNAS: Coluna[] = [
-  { chave: "buyer_id", rotulo: "Comprador" },
-  { chave: "recency_dias", rotulo: "Recência (dias)", alinhamento: "right" },
-  { chave: "frequency", rotulo: "Frequência", alinhamento: "right" },
+  { chave: "buyer_id", rotulo: "Comprador", rotuloCurto: "#" },
+  { chave: "recency_dias", rotulo: "Recência (dias)", rotuloCurto: "Dias", alinhamento: "right" },
+  // Escondida no celular mesmo com rótulo curto: encurtar "Frequência" pra
+  // "Pedidos" ainda deixava as colunas em 411px contra os 325 disponíveis.
+  // É a candidata certa porque é quase uma constante — na loja conectada
+  // hoje, 708 dos 778 compradores têm frequência 1. Quem precisa do número
+  // vê no desktop; quem está no celular ganha o Segmento inteiro na tela.
+  { chave: "frequency", rotulo: "Frequência", alinhamento: "right", soNoDesktop: true },
   { chave: "monetary", rotulo: "Valor", alinhamento: "right" },
   { chave: "r_score", rotulo: "R", alinhamento: "right", soNoDesktop: true },
   { chave: "f_score", rotulo: "F", alinhamento: "right", soNoDesktop: true },
@@ -97,12 +108,23 @@ export function BuyersTable({ dados }: { dados: RfmLinha[] }) {
                 key={coluna.chave}
                 className={`px-3 py-2 font-medium ${coluna.alinhamento === "right" ? "text-right" : ""} ${coluna.soNoDesktop ? SO_NO_DESKTOP : ""}`}
               >
+                {/* `aria-label` com o rótulo por extenso: o texto curto do
+                    celular ("#", "Dias") é claro ao lado do dado, mas sozinho
+                    num leitor de tela não diria nada. */}
                 <button
                   type="button"
                   onClick={() => alternarOrdem(coluna.chave)}
+                  aria-label={`Ordenar por ${coluna.rotulo}`}
                   className="inline-flex items-center gap-1 hover:text-accent"
                 >
-                  {coluna.rotulo}
+                  {coluna.rotuloCurto ? (
+                    <>
+                      <span className="sm:hidden">{coluna.rotuloCurto}</span>
+                      <span className="hidden sm:inline">{coluna.rotulo}</span>
+                    </>
+                  ) : (
+                    coluna.rotulo
+                  )}
                   {ordem.chave === coluna.chave && (
                     <span aria-hidden>{ordem.direcao === "asc" ? "↑" : "↓"}</span>
                   )}
