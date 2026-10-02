@@ -63,10 +63,17 @@ async def test_worker_para_no_shutdown(monkeypatch, pg_pool):
     assert tarefa.done()
 
 
-async def test_lifespan_sobe_o_refresh_da_demo_por_default(monkeypatch, pg_pool):
+async def test_lifespan_sobe_o_refresh_da_demo_quando_ligado_explicitamente(monkeypatch, pg_pool):
+    """Com `DEMO_REFRESH_IN_PROCESS=1` a task tem que ser agendada.
+
+    O nome antigo dizia "por default", que virou mentira quando o refresh
+    passou a ser opt-in -- e um teste cujo nome mente sobre o default e pior
+    que nenhum teste, porque convence o proximo leitor de que o default e o
+    contrario do que e.
+    """
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
-    monkeypatch.delenv("DEMO_REFRESH_IN_PROCESS", raising=False)
+    monkeypatch.setenv("DEMO_REFRESH_IN_PROCESS", "1")
     # Sem DEMO_SELLER_ID o refresh e no-op -- o que esta sob teste aqui e o
     # agendamento da task, nao a regeneracao.
     monkeypatch.delenv("DEMO_SELLER_ID", raising=False)
@@ -75,9 +82,44 @@ async def test_lifespan_sobe_o_refresh_da_demo_por_default(monkeypatch, pg_pool)
         assert len(tarefas) == 1
 
 
+async def test_lifespan_nao_sobe_o_refresh_da_demo_sem_a_env_var(monkeypatch, pg_pool):
+    """O default: variavel AUSENTE nao liga o refresh.
+
+    E o teste que paga pela inversao pra opt-in. Um clone novo, um runner de CI
+    ou um script que importe `backend.main` nunca ouviu falar de
+    `DEMO_REFRESH_IN_PROCESS` -- e a segunda instrucao do refresh e
+    `DELETE FROM orders`. O caso sob teste e exatamente "ninguem configurou
+    nada", nao "alguem desligou" (esse e o teste do `=0` abaixo).
+    """
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.delenv("DEMO_REFRESH_IN_PROCESS", raising=False)
+    async with lifespan(app):
+        assert not [t for t in asyncio.all_tasks() if t.get_name() == "sellerpulse-demo-refresh"]
+
+
+async def test_lifespan_nao_sobe_o_refresh_da_demo_com_valor_qualquer(monkeypatch, pg_pool):
+    """`true`, `yes`, `2` -- so o valor exatamente `1` liga.
+
+    Sem isto, trocar o `== "1"` por um `!= "0"` (que e o formato do
+    `worker_habilitado`) voltaria a ligar o refresh por engano e nenhum teste
+    reclamaria.
+    """
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setenv("DEMO_REFRESH_IN_PROCESS", "true")
+    async with lifespan(app):
+        assert not [t for t in asyncio.all_tasks() if t.get_name() == "sellerpulse-demo-refresh"]
+
+
 async def test_lifespan_respeita_o_desligamento_do_refresh_da_demo(monkeypatch, pg_pool):
     """Os testes de /demo dependem disto: o refresh comeca com um DELETE nos
-    pedidos do seller marcado como demo, que e o mesmo que eles populam."""
+    pedidos do seller marcado como demo, que e o mesmo que eles populam.
+
+    Com o default agora opt-in, o `=0` explicito nao muda o resultado -- mas
+    continua sendo o jeito documentado de desligar (e o que a fixture de
+    sessao usa), entao segue coberto.
+    """
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
     monkeypatch.setenv("DEMO_REFRESH_IN_PROCESS", "0")
@@ -95,7 +137,7 @@ async def test_refresh_da_demo_nao_vaza_task_no_shutdown(monkeypatch, pg_pool):
 
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
-    monkeypatch.delenv("DEMO_REFRESH_IN_PROCESS", raising=False)
+    monkeypatch.setenv("DEMO_REFRESH_IN_PROCESS", "1")
 
     async def _refresh_que_nunca_acaba(pool):
         await asyncio.Event().wait()
@@ -114,7 +156,7 @@ async def test_refresh_da_demo_que_estoura_nao_derruba_o_boot(monkeypatch, pg_po
 
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
-    monkeypatch.delenv("DEMO_REFRESH_IN_PROCESS", raising=False)
+    monkeypatch.setenv("DEMO_REFRESH_IN_PROCESS", "1")
 
     async def _refresh_que_estoura(pool):
         raise RuntimeError("banco fora do ar")

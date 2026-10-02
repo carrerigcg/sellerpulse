@@ -27,14 +27,21 @@ _log = logging.getLogger(__name__)
 
 
 def demo_refresh_habilitado() -> bool:
-    """Desligavel por env, no mesmo formato do `worker_habilitado()`.
+    """LIGA so com `DEMO_REFRESH_IN_PROCESS=1` explicito -- opt-in, nao opt-out.
 
-    Os testes de `/demo` DESLIGAM: eles inserem pedidos com datas fixas e
-    conferem o resultado, e um refresh rodando em paralelo apagaria justamente
-    essas linhas (`regenera_demo` comeca com DELETE). Quem roda local contra o
-    Supabase de producao tambem vai querer desligar.
+    A segunda instrucao desta feature e `DELETE FROM orders`. Num default
+    opt-out, todo ambiente que nunca ouviu falar dela roda o refresh por
+    inercia: um clone novo, um runner de CI, qualquer script que importe
+    `backend.main` -- e basta um `DEMO_SELLER_ID` errado pra apagar os pedidos
+    de um seller. A assimetria e todo o argumento: esquecer a variavel no
+    opt-in deixa a demo velha (cosmetico), esquecer no opt-out apaga dado
+    (destrutivo). Entre as duas, o default tem que ser a falha barata.
+
+    DIVERGE de `worker_habilitado()` DE PROPOSITO, que continua opt-out: o
+    worker so le e escreve as linhas da propria fila, este refresh APAGA. Nao
+    "arrume" a inconsistencia -- ela e a decisao.
     """
-    return os.environ.get("DEMO_REFRESH_IN_PROCESS", "1") != "0"
+    return os.environ.get("DEMO_REFRESH_IN_PROCESS") == "1"
 
 
 async def _refresca_demo(pool) -> None:
@@ -60,7 +67,8 @@ async def lifespan(app: FastAPI):
     Worker. `WORKER_IN_PROCESS=0` desliga — usado nos testes de router, que
     precisam que ninguem drene a fila que eles acabaram de popular.
 
-    O refresh da demo tambem sai daqui, em task de fundo. Nunca no caminho
+    O refresh da demo tambem sai daqui, em task de fundo -- mas so quando
+    ligado explicitamente (ver `demo_refresh_habilitado`). Nunca no caminho
     sincrono do boot: o free tier do Render hiberna e o visitante que acorda a
     instancia ja espera ~25s: somar a regeneracao de ~780 pedidos a essa
     espera faria a pagina de aquisicao parecer quebrada.
