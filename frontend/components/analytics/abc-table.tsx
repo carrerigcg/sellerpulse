@@ -14,15 +14,21 @@ const pct = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 /** Tabela por produto — sku, título, receita, participação, classe. */
 export function AbcTable({ abc }: { abc: AbcLinha[] }) {
   return (
-    <div className="mt-4 max-h-[28rem] overflow-y-auto rounded-lg border border-line">
+    // `overflow-x-auto` explícito: `overflow-y-auto` já forçava o eixo X pra
+    // `auto` por regra da spec, então a rolagem lateral existia por efeito
+    // colateral. Declarada, ela fica no código em vez de herdada por acidente.
+    <div className="mt-4 max-h-[28rem] overflow-x-auto overflow-y-auto rounded-lg border border-line">
       <table className="w-full text-left text-sm">
         <thead className="sticky top-0 bg-surface text-xs uppercase tracking-wide text-muted">
           <tr>
             <th className="px-3 py-2 font-medium">SKU</th>
             <th className="px-3 py-2 font-medium">Título</th>
             <th className="px-3 py-2 font-medium text-right">Receita</th>
-            <th className="px-3 py-2 font-medium text-right">% receita</th>
-            <th className="px-3 py-2 font-medium text-right">% acumulado</th>
+            {/* Escondidas no celular pra que Receita e Classe — o que a tela
+                existe pra mostrar — caibam sem rolar de lado. O selo A/B/C já
+                diz o mesmo que as duas porcentagens, em uma coluna só. */}
+            <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">% receita</th>
+            <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">% acumulado</th>
             <th className="px-3 py-2 font-medium">Classe</th>
           </tr>
         </thead>
@@ -36,8 +42,10 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
                 {anuncioFoiRemovido(linha) ? <AnuncioRemovidoPill /> : linha.titulo}
               </td>
               <td className="tabular px-3 py-2 text-right">{brl.format(linha.receita)}</td>
-              <td className="tabular px-3 py-2 text-right">{pct.format(linha.receita_pct)}%</td>
-              <td className="tabular px-3 py-2 text-right">
+              <td className="tabular hidden px-3 py-2 text-right sm:table-cell">
+                {pct.format(linha.receita_pct)}%
+              </td>
+              <td className="tabular hidden px-3 py-2 text-right sm:table-cell">
                 {pct.format(linha.receita_acumulada_pct)}%
               </td>
               <td className="px-3 py-2">
