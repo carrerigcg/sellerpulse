@@ -38,6 +38,59 @@ _TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims"
 _DEMO_DB = Path(__file__).resolve().parents[2] / "data" / "demo.db"
 
 
+class _ConnEspia:
+    """Conexao que REGISTRA o SQL de `execute`/`fetchval` e encaminha o resto.
+
+    Existe pra um teste so: fixar que `_exige_demo` roda ANTES do primeiro
+    DELETE. Encaminha por `__getattr__` em vez de reimplementar a interface do
+    asyncpg -- `seed_na_conexao` usa `executemany`, e amanha pode usar outra
+    coisa; o que este espiao precisa observar sao exatamente as duas chamadas
+    que a ordem depende.
+    """
+
+    def __init__(self, conn, registro: list[str]) -> None:
+        self._conn = conn
+        self._registro = registro
+
+    async def execute(self, sql, *args, **kwargs):
+        self._registro.append(sql)
+        return await self._conn.execute(sql, *args, **kwargs)
+
+    async def fetchval(self, sql, *args, **kwargs):
+        self._registro.append(sql)
+        return await self._conn.fetchval(sql, *args, **kwargs)
+
+    def __getattr__(self, nome):
+        # `transaction`, `executemany`, `fetchrow`... passam direto.
+        return getattr(self._conn, nome)
+
+
+class _AquisicaoEspia:
+    def __init__(self, pool, registro: list[str]) -> None:
+        self._ctx = pool.acquire()
+        self._registro = registro
+
+    async def __aenter__(self):
+        return _ConnEspia(await self._ctx.__aenter__(), self._registro)
+
+    async def __aexit__(self, *exc):
+        return await self._ctx.__aexit__(*exc)
+
+
+class _PoolEspia:
+    """Pool que entrega `_ConnEspia`. Mesma assinatura usada por `regenera_demo`."""
+
+    def __init__(self, pool, registro: list[str]) -> None:
+        self._pool = pool
+        self._registro = registro
+
+    def acquire(self):
+        return _AquisicaoEspia(self._pool, self._registro)
+
+    def __getattr__(self, nome):
+        return getattr(self._pool, nome)
+
+
 async def _marca_demo(pg_pool, seller_id) -> None:
     async with pg_pool.acquire() as conn:
         await conn.execute("UPDATE sellers SET is_demo = true WHERE id = $1", seller_id)
@@ -105,6 +158,41 @@ async def test_recusa_seller_inexistente_sem_apagar_o_vizinho(pg_pool, test_sell
 
     assert await _contagens(pg_pool, sid) == antes
     assert await _max_date_closed(pg_pool, sid) == data_antes
+
+
+async def test_a_trava_is_demo_roda_antes_do_primeiro_delete(pg_pool, test_seller):
+    """Fixa a POSICAO da trava, nao so a existencia dela.
+
+    Os outros testes desta secao provam que um seller sem `is_demo` sai com os
+    pedidos intactos -- mas provam isso com a trava em QUALQUER lugar dentro da
+    transacao: mover `_exige_demo` pra depois dos quatro DELETEs mantem os 16
+    testes verdes, porque o `raise` dispara o rollback e o dado volta
+    (verificado por mutacao). Quem defende a ordem hoje e so a transacao.
+
+    Isso nao e defesa suficiente. Um `conn.transaction()` que alguem remova,
+    troque por autocommit, ou um DELETE que alguem mova pra fora do bloco --
+    e a ordem passa a importar de verdade, sem nenhum teste avisando. Aqui a
+    ordem e observada direto: `SELECT is_demo` tem que aparecer no SQL antes
+    do primeiro `DELETE`.
+
+    O seller usado E demo, entao o caminho e o de sucesso: o que se mede e a
+    sequencia, nao o `raise`.
+    """
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+
+    registro: list[str] = []
+    await regenera_demo(
+        _PoolEspia(pg_pool, registro), sid, anchor=datetime.now(UTC), seed=DEFAULT_SEED, **_PEQUENO
+    )
+
+    trava = next(i for i, sql in enumerate(registro) if "is_demo" in sql)
+    primeiro_delete = next(i for i, sql in enumerate(registro) if sql.lstrip().startswith("DELETE"))
+    assert trava < primeiro_delete, (
+        "a trava is_demo rodou DEPOIS de um DELETE -- hoje o rollback esconde isso, "
+        f"mas a ordem esta errada. SQL observado: {registro[: primeiro_delete + 1]}"
+    )
 
 
 # --------------------------------------------------------------------------
