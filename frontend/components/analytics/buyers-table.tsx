@@ -40,13 +40,20 @@ type Coluna = {
 };
 
 const COLUNAS: Coluna[] = [
-  { chave: "buyer_id", rotulo: "Comprador", rotuloCurto: "#", larguraCelular: "w-[22%]" },
+  { chave: "buyer_id", rotulo: "Comprador", rotuloCurto: "#", larguraCelular: "w-[36%]" },
+  // Escondida no celular pra que o identificador caiba inteiro. Com ela, as
+  // quatro colunas pediam 312px contra os 283 do cartão, e quem pagava a
+  // conta era o `#`: os 372 compradores apareciam com o número picado em
+  // duas linhas ("#555 / 88495"). Um identificador partido no meio é o mesmo
+  // defeito que a coluna de Valor evita ao não quebrar dentro do número.
+  // Recência é a candidata certa a sair pelo mesmo motivo que R, F e M: o
+  // selo de Segmento já a carrega de forma qualitativa — "Em risco",
+  // "Hibernando" e "Novos" são, na origem, afirmações sobre recência.
   {
     chave: "recency_dias",
     rotulo: "Recência (dias)",
-    rotuloCurto: "Dias",
     alinhamento: "right",
-    larguraCelular: "w-[16%]",
+    soNoDesktop: true,
   },
   // Escondida no celular mesmo com rótulo curto: encurtar "Frequência" pra
   // "Pedidos" ainda deixava as colunas em 411px contra os 325 disponíveis.
@@ -54,11 +61,11 @@ const COLUNAS: Coluna[] = [
   // hoje, 708 dos 778 compradores têm frequência 1. Quem precisa do número
   // vê no desktop; quem está no celular ganha o Segmento inteiro na tela.
   { chave: "frequency", rotulo: "Frequência", alinhamento: "right", soNoDesktop: true },
-  { chave: "monetary", rotulo: "Valor", alinhamento: "right", larguraCelular: "w-[28%]" },
+  { chave: "monetary", rotulo: "Valor", alinhamento: "right", larguraCelular: "w-[29%]" },
   { chave: "r_score", rotulo: "R", alinhamento: "right", soNoDesktop: true },
   { chave: "f_score", rotulo: "F", alinhamento: "right", soNoDesktop: true },
   { chave: "m_score", rotulo: "M", alinhamento: "right", soNoDesktop: true },
-  { chave: "segmento", rotulo: "Segmento", larguraCelular: "w-[34%]" },
+  { chave: "segmento", rotulo: "Segmento", larguraCelular: "w-[35%]" },
 ];
 
 /**
@@ -166,7 +173,9 @@ export function BuyersTable({ dados }: { dados: RfmLinha[] }) {
                     aparece sob o rótulo do vizinho. Foi o que aconteceu com
                     Frequência. Mexeu em `COLUNAS`, mexa aqui junto. */}
                 <td className="break-words px-2 py-2 text-muted sm:px-3">#{linha.buyer_id}</td>
-                <td className="tabular px-2 py-2 text-right sm:px-3">{linha.recency_dias}</td>
+                <td className={`tabular px-2 py-2 text-right sm:px-3 ${SO_NO_DESKTOP}`}>
+                  {linha.recency_dias}
+                </td>
                 <td className={`tabular px-2 py-2 text-right sm:px-3 ${SO_NO_DESKTOP}`}>
                   {linha.frequency}
                 </td>

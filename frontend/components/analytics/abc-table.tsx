@@ -34,21 +34,26 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
                 mora dentro de um cartão com `p-5`, então sobram 283px. Medir
                 contra 325 foi o que deixou passar sete receitas cortadas.
 
-                Só duas colunas têm piso de verdade, medido com dado real do
-                vendedor de demonstração e `px-2`: Receita 83px ("R$ 138.747"
-                numa linha só, e sem `break-words` ela não pode quebrar dentro
-                do número) e Classe 59px (a palavra do cabeçalho não quebra, e
-                a etiqueta A/B/C é menor que ela). São 142px travados. SKU e
-                Título dividem os 141 que sobram, e os dois são elásticos
-                porque quebram em linhas. Daí 19/29/30/22 = 100.
+                São três colunas no celular, não quatro: 283px não comportam
+                quatro incluindo texto livre. Com quatro, a conta fechava e a
+                leitura não — o SKU saía picado em "MLB1/0000/0" e o título
+                quebrava no meio das palavras ("seguranç/a"). É o mesmo erro
+                que a coluna de Receita evita ao não quebrar dentro do número,
+                só que menos perigoso.
 
-                As folgas ficam em 2 ou 3px por coluna, que é exatamente onde
-                conta de cabeça passa despercebida: mexer numa porcentagem
-                aqui exige medir de novo (maior `scrollWidth` de cada coluna
-                contra o `clientWidth`), não estimar. */}
-            <th className="w-[19%] px-2 py-2 font-medium sm:w-auto sm:px-3">SKU</th>
-            <th className="w-[29%] px-2 py-2 font-medium sm:w-auto sm:px-3">Título</th>
-            <th className="w-[30%] px-2 py-2 font-medium text-right sm:w-auto sm:px-3">
+                Quem sai é o SKU, porque é identificador de máquina: no
+                celular a pergunta é "qual produto, quanto rendeu, é A ou C?",
+                e quem responde "qual produto" é o título. No desktop ele
+                volta, que lá sobra espaço.
+
+                Pisos medidos com dado real e `px-2`: Receita 85px
+                ("R$ 138.747" numa linha) e Classe 62px (a palavra do
+                cabeçalho não quebra). Sobra ~130px pro Título — perto de 16
+                caracteres por linha, o bastante pra quebrar só nos espaços.
+                Daí 46/31/23 = 100. */}
+            <th className="hidden px-2 py-2 font-medium sm:table-cell sm:px-3">SKU</th>
+            <th className="w-[46%] px-2 py-2 font-medium sm:w-auto sm:px-3">Título</th>
+            <th className="w-[31%] px-2 py-2 font-medium text-right sm:w-auto sm:px-3">
               Receita
             </th>
             {/* Escondidas no celular pra que Receita e Classe — o que a tela
@@ -56,15 +61,17 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
                 diz o mesmo que as duas porcentagens, em uma coluna só. */}
             <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">% receita</th>
             <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">% acumulado</th>
-            <th className="w-[22%] px-2 py-2 font-medium sm:w-auto sm:px-3">Classe</th>
+            <th className="w-[23%] px-2 py-2 font-medium sm:w-auto sm:px-3">Classe</th>
           </tr>
         </thead>
         <tbody>
           {abc.map((linha) => (
             <tr key={linha.sku} className="border-t border-line">
-              {/* O SKU é um token só ("MLB-4471239988"): sem `break-words`
-                  ele não teria onde quebrar e estouraria a coluna estreita. */}
-              <td className="break-words px-2 py-2 text-muted sm:px-3">{linha.sku}</td>
+              {/* Escondido no celular — ver o comentário no cabeçalho. Aqui
+                  ele não leva `break-words`: na largura do desktop o SKU cabe
+                  inteiro, e deixar a quebra disponível só convidaria a picar
+                  o identificador se a coluna apertasse. */}
+              <td className="hidden px-2 py-2 text-muted sm:table-cell sm:px-3">{linha.sku}</td>
               {/* Repetir o SKU como título é o que confunde: a coluna ao lado
                   já o mostra. Trocar pelo rótulo diz por que o nome falta. */}
               {/* O truncamento só vale a partir de `sm`, onde a coluna tem
@@ -73,7 +80,19 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
                   `break-words` cobre SKU-título sem espaço, que não teria
                   onde quebrar e estouraria a célula estreita. */}
               <td className="break-words px-2 py-2 sm:max-w-xs sm:truncate sm:px-3">
-                {anuncioFoiRemovido(linha) ? <AnuncioRemovidoPill /> : linha.titulo}
+                {anuncioFoiRemovido(linha) ? (
+                  <>
+                    <AnuncioRemovidoPill />
+                    {/* Nessas linhas o título É o SKU, então a pílula ocupa o
+                        lugar do nome e, com a coluna SKU escondida, a linha
+                        ficaria sem identificador nenhum no celular. O SKU
+                        embaixo da pílula resolve sem inventar coluna — e some
+                        a partir de `sm`, onde a coluna SKU volta. */}
+                    <span className="mt-1 block text-xs text-muted sm:hidden">{linha.sku}</span>
+                  </>
+                ) : (
+                  linha.titulo
+                )}
               </td>
               {/* Sem `break-words` aqui, de propósito: com ele uma receita de
                   7 dígitos quebrava DENTRO do número ("R$ 1.299.45" / "0"),
