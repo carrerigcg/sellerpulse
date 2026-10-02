@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+from datetime import timedelta
+from pathlib import Path
 
 from src.demo_data import (
+    ANCHOR_DATE,
     ANCHOR_TIMESTAMP,
     DEFAULT_SEED,
     generate_catalog,
@@ -14,6 +17,8 @@ from src.demo_data import (
     generate_orders,
     write_row,
 )
+
+_DEMO_DB = Path(__file__).resolve().parents[1] / "data" / "demo.db"
 
 
 def test_write_row_uses_anchor_timestamp_for_fetched_at(memory_db: sqlite3.Connection) -> None:
@@ -228,3 +233,72 @@ def test_generate_demo_db_produces_byte_identical_file_cross_process(tmp_path) -
         check=True,
     )
     assert r1.stdout.strip() == r2.stdout.strip()
+
+
+# ---------------------------------------------------------------------------
+# A ancora congelada
+#
+# Estes tres testes moravam em `backend/tests/test_demo_refresh.py`, onde
+# nasceram junto com o parametro `anchor`. Mas eles nao tocam no backend: o
+# que exercitam e `src/demo_data.py` e o `data/demo.db` versionado, e esta
+# suite e a que roda `src/`. Lá, quem editasse `src/demo_data.py` e rodasse
+# `pytest tests` passava verde -- o aviso de que a ancora descongelou so
+# chegava em `pytest backend/tests`, que exige um Postgres local no ar.
+# ---------------------------------------------------------------------------
+
+
+def test_ancora_default_continua_batendo_com_o_demo_db_commitado() -> None:
+    """`generate_orders` sem `anchor` tem que reproduzir `data/demo.db`.
+
+    O arquivo e versionado e o golden do PDF depende destes numeros. Se o
+    default do parametro `anchor` tivesse virado `now()` -- ou se a ancora
+    congelada tivesse mudado de valor -- este teste cai, em vez de o commit de
+    `data/demo.db` virar "always dirty" e o golden do PDF quebrar depois.
+    """
+    assert _DEMO_DB.exists(), f"demo.db versionado nao encontrado em {_DEMO_DB}"
+    conn = sqlite3.connect(str(_DEMO_DB))
+    try:
+        do_arquivo = conn.execute("SELECT order_id, date_closed FROM orders ORDER BY order_id")
+        do_arquivo = do_arquivo.fetchall()
+    finally:
+        conn.close()
+
+    # Mesmos parametros que `generate_demo_db` usa.
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    gerados = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
+    do_gerador = sorted((o["order_id"], o["date_closed"]) for o in gerados)
+
+    assert do_gerador == do_arquivo
+
+
+def test_passar_a_ancora_congelada_explicitamente_da_o_mesmo_resultado() -> None:
+    """`anchor=ANCHOR_DATE` explicito == omitir o parametro.
+
+    Prova que o parametro esta de fato ligado ao default, e nao que o default
+    sobreviveu por o corpo da funcao ainda usar a constante direto.
+    """
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=5, n_products=10)
+    sem = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=2)
+    com = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=2, anchor=ANCHOR_DATE)
+    assert sem == com
+
+
+def test_ancora_diferente_muda_as_datas_mas_nao_os_order_ids() -> None:
+    """A premissa que torna o DELETE do refresh obrigatorio, fixada em teste.
+
+    `backend/demo_refresh.py` apaga antes de re-semear porque o
+    `ON CONFLICT DO NOTHING` do seed engoliria os INSERTs: os `order_id` saem
+    do RNG, nao das datas, entao duas ancoras diferentes produzem os mesmos
+    ids. Se um dia `order_id` passar a derivar das datas, este teste avisa que
+    a justificativa do DELETE mudou.
+    """
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=5, n_products=10)
+    antiga = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=2)
+    nova = generate_orders(
+        catalog=catalog,
+        seed=DEFAULT_SEED,
+        weeks_back=2,
+        anchor=ANCHOR_DATE + timedelta(days=90),
+    )
+    assert [o["order_id"] for o in antiga] == [o["order_id"] for o in nova]
+    assert [o["date_closed"] for o in antiga] != [o["date_closed"] for o in nova]

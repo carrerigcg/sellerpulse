@@ -9,10 +9,8 @@ funciona, olhando so pro retorno.
 
 from __future__ import annotations
 
-import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
 
@@ -23,7 +21,7 @@ from backend.demo_refresh import (
     regenera_demo_se_vencida,
 )
 from backend.seed import seed_postgres
-from src.demo_data import ANCHOR_DATE, DEFAULT_SEED, generate_catalog, generate_orders
+from src.demo_data import ANCHOR_DATE, DEFAULT_SEED
 
 # Parametros pequenos pra manter os testes rapidos, iguais aos de test_seed.py.
 # `weeks_back` tem que ser o MESMO nas duas semeaduras de um teste de refresh:
@@ -34,8 +32,6 @@ from src.demo_data import ANCHOR_DATE, DEFAULT_SEED, generate_catalog, generate_
 _PEQUENO = {"n_categories": 5, "n_products": 10, "weeks_back": 2, "claim_rate": 0.04}
 
 _TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims")
-
-_DEMO_DB = Path(__file__).resolve().parents[2] / "data" / "demo.db"
 
 
 class _ConnEspia:
@@ -387,67 +383,7 @@ async def test_sem_pedido_nenhum_tambem_dispara(pg_pool, test_seller, monkeypatc
 
 
 # --------------------------------------------------------------------------
-# 5. Determinismo preservado
-# --------------------------------------------------------------------------
-
-
-def test_ancora_default_continua_batendo_com_o_demo_db_commitado() -> None:
-    """`generate_orders` sem `anchor` tem que reproduzir `data/demo.db`.
-
-    O arquivo e versionado e o golden do PDF depende destes numeros. Se o
-    default do parametro novo tivesse virado `now()` -- ou se a ancora
-    congelada tivesse mudado de valor -- este teste cai, em vez de o commit de
-    `data/demo.db` virar "always dirty" e o golden do PDF quebrar depois.
-    """
-    assert _DEMO_DB.exists(), f"demo.db versionado nao encontrado em {_DEMO_DB}"
-    conn = sqlite3.connect(str(_DEMO_DB))
-    try:
-        do_arquivo = conn.execute("SELECT order_id, date_closed FROM orders ORDER BY order_id")
-        do_arquivo = do_arquivo.fetchall()
-    finally:
-        conn.close()
-
-    # Mesmos parametros que `generate_demo_db` usa.
-    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
-    gerados = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=12)
-    do_gerador = sorted((o["order_id"], o["date_closed"]) for o in gerados)
-
-    assert do_gerador == do_arquivo
-
-
-def test_passar_a_ancora_congelada_explicitamente_da_o_mesmo_resultado() -> None:
-    """`anchor=ANCHOR_DATE` explicito == omitir o parametro.
-
-    Prova que o parametro novo esta de fato ligado ao default, e nao que o
-    default sobreviveu por o corpo da funcao ainda usar a constante direto.
-    """
-    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=5, n_products=10)
-    sem = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=2)
-    com = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=2, anchor=ANCHOR_DATE)
-    assert sem == com
-
-
-def test_ancora_diferente_muda_as_datas_mas_nao_os_order_ids() -> None:
-    """A premissa que torna o DELETE obrigatorio, fixada em teste.
-
-    Se um dia `order_id` passar a derivar das datas, o `ON CONFLICT DO
-    NOTHING` do seed voltaria a servir de refresh -- e este teste avisa que a
-    justificativa do DELETE mudou.
-    """
-    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=5, n_products=10)
-    antiga = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=2)
-    nova = generate_orders(
-        catalog=catalog,
-        seed=DEFAULT_SEED,
-        weeks_back=2,
-        anchor=ANCHOR_DATE + timedelta(days=90),
-    )
-    assert [o["order_id"] for o in antiga] == [o["order_id"] for o in nova]
-    assert [o["date_closed"] for o in antiga] != [o["date_closed"] for o in nova]
-
-
-# --------------------------------------------------------------------------
-# 6. Ambiente nao configurado e no-op, nunca excecao
+# 5. Ambiente nao configurado e no-op, nunca excecao
 # --------------------------------------------------------------------------
 
 
