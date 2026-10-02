@@ -29,22 +29,36 @@ type Coluna = {
    * um dígito. Encurtar o rótulo estreita a coluna sem esconder nada.
    */
   rotuloCurto?: string;
+  /**
+   * Largura da coluna no celular, onde a tabela é `table-fixed`. Só as
+   * visíveis precisam. Medido com dado real: os pisos são Segmento 96px (a
+   * etiqueta "Hibernando" não quebra), Valor 74px ("R$ 12.480" numa linha) e
+   * Dias 42px (o cabeçalho). O "#" fica com o que sobra porque é o único
+   * elástico — um identificador quebra em duas linhas sem perder nada.
+   */
+  larguraCelular?: string;
 };
 
 const COLUNAS: Coluna[] = [
-  { chave: "buyer_id", rotulo: "Comprador", rotuloCurto: "#" },
-  { chave: "recency_dias", rotulo: "Recência (dias)", rotuloCurto: "Dias", alinhamento: "right" },
+  { chave: "buyer_id", rotulo: "Comprador", rotuloCurto: "#", larguraCelular: "w-[22%]" },
+  {
+    chave: "recency_dias",
+    rotulo: "Recência (dias)",
+    rotuloCurto: "Dias",
+    alinhamento: "right",
+    larguraCelular: "w-[16%]",
+  },
   // Escondida no celular mesmo com rótulo curto: encurtar "Frequência" pra
   // "Pedidos" ainda deixava as colunas em 411px contra os 325 disponíveis.
   // É a candidata certa porque é quase uma constante — na loja conectada
   // hoje, 708 dos 778 compradores têm frequência 1. Quem precisa do número
   // vê no desktop; quem está no celular ganha o Segmento inteiro na tela.
   { chave: "frequency", rotulo: "Frequência", alinhamento: "right", soNoDesktop: true },
-  { chave: "monetary", rotulo: "Valor", alinhamento: "right" },
+  { chave: "monetary", rotulo: "Valor", alinhamento: "right", larguraCelular: "w-[28%]" },
   { chave: "r_score", rotulo: "R", alinhamento: "right", soNoDesktop: true },
   { chave: "f_score", rotulo: "F", alinhamento: "right", soNoDesktop: true },
   { chave: "m_score", rotulo: "M", alinhamento: "right", soNoDesktop: true },
-  { chave: "segmento", rotulo: "Segmento" },
+  { chave: "segmento", rotulo: "Segmento", larguraCelular: "w-[34%]" },
 ];
 
 /**
@@ -100,13 +114,20 @@ export function BuyersTable({ dados }: { dados: RfmLinha[] }) {
     // `auto` por regra da spec, então a rolagem lateral existia por efeito
     // colateral. Declarada, ela fica no código em vez de herdada por acidente.
     <div className="mt-4 max-h-[28rem] overflow-x-auto overflow-y-auto rounded-lg border border-line">
-      <table className="w-full text-left text-sm">
+      {/* `table-fixed` no celular pelo mesmo motivo da tabela ABC: as quatro
+          colunas visíveis somam 307px de largura natural contra os 283 do
+          cartão, e `break-words` sozinho não resolve — `overflow-wrap` não
+          diminui a largura mínima intrínseca que o layout automático usa, só
+          quebra o texto depois que a largura já foi imposta. Com as larguras
+          fixadas, o "#" quebra em duas linhas e tudo cabe.
+          `sm:table-auto` devolve o comportamento original no desktop. */}
+      <table className="w-full table-fixed text-left text-sm sm:table-auto">
         <thead className="sticky top-0 bg-surface text-xs uppercase tracking-wide text-muted">
           <tr>
             {COLUNAS.map((coluna) => (
               <th
                 key={coluna.chave}
-                className={`px-3 py-2 font-medium ${coluna.alinhamento === "right" ? "text-right" : ""} ${coluna.soNoDesktop ? SO_NO_DESKTOP : ""}`}
+                className={`px-2 py-2 font-medium sm:w-auto sm:px-3 ${coluna.larguraCelular ?? ""} ${coluna.alinhamento === "right" ? "text-right" : ""} ${coluna.soNoDesktop ? SO_NO_DESKTOP : ""}`}
               >
                 {/* `aria-label` com o rótulo por extenso: o texto curto do
                     celular ("#", "Dias") é claro ao lado do dado, mas sozinho
@@ -138,20 +159,30 @@ export function BuyersTable({ dados }: { dados: RfmLinha[] }) {
             const def = definicaoSegmento(linha.segmento);
             return (
               <tr key={linha.buyer_id} className="border-t border-line">
-                <td className="px-3 py-2 text-muted">#{linha.buyer_id}</td>
-                <td className="tabular px-3 py-2 text-right">{linha.recency_dias}</td>
-                <td className="tabular px-3 py-2 text-right">{linha.frequency}</td>
-                <td className="tabular px-3 py-2 text-right">{brl.format(linha.monetary)}</td>
-                <td className={`tabular px-3 py-2 text-right ${SO_NO_DESKTOP}`}>
+                {/* A ORDEM E A VISIBILIDADE destas células têm que bater com
+                    `COLUNAS` uma a uma. O cabeçalho é gerado do array e o
+                    corpo é escrito à mão, então esconder uma coluna só no
+                    array desalinha a tabela inteira em silêncio: o dado
+                    aparece sob o rótulo do vizinho. Foi o que aconteceu com
+                    Frequência. Mexeu em `COLUNAS`, mexa aqui junto. */}
+                <td className="break-words px-2 py-2 text-muted sm:px-3">#{linha.buyer_id}</td>
+                <td className="tabular px-2 py-2 text-right sm:px-3">{linha.recency_dias}</td>
+                <td className={`tabular px-2 py-2 text-right sm:px-3 ${SO_NO_DESKTOP}`}>
+                  {linha.frequency}
+                </td>
+                <td className="tabular px-2 py-2 text-right sm:px-3">
+                  {brl.format(linha.monetary)}
+                </td>
+                <td className={`tabular px-2 py-2 text-right sm:px-3 ${SO_NO_DESKTOP}`}>
                   {linha.r_score}
                 </td>
-                <td className={`tabular px-3 py-2 text-right ${SO_NO_DESKTOP}`}>
+                <td className={`tabular px-2 py-2 text-right sm:px-3 ${SO_NO_DESKTOP}`}>
                   {linha.f_score}
                 </td>
-                <td className={`tabular px-3 py-2 text-right ${SO_NO_DESKTOP}`}>
+                <td className={`tabular px-2 py-2 text-right sm:px-3 ${SO_NO_DESKTOP}`}>
                   {linha.m_score}
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-2 py-2 sm:px-3">
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${def.badge}`}>
                     {def.rotulo}
                   </span>
