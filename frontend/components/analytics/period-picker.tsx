@@ -16,16 +16,23 @@ export function PeriodPicker({ de, ate }: { de: string; ate: string }) {
     // campos dividam a linha em medidas iguais em vez de dependerem do
     // encolhimento; `sm:w-auto` devolve a largura natural no desktop.
     <form className="flex w-full flex-wrap items-end gap-2 sm:w-auto">
-      {/* `basis-2/5` é o que empurra o "Aplicar" pra linha de baixo no
-          celular: com 40% de base cada, os dois campos mais o botão não
-          cabem numa linha só, então o botão quebra e as datas crescem pra
-          ~160px — acima dos ~151px que o `<input type="date">` precisa pra
-          mostrar o ano inteiro. Com os três na mesma linha os campos caíam
-          pra 120px e o ano aparecia cortado ("04/07/202").
-          `grow` em vez de `flex-1` porque `flex-1` zera o `basis` e desfaria
-          justamente essa conta. `min-w-0` + `w-full` no input porque a
-          largura intrínseca do campo de data ignora o encolhimento do flex
-          sozinha. */}
+      {/* NÃO troque `basis-2/5` por `flex-1` nem tire a base achando que o
+          `flex-wrap` sozinho resolve — o defeito que isso traz de volta não
+          aparece em medição.
+
+          Com os três itens na mesma linha os campos caem pra 120px e o
+          `<input type="date">` corta o ano na tela ("04/07/202"), mas
+          reporta `scrollWidth` 118 contra 120 de largura: o controle nativo
+          esconde o próprio excesso por dentro, então nenhuma verificação de
+          overflow acusa nada. Só a captura de tela pega. Os ~151px de que
+          ele precisa pra mostrar a data inteira são a medida que vale.
+
+          `basis-2/5` é o que força a quebra: com 40% de base cada, os dois
+          campos mais o botão não cabem numa linha, o botão desce e as datas
+          crescem pra 160px. `grow` em vez de `flex-1` porque `flex-1` zera o
+          `basis` e desfaria exatamente essa conta. `min-w-0` + `w-full` no
+          input porque a largura intrínseca do campo de data ignora o
+          encolhimento do flex sozinha. */}
       <label className="min-w-0 grow basis-2/5 text-xs text-muted sm:grow-0 sm:basis-auto">
         De
         <input
