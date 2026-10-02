@@ -1,264 +1,180 @@
 # SellerPulse
 
-> **Full Analytics Suite for Mercado Livre sellers — from raw orders to executive decisions.**
+> **Analytics para vendedores do Mercado Livre — do pedido bruto à decisão de negócio.**
 
-Pipeline analítico completo para vendedores do Mercado Livre: ingere pedidos via API oficial (OAuth 2.0), consolida em SQLite, e entrega insights em três formatos — relatório executivo em PDF, notebooks Jupyter narrativos e dashboard Streamlit interativo. Uma única camada analítica pura alimenta as três saídas.
+O vendedor conecta a conta dele pelo fluxo oficial do Mercado Livre, os últimos 6 meses de pedidos entram sozinhos, e três telas respondem o que a plataforma não responde: **quanto sobra de cada venda, quais produtos sustentam a loja, e quem são os compradores que valem a pena reconquistar.**
+
+Sem planilha, sem CSV, sem campo digitado à mão.
 
 [![tests](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml/badge.svg)](https://github.com/carrerigcg/sellerpulse/actions/workflows/tests.yml)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
+![Next.js](https://img.shields.io/badge/next.js-16-black.svg)
+![PostgreSQL](https://img.shields.io/badge/postgres-17-336791.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Version](https://img.shields.io/badge/version-v0.3.1-blue.svg)
+
+**[→ Demonstração navegável, sem cadastro](https://frontend-three-rosy-iwes33l1kk.vercel.app/demo)**
+
+![SellerPulse](docs/img/web-landing.png)
 
 ---
 
-## Dashboard
+## As três telas
 
-![Home do SellerPulse](docs/img/dashboard-home.png)
+Os prints abaixo são capturas da demonstração pública. Os dados dela são sintéticos e **se regeneram periodicamente para terminar sempre no dia de hoje**, então os valores exatos mudam com o tempo — a forma, o volume e o catálogo são os mesmos.
 
-_Screenshot capturado localmente rodando `python -m src.main abrir-dashboard`._
+### Financeiro — quanto sobra de cada venda
 
-<details>
-<summary>Mais telas</summary>
+![Executive](docs/img/web-executive.png)
 
-**Executive Summary** — receita, custos e resultado líquido, com variação sobre a janela anterior:
+Receita, comissão do Mercado Livre e **margem de contribuição** por dia, com variação sobre o período anterior.
 
-![Executive Summary](docs/img/dashboard-executive.png)
+A margem é **calculada, não estimada**: `receita − comissão − frete`, cada parcela rastreável a uma coluna do banco. O custo do produto é o único número que o sistema não tem — e ele diz isso na tela, em vez de preencher com um percentual chutado.
 
-**Product Analytics** — top produtos por receita/unidades, curva Pareto ABC e cohort mensal por produto:
+### Produtos — o que sustenta a loja
 
-![Product Analytics](docs/img/dashboard-products.png)
-![Curva Pareto ABC](docs/img/dashboard-products-pareto.png)
-![Cohort por mês de lançamento](docs/img/dashboard-products-cohort.png)
+![Produtos](docs/img/web-produtos.png)
 
-**Customer Analytics** — segmentação RFM dos compradores:
+Curva ABC de Pareto sobre a receita por produto. Na demonstração, **14 produtos respondem por 78,7% do faturamento** e a cauda de 16 produtos responde por 5,1%.
 
-![Customer Analytics](docs/img/dashboard-customers.png)
-![Compradores por segmento](docs/img/dashboard-customers-segments.png)
+Tem também cohort por mês de lançamento, para ver se produto novo vinga ou morre.
 
-</details>
+### Clientes — quem volta e quem está sumindo
+
+![Clientes](docs/img/web-clientes.png)
+
+Segmentação RFM (recência, frequência, valor). Cada ponto é um comprador, colorido pelo segmento; o eixo X é dias desde a última compra, então quem está indo embora aparece à direita.
+
+É o que transforma *"tive 372 compradores"* em *"95 deles estão sumindo e valem R$ 154 mil"*.
 
 ---
 
-## 📊 Status atual
+## Como funciona
 
-| Módulo | Estado |
+```
+Conta do Mercado Livre
+        │  OAuth 2.0 oficial — a senha do vendedor nunca passa pelo SellerPulse
+        ▼
+  Fila de sincronização  ──►  6 meses de pedidos, em janelas de 30 dias
+        │                      retoma de onde parou se a instância cair
+        ▼
+     PostgreSQL           ──►  multi-inquilino, isolado por seller_id
+        │
+        ▼
+   API (FastAPI)          ──►  métricas e segmentação em pandas
+        │
+        ▼
+    Web (Next.js)
+```
+
+**Decisões que valem citar:**
+
+- **Multi-inquilino desde a primeira migration.** Toda tabela usa chave composta por `seller_id`, toda consulta filtra por ele, e **todo JOIN casa por `seller_id` também** — sem isso um `item_id` do Mercado Livre, que é global, casaria com o pedido de outro vendedor e multiplicaria a receita. Há RLS no banco, mas como defesa em profundidade: o backend conecta num papel que a contorna, então quem garante o isolamento é o predicado explícito na consulta, coberto por teste de mutação.
+- **Tokens cifrados em repouso** (Fernet, com versão de chave). O Mercado Livre rotaciona o *refresh token* a cada uso, então a renovação é serializada por lock de linha — dois refreshes simultâneos invalidariam um ao outro.
+- **A fila sobrevive à hibernação.** O plano gratuito do Render derruba a instância depois de ~15 min; o job tem *lease* com renovação e cursor de retomada, então uma importação interrompida continua em vez de recomeçar.
+- **Sincronização incremental que revisita o passado.** O delta filtra por `date_last_updated`, não por data de criação — um pedido cancelado semanas depois precisa deixar de contar como receita.
+- **A porta pública é só leitura.** `/demo/*` é o único caminho sem autenticação: aceita apenas GET, resolve o vendedor por variável de ambiente do servidor (nunca por parâmetro), exige a marca `is_demo` no banco, e tem teto de janela e de paginação.
+
+---
+
+## Stack
+
+| Camada | |
 |---|---|
-| Ingestão OAuth Mercado Livre (`auth.py`, `ml_client.py`, `setup_auth.py`) | ✅ Pronto — 33 testes passando |
-| Persistência SQLite com UPSERTs idempotentes (`storage.py`) | ✅ Pronto |
-| Orquestrador CLI de ingestão (`main.py`) | ✅ Pronto |
-| Dados sintéticos reprodutíveis (`demo_data.py`) | ✅ Pronto — `data/demo.db` versionado, determinístico via seed 42 |
-| Camada de métricas (`metrics.py`) | ✅ Pronto — Fase 1 |
-| Camada de segmentação (`segmentation.py`) — ABC, RFM, cohort | ✅ Pronto — Fase 2 |
-| Renderizador de PDF executivo (`pdf_renderer.py`) | ✅ Pronto — Fase 1 (WeasyPrint + Jinja2) |
-| Dashboard Streamlit (`dashboard.py`) — 3 páginas navegáveis local | ✅ Pronto — Fase 2 |
-| Identidade visual (`theme.py`) — paleta navy/gold compartilhada com o PDF | ✅ Pronto — Fase 2.5 |
-| Camada de forecasting (`forecasting.py`) — SARIMA + detecção de anomalias | 📋 Planejada — v1.0.0 |
-| Camada de patrimony (`patrimony.py`) — simulação de alocação e recomendação | 📋 Planejada — v1.0.0 |
-| Notebooks Jupyter narrativos (`notebooks/`) | 📋 Planejada — v1.0.0 |
-| CI GitHub Actions | ✅ Pronto — matrix py3.11 × ubuntu/windows, ruff + pytest |
-
-> **Nota sobre o toggle Demo/Real na sidebar do dashboard.** Hoje só o modo Demo (dados sintéticos versionados em `data/demo.db`) está ativo. O modo Real depende da Fase 3 (OAuth no dashboard) — ver Roadmap abaixo.
+| **Backend** | Python 3.11 · FastAPI · asyncpg · pandas |
+| **Banco** | PostgreSQL 17 (Supabase) · 8 migrations versionadas · chave composta por `seller_id` |
+| **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind · Recharts |
+| **Auth** | Supabase Auth (JWT ES256) + OAuth 2.0 do Mercado Livre |
+| **Infra** | Render (Docker) · Vercel |
+| **Testes** | pytest · 564 testes · CI em 4 jobs (Linux + Windows) |
 
 ---
 
-## 🗺️ Roadmap
+## Rodando localmente
 
-Versões planejadas com spec técnico já aprovado. Cada uma vira release taggeada quando entra em `main`.
-
-| Versão | Escopo | Spec |
-|---|---|---|
-| `v0.4.0` | **OAuth no dashboard** — modo Real com login Mercado Livre direto pela UI, ingestão sob demanda de 6 meses, session store em memória. | [`docs/specs/2026-08-19-oauth-in-dashboard-design.md`](docs/specs/2026-08-19-oauth-in-dashboard-design.md) |
-| `v0.5.0` | **PDF v2 — guia analytics** — PDF vira roteiro educativo com dados OAuth reais, seções ABC/RFM/cohort, retenção 30d. | [`docs/specs/2026-08-25-pdf-v2-guia-analytics-design.md`](docs/specs/2026-08-25-pdf-v2-guia-analytics-design.md) |
-| `v1.0.0` | **Forecasting + patrimony + notebooks** — SARIMA, detecção de anomalias, simulação de alocação patrimonial, narrativa Jupyter. | [`docs/specs/2026-08-07-camadas-analiticas-design.md`](docs/specs/2026-08-07-camadas-analiticas-design.md) |
-
----
-
-## 🎯 Visão geral
-
-**Problema.** O vendedor médio do Mercado Livre tem acesso a um painel operacional, mas não a uma leitura estratégica dos próprios dados. Fica difícil responder perguntas simples: *"quanto sobrou de lucro na semana?"*, *"quais produtos empurram meu faturamento?"*, *"vale a pena reinvestir esse caixa em estoque ou segurar?"*.
-
-**Solução.** SellerPulse consome a API oficial do ML, consolida os dados de vendas em SQLite, e roda uma bateria de análises (segmentação ABC/RFM, forecast sazonal, detecção de anomalias, simulação patrimonial) que se materializam em três formatos complementares:
-
-- **PDF executivo** — leitura de 3 páginas no padrão consultoria (McKinsey/BCG).
-- **Notebooks Jupyter** — narrativa exploratória para quem quer entender a metodologia.
-- **Dashboard Streamlit** — interativo, com filtros e drill-down.
-
-**Hook narrativo.** O módulo `patrimony.py` implementa um simulador de reinvestimento: dado o caixa gerado na semana e as restrições operacionais do vendedor, propõe cenários de alocação (estoque × reserva × marketing). É a camada que transforma "relatório de vendas" em "assistente de decisão patrimonial".
-
----
-
-## 🚀 Quick start
+Pré-requisitos: Python 3.11+, Node 20+, PostgreSQL 17.
 
 ```bash
-git clone https://github.com/carrerigcg/sellerpulse.git
-cd sellerpulse
-python -m venv .venv && source .venv/bin/activate   # ou .venv\Scripts\activate no Windows
-pip install -r requirements.txt
-pytest
+# 1. Backend  (no Windows troque bin/ por Scripts/)
+python -m venv backend/.venv
+backend/.venv/bin/pip install -r backend/requirements.txt
+cp backend/.env.example backend/.env             # preencher as credenciais
+backend/.venv/bin/python backend/scripts/setup_test_db.py
+
+# 2. Frontend
+cd frontend && npm ci && cp .env.local.example .env.local
+
+# 3. Subir
+backend/.venv/bin/python -m uvicorn backend.main:app --port 10000
+cd frontend && npm run dev                       # web em :3000
 ```
 
-O modo **sintético** é o padrão — clone e execute em segundos, sem credenciais (o `data/demo.db` já vem versionado no repo):
+Todo comando roda a partir da **raiz do repositório** — `backend/` não é instalado via pip, roda como pacote top-level igual a `src/`.
+
+As migrations em `backend/migrations/` rodam em ordem numérica. A `0000` é um stub do schema `auth` para o banco de testes; no Supabase esse schema já existe.
+
+---
+
+## Testes
 
 ```bash
-python -m src.main gerar-pdf         # gera PDF em RELATORIOS/relatorio-YYYY-WNN.pdf
-python -m src.main abrir-dashboard   # sobe Streamlit em localhost:8501            [Fase 2]
-python -m src.main regerar-dados     # reconstrói data/demo.db a partir do gerador
+.venv/bin/python -m pytest tests                  # camada analítica pura (316)
+backend/.venv/bin/python -m pytest backend/tests  # API, fila, ingestão (248)
+cd frontend && npm run lint && npm run build
 ```
 
-> **Windows:** `gerar-pdf` depende do WeasyPrint, que requer o runtime GTK3.
-> Instale via [GTK3 for Windows Runtime](https://github.com/tschoonj/GTK-for-Windows-Runtime-Environment-Installer/releases) — sem isso o comando falha com `libgobject-2.0-0`. Em Linux/macOS o `pip install` já cobre as libs nativas.
+**Teste de mutação é padrão do projeto, não exceção.** Toda correção quebra o código de propósito primeiro, confirma que o teste falha, e só então desfaz. A razão é concreta: um erro que zerava a comissão do Mercado Livre sobreviveu meses porque os dados de teste tinham exatamente as mesmas premissas erradas do código — os testes provavam que o sistema concordava consigo mesmo, não que estava certo.
 
-O modo **API real** (opcional — requer conta ML + credenciais em `.env`):
-
-```bash
-cp .env.example .env                 # preencha ML_CLIENT_ID e ML_CLIENT_SECRET
-python -m src.setup_auth             # autoriza 1 vez via browser
-python -m src.main --week=2026-W32   # ingere semana ISO específica
-```
+Desde então a regra é verificar contra dado real, não só contra fixture.
 
 ---
 
-## 🏗️ Arquitetura
-
-```
-┌──────────────────────────────────────────────────────┐
-│  Fontes de dados                                     │
-│  ┌────────────────────┐    ┌─────────────────────┐  │
-│  │  demo_data.py      │    │  ml_client.py       │  │
-│  │  Faker + regras    │    │  OAuth 2.0 ML       │  │
-│  │  (padrão)          │    │  (opcional)         │  │
-│  └─────────┬──────────┘    └──────────┬──────────┘  │
-└────────────┼──────────────────────────┼─────────────┘
-             │                          │
-             └────────────┬─────────────┘
-                          ▼
-                ┌──────────────────┐
-                │  data/demo.db    │
-                │  SQLite          │
-                └────────┬─────────┘
-                         ▼
-        ┌────────────────────────────────────┐
-        │  Camada analítica pura             │
-        │  (recebe conn, devolve DataFrame)  │
-        │                                    │
-        │  metrics · segmentation            │
-        │  forecasting · patrimony           │
-        └───┬────────────┬────────────┬──────┘
-            ▼            ▼            ▼
-       ┌─────────┐  ┌─────────┐  ┌────────────┐
-       │  PDF    │  │Notebook │  │ Dashboard  │
-       │executivo│  │ Jupyter │  │ Streamlit  │
-       └─────────┘  └─────────┘  └────────────┘
-```
-
-**Princípio central:** a camada analítica é **100% pura** — funções recebem `conn` (conexão SQLite) e devolvem `pd.DataFrame`. Sem side effects, sem I/O, sem chamadas de API. Isso garante que uma mudança de fórmula é aplicada 1x e propaga automaticamente para as 3 saídas.
-
----
-
-## 🧠 Análises implementadas / previstas
-
-| Análise | Módulo | Descrição |
-|---|---|---|
-| **Fluxo financeiro semanal** | `metrics.py` | Receita bruta − taxas ML − frete pago − custo estimado = líquido. Base de tudo. |
-| **Top produtos & categorias** | `metrics.py` | Ranking por faturamento e por unidades — sinaliza motores do negócio. |
-| **Segmentação ABC** | `segmentation.py` | Curva de Pareto: quais SKUs concentram 80% da receita. |
-| **Segmentação RFM** | `segmentation.py` | Recency-Frequency-Monetary para caracterização de tipo de venda. |
-| **Análise de cohort** | `segmentation.py` | Comportamento por cohort de mês de primeira venda. |
-| **Forecast sazonal** | `forecasting.py` | ARIMA/Prophet para projeção de 4 semanas à frente. |
-| **Detecção de anomalias** | `forecasting.py` | Flag automático de semanas fora do padrão histórico. |
-| **Reputação × devolução** | `metrics.py` | KPI operacional — proxy de saúde da conta ML. |
-| **Simulador patrimonial** | `patrimony.py` | Cenários de reinvestimento do caixa gerado. |
-
----
-
-## 🛠️ Stack
-
-- **Runtime:** Python 3.11+
-- **Data:** SQLite (via `sqlite3` da stdlib), `pandas`, `numpy`
-- **Modelagem:** `statsmodels`, `scikit-learn`
-- **Visualização estática:** `matplotlib`, `seaborn`
-- **Visualização interativa:** `plotly`, `streamlit`
-- **PDF:** `weasyprint` + `jinja2`
-- **HTTP + OAuth:** `requests`, `python-dotenv`
-- **Dados sintéticos:** `faker`
-- **Testes:** `pytest`, `responses` (mock HTTP)
-- **CI:** GitHub Actions (matrix py3.11 × ubuntu/windows)
-
----
-
-## 📁 Estrutura do repositório
+## Estrutura
 
 ```
 sellerpulse/
-├── src/
-│   ├── auth.py              # OAuth 2.0: autorização + refresh rotativo
-│   ├── ml_client.py         # cliente HTTP ML com retry, paginação, rate limit
-│   ├── storage.py           # camada SQLite (schema + UPSERTs idempotentes)
-│   ├── setup_auth.py        # bootstrap OAuth one-shot
-│   ├── main.py              # CLI unificado — subcomandos
-│   ├── demo_data.py         # gerador de dados sintéticos (seed fixa)
-│   ├── metrics.py           # cálculos financeiros e operacionais
-│   ├── pdf_renderer.py      # HTML + WeasyPrint → PDF
-│   ├── segmentation.py      # ABC, RFM, cohort                                 [✅]
-│   ├── forecasting.py       # ARIMA, detecção de anomalias                    [TODO]
-│   ├── patrimony.py         # simulador de reinvestimento                     [TODO]
-│   └── dashboard.py         # app Streamlit                                    [✅]
-├── templates/
-│   └── relatorio.html.j2    # template Jinja2 do PDF executivo
-├── tests/                   # pytest — 84 testes cobrindo auth, ml_client, storage, main, demo_data, metrics, pdf_renderer
-├── notebooks/               # 4 notebooks narrativos                          [TODO]
-├── mockup/
-│   └── relatorio.html       # referência visual do PDF (padrão Corporate Executive)
-├── docs/
-│   └── specs/               # design docs de cada camada
-├── data/                    # SQLite (demo.db versionado; tokens/historico.db ignorados)
-├── .env.example
-├── requirements.txt
-├── pyproject.toml
-└── LICENSE
+├── backend/
+│   ├── analytics/        # métricas e segmentação sobre Postgres (asyncpg)
+│   ├── ml/               # OAuth, cifra de tokens, ingestão da API do ML
+│   ├── jobs/ worker/     # fila de sincronização com lease e retomada
+│   ├── routers/          # endpoints REST (autenticados + /demo público)
+│   ├── migrations/       # 8 migrations SQL versionadas
+│   └── tests/            # 248 testes
+├── frontend/
+│   ├── app/              # landing, /demo público, /dashboard autenticado
+│   ├── components/       # gráficos, tabelas, seções da landing
+│   └── lib/              # clientes da API (um por contexto de auth)
+├── src/                  # camada analítica original (SQLite) — alimenta o PDF
+├── tests/                # 316 testes da camada pura
+├── templates/            # template Jinja2 do relatório em PDF
+└── docs/specs/           # design docs de cada sprint
 ```
 
----
-
-## 🔌 Conexão com conta ML real (opcional)
-
-O modo padrão do SellerPulse é **100% sintético e reprodutível** — não precisa de credenciais. A camada de ingestão real via API ML fica disponível como conector opcional, útil para quem quer alimentar o pipeline com dados de uma conta real.
-
-Fluxo de setup (uma única vez):
-
-1. Criar aplicação em https://developers.mercadolivre.com.br → obtém `CLIENT_ID` e `CLIENT_SECRET`.
-2. Configurar Redirect URI: `http://localhost:8080/callback`.
-3. Copiar `.env.example` → `.env` e preencher.
-4. Executar `python -m src.setup_auth` — abre o browser, autoriza, salva `data/tokens.json` com refresh token rotativo (válido por 6 meses; renovação subsequente é automática).
-
-Após o bootstrap, qualquer execução usa o token válido corrente e rotaciona o refresh automaticamente. A camada de ingestão implementa retry com backoff, tratamento de 429 (rate limit), refresh de token durante execução em caso de 401, e persistência atômica do refresh rotativo (evita perda de acesso em caso de crash entre o POST de refresh e a próxima chamada).
+> `src/` é a camada da primeira versão, single-tenant sobre SQLite. Ela continua viva porque o gerador de relatório em PDF depende dela, e `backend/analytics/` é um porte fiel dela para Postgres — as divergências deliberadas entre as duas estão documentadas em comentário, no ponto exato em que divergem.
 
 ---
 
-## 🧪 Testes
+## Status
 
-```bash
-pytest                           # roda toda a suíte
-pytest tests/test_auth.py -v     # apenas módulo específico
-pytest --cov=src                 # cobertura (requer pytest-cov)
-```
-
-A suíte cobre:
-- OAuth: exchange de code, refresh rotativo, persistência atômica, tratamento de erros.
-- Cliente ML: paginação de `/orders/search`, retry em 5xx, respeito a `Retry-After` em 429, parsing de payloads reais.
-- Storage: UPSERTs idempotentes, TTL de caches, versionamento de schema, isolamento por transação.
-- Orquestrador: resolução de janelas (--week, --from/--to, default), logging de runs, propagação de erros.
+| | |
+|---|---|
+| Conexão com conta real do Mercado Livre | ✅ em produção |
+| Importação de 6 meses + sincronização incremental | ✅ em produção |
+| Três telas, autenticadas e públicas | ✅ em produção |
+| Demonstração sem cadastro | ✅ [no ar](https://frontend-three-rosy-iwes33l1kk.vercel.app/demo) |
+| Custo do produto informado pelo vendedor | 📋 planejado |
+| Custo de frete via API de shipments | 📋 planejado |
+| Relatório em PDF sobre dados reais | 📋 planejado |
 
 ---
 
-## 📜 Licença
+## Licença
 
 [MIT](./LICENSE) — livre uso comercial e pessoal, com atribuição.
 
 ---
 
-## 👤 Autor
+## Autor
 
 **Guilherme Carreri** — analista de dados, aplicando para posições de estágio em BI / Data & Analytics.
 
-Feedback, sugestões de análise ou colaboração: [carreri.gui@gmail.com](mailto:carreri.gui@gmail.com)
+[carreri.gui@gmail.com](mailto:carreri.gui@gmail.com)

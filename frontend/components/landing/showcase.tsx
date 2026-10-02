@@ -34,8 +34,14 @@ const TELAS = [
   {
     titulo: "Clientes",
     pergunta: "Quem compra de novo, e quem já foi embora sem avisar?",
-    desktop: { src: "/landing/demo-clientes.png", width: 1104, height: 940 },
-    mobile: { src: "/landing/demo-clientes-mobile.png", width: 602, height: 1200 },
+    // Recorte comeca na dispersao RFM, pulando os seis cartoes de segmento.
+    // Na loja de demonstracao ninguem compra duas vezes, entao "Campeoes" e
+    // "Fieis" ficam em R$ 0 -- correto, mas dois zeros no topo da vitrine
+    // passam a impressao errada do PRODUTO por causa de um limite do DADO. E
+    // a dispersao responde melhor a pergunta da legenda: o eixo X e dias
+    // desde a ultima compra.
+    desktop: { src: "/landing/demo-clientes.png", width: 1104, height: 620 },
+    mobile: { src: "/landing/demo-clientes-mobile.png", width: 602, height: 760 },
     href: "/demo/clientes",
   },
 ] as const;
