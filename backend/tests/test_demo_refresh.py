@@ -364,6 +364,13 @@ async def test_dado_velho_dispara_regeneracao_ate_hoje(pg_pool, test_seller, mon
 
     # Profundidade: 26 semanas tem que cobrir ~180 dias de historico, a mesma
     # janela do backfill de um seller real.
+    #
+    # A folga de 14 dias nao e arbitraria, e tambem nao e generosa: o intervalo
+    # medido aqui e entre o pedido mais ANTIGO e o mais NOVO, e os dois sao
+    # sorteados dentro da primeira e da ultima semana. Cada ponta pode encolher
+    # ate 7 dias, entao o piso teorico e `SEMANAS_DEMO * 7 - 14`. Na pratica
+    # sobra pouco: sob mutacao (DELETE removido) este assert falhou por UM dia,
+    # 167 contra 168 -- ou seja, ele morde, nao e decorativo.
     async with pg_pool.acquire() as conn:
         mais_antigo = await conn.fetchval(
             "SELECT min(date_closed) FROM orders WHERE seller_id = $1", sid

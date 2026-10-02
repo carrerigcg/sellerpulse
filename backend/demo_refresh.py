@@ -15,6 +15,14 @@ apresenta (e se comporta) como "seguro de rodar de novo": todo INSERT dele tem
 `INSERT` -- e nao da pra descrever as duas politicas no mesmo docstring sem
 que uma minta sobre a outra. Um DELETE morando num modulo que todo mundo le
 como idempotente e exatamente a forma de alguem chamar a funcao errada.
+
+Uma esquisitice conhecida do dado gerado: `generate_claims` data cada
+reclamacao de 1 a 14 dias DEPOIS do pedido dela, entao com `anchor = now` as
+mais novas caem no FUTURO (medido: 6,68 dias a frente no caminho de
+producao). Hoje isso nao aparece em lugar nenhum -- nenhuma tela da web le
+`claims`, so o PDF da camada legada, que roda sobre o `data/demo.db`
+congelado. Fica registrado pra quem um dia montar uma tela de reputacao nao
+achar que e bug de ingestao.
 """
 
 from __future__ import annotations
@@ -42,14 +50,18 @@ SEMANAS_DEMO = 26
 # 7 dias nao e um numero escolhido por gosto: e o menor valor que NAO pode
 # entrar em loop. `generate_orders` espalha os pedidos da ultima semana em
 # `week_start + 0..6 dias`, com `week_start = anchor - 7 dias`. O pedido mais
-# novo cai tipicamente ~1 dia antes da ancora, mas no pior caso do RNG (nenhum
-# pedido com `day_offset = 6` na ultima semana) pode cair ate ~7 dias antes.
-# Com um limite menor que isso, uma regeneracao poderia terminar ja produzindo
-# dado "vencido" -- e como o gatilho roda em todo cold start, o Render (que
-# hiberna o tempo todo) regeraria a base a cada visita, pra sempre.
+# novo cai tipicamente ~1 dia antes da ancora. O pior caso NAO e 7 dias: como
+# `hour = rng.randint(9, 22)` nunca sorteia antes das 9h, o limite duro e
+# 7d - 9h = 6,625 dias. 7 e o menor inteiro acima disso.
 #
-# O custo do outro lado e pequeno: no pior caso a demo fica ~8 dias atras de
-# hoje, o que continua dentro de qualquer janela de "ultimos 30 dias".
+# Com um limite menor, uma regeneracao poderia terminar ja produzindo dado
+# "vencido" -- e como o gatilho roda em todo cold start, o Render (que hiberna
+# o tempo todo) regeraria a base a cada visita, pra sempre.
+#
+# Medido, pra quem quiser conferir em vez de confiar no raciocinio: sobre 2000
+# sementes com `weeks_back = 26`, o maior intervalo observado foi 2,09 dias, e
+# o caminho que roda em producao (seed 42) da 3h47. A folga real ate o limite
+# e de quase 7 dias, nao de horas.
 DIAS_PARA_VENCER = 7
 
 
@@ -208,5 +220,9 @@ async def regenera_demo_se_vencida(pool) -> str:
         SEMANAS_DEMO,
         agora.date(),
     )
-    await regenera_demo(pool, seller_id, anchor=agora)
+    # Ancora truncada no minuto: `datetime.now` carrega microssegundos, e eles
+    # vazariam pra TODO timestamp gerado -- o dado regenerado ficaria com cara
+    # diferente do `data/demo.db` commitado, que sai com segundos zerados. A
+    # comparacao de vencimento acima usa o `agora` cheio, sem truncar.
+    await regenera_demo(pool, seller_id, anchor=agora.replace(second=0, microsecond=0))
     return "regenerada"
