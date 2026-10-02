@@ -58,3 +58,18 @@ body {
 .tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* Esconde só o desenho da barra de rolagem, não a rolagem em si.
+   Usado na régua de navegação do cabeçalho, que no celular rola de lado:
+   numa faixa de 32px de altura a barra fica por cima dos links e parece
+   defeito. O link cortado na borda direita já avisa que há mais pra ver.
+   `@utility` em vez de classe solta pra que variantes (`sm:`, `hover:`)
+   continuem funcionando, como em qualquer utilitário do Tailwind. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

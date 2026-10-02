@@ -21,12 +21,17 @@ export default function DemoLayout({ children }: LayoutProps<"/demo">) {
         Você está vendo dados de demonstração fictícios, não uma loja real.
       </div>
       <header className="border-b border-line">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-6">
-            <Wordmark className="text-base" />
-            <DemoNav />
-          </div>
-          <div className="flex items-center gap-3">
+        {/* Duas linhas no celular, uma só a partir de `sm`.
+            Em 375px a marca, a navegação e o botão de ação somam mais que a
+            largura da tela, e quem era empurrado pra fora era justamente o
+            "Criar conta grátis" — o caminho que esta tela existe pra oferecer.
+            Por isso a navegação desce pra uma faixa própria embaixo (`order-3
+            w-full`) e a ação sobe pro lado da marca. O `order` devolve a ordem
+            original a partir de `sm`, então o desktop não muda: marca, nav e
+            ações continuam na mesma linha, com os mesmos 24px de intervalo. */}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-6 py-2.5 sm:h-14 sm:flex-nowrap sm:py-0">
+          <Wordmark className="order-1 text-base" />
+          <div className="order-2 ml-auto flex items-center gap-3 sm:order-3">
             <Link
               href="/login"
               className="hidden text-sm text-muted hover:text-ink sm:inline"
@@ -40,6 +45,7 @@ export default function DemoLayout({ children }: LayoutProps<"/demo">) {
               Criar conta grátis
             </Link>
           </div>
+          <DemoNav className="order-3 w-full sm:order-2 sm:w-auto" />
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>

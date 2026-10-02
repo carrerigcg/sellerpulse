@@ -17,11 +17,21 @@ const LINKS = [
   { href: "/demo/clientes", rotulo: "Clientes" },
 ] as const;
 
-export function DemoNav() {
+/**
+ * `className` existe pra que o layout escolha onde a faixa fica (ordem e
+ * largura mudam entre celular e desktop) sem que este componente precise
+ * saber de layout. O que é dele — rolar de lado em vez de transbordar —
+ * fica aqui.
+ */
+export function DemoNav({ className = "" }: { className?: string }) {
   const pathname = usePathname();
 
   return (
-    <nav className="flex items-center gap-1">
+    // `overflow-x-auto` porque os links não cabem na largura do celular nem
+    // sozinhos numa linha; rolar de lado mantém todos alcançáveis. O
+    // `min-w-0` permite encolher quando a faixa é um item flex do cabeçalho
+    // (tablet), já que o padrão do flex é não encolher abaixo do conteúdo.
+    <nav className={`flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar ${className}`}>
       {LINKS.map((link) => {
         // "/demo" não pode casar por prefixo com as outras rotas (todas
         // começam com "/demo"), então só ele usa igualdade exata.
@@ -32,7 +42,9 @@ export function DemoNav() {
             key={link.href}
             href={link.href}
             aria-current={ativa ? "page" : undefined}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+            // `shrink-0`: sem isso o flex espreme os links pra caber na
+            // faixa e o texto quebra em duas linhas, em vez de rolar.
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium transition ${
               ativa ? "bg-accent-soft text-accent" : "text-muted hover:text-ink"
             }`}
           >
