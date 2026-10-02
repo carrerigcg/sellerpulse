@@ -11,12 +11,18 @@ Idempotente: cada INSERT usa `ON CONFLICT DO NOTHING` na chave composta da
 tabela, entao rodar duas vezes pro mesmo seller nao duplica nada -- a segunda
 chamada devolve contagens zeradas.
 
+Essa idempotencia serve pra nao duplicar, e NAO pra atualizar: re-semear com
+outra `anchor` e um no-op silencioso (os `order_id` nao dependem das datas).
+Quem precisa mover as datas de um seller ja semeado usa
+`backend/demo_refresh.py`.
+
 Tudo roda dentro de uma unica transacao: ou o seller fica totalmente semeado,
 ou (em caso de erro) nada e gravado.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from backend.analytics._common import _parse_boundary
@@ -101,6 +107,7 @@ async def seed_postgres(
     n_products: int = 50,
     weeks_back: int = 12,
     claim_rate: float = 0.04,
+    anchor: datetime | None = None,
 ) -> dict[str, int]:
     """Popula `seller_id` com catalogo + pedidos + claims sinteticos.
 
@@ -111,73 +118,115 @@ async def seed_postgres(
             `src/demo_data.py`, a mesma usada pelo `data/demo.db`).
         n_categories, n_products, weeks_back, claim_rate: repassados direto
             pra `generate_catalog` / `generate_orders` / `generate_claims`.
+        anchor: data final da serie gerada. `None` (default) usa a ancora
+            congelada do `generate_orders` -- a mesma do `data/demo.db`. O
+            refresh do seller de demonstracao (`backend/demo_refresh.py`)
+            passa `now()` pra que a demo publica termine HOJE.
 
     Returns:
         dict com as contagens de linhas efetivamente INSERIDAS nesta chamada
         (chaves: categories, items, orders, order_items, claims). Numa
         segunda chamada com os mesmos parametros, todas as contagens vem 0 —
         o `ON CONFLICT DO NOTHING` torna a operacao idempotente.
+
+        ATENCAO: essa idempotencia NAO vale como refresh. Trocar `anchor` e
+        rodar de novo devolve tudo 0 e nao move data nenhuma, porque
+        `order_id` deriva da sequencia do RNG e nao das datas -- os ids
+        colidem e todo INSERT cai no `DO NOTHING`. Pra atualizar as datas de
+        um seller ja semeado use `demo_refresh.regenera_demo`.
+    """
+    async with pool.acquire() as conn, conn.transaction():
+        return await seed_na_conexao(
+            conn,
+            seller_id,
+            seed=seed,
+            n_categories=n_categories,
+            n_products=n_products,
+            weeks_back=weeks_back,
+            claim_rate=claim_rate,
+            anchor=anchor,
+        )
+
+
+async def seed_na_conexao(
+    conn,
+    seller_id,
+    *,
+    seed: int = DEFAULT_SEED,
+    n_categories: int = 10,
+    n_products: int = 50,
+    weeks_back: int = 12,
+    claim_rate: float = 0.04,
+    anchor: datetime | None = None,
+) -> dict[str, int]:
+    """Mesmo trabalho de `seed_postgres`, mas na conexao/transacao do caller.
+
+    Existe pro `demo_refresh.regenera_demo`, que precisa dos DELETEs e do seed
+    na MESMA transacao -- se ele chamasse `seed_postgres`, o seed abriria
+    transacao propria numa conexao propria do pool e uma falha no meio deixaria
+    a demo publica vazia. Nao abre nem commita transacao: quem chama decide.
     """
     catalog = generate_catalog(seed=seed, n_categories=n_categories, n_products=n_products)
-    orders = generate_orders(catalog=catalog, seed=seed, weeks_back=weeks_back)
+    # `anchor=None` nao pode ser repassado adiante: o default de
+    # `generate_orders` e a ancora congelada, nao None.
+    extras = {} if anchor is None else {"anchor": anchor}
+    orders = generate_orders(catalog=catalog, seed=seed, weeks_back=weeks_back, **extras)
     claims = generate_claims(orders=orders, seed=seed, rate=claim_rate)
 
-    async with pool.acquire() as conn, conn.transaction():
-        contagens_antes = await _contagens(conn, seller_id)
+    contagens_antes = await _contagens(conn, seller_id)
 
-        categorias_args = [
-            (seller_id, cat["category_id"], cat["name"]) for cat in catalog["categories"]
-        ]
-        await conn.executemany(_INSERT_CATEGORY, categorias_args)
+    categorias_args = [
+        (seller_id, cat["category_id"], cat["name"]) for cat in catalog["categories"]
+    ]
+    await conn.executemany(_INSERT_CATEGORY, categorias_args)
 
-        itens_args = [
-            (seller_id, prod["item_id"], prod["title"], prod["category_id"])
-            for prod in catalog["products"]
-        ]
-        await conn.executemany(_INSERT_ITEM, itens_args)
+    itens_args = [
+        (seller_id, prod["item_id"], prod["title"], prod["category_id"])
+        for prod in catalog["products"]
+    ]
+    await conn.executemany(_INSERT_ITEM, itens_args)
 
-        pedidos_args = []
-        order_items_args = []
-        for order in orders:
-            pedidos_args.append(
-                (
-                    order["order_id"],
-                    seller_id,
-                    _parse_boundary(order["date_closed"]),
-                    order["status"],
-                    order["total_amount"],
-                    order["marketplace_fee"],
-                    order["shipping_cost"],
-                    order["buyer_id"],
-                    order["raw_json"],
-                )
-            )
-            for item in _dedupe_order_items(order["items"]):
-                order_items_args.append(
-                    (
-                        seller_id,
-                        order["order_id"],
-                        item["item_id"],
-                        item["quantity"],
-                        item["unit_price"],
-                    )
-                )
-        await conn.executemany(_INSERT_ORDER, pedidos_args)
-        await conn.executemany(_INSERT_ORDER_ITEM, order_items_args)
-
-        claims_args = [
+    pedidos_args = []
+    order_items_args = []
+    for order in orders:
+        pedidos_args.append(
             (
+                order["order_id"],
                 seller_id,
-                c["claim_id"],
-                c["order_id"],
-                c["status"],
-                _parse_boundary(c["date_created"]),
-                c["raw_json"],
+                _parse_boundary(order["date_closed"]),
+                order["status"],
+                order["total_amount"],
+                order["marketplace_fee"],
+                order["shipping_cost"],
+                order["buyer_id"],
+                order["raw_json"],
             )
-            for c in claims
-        ]
-        await conn.executemany(_INSERT_CLAIM, claims_args)
+        )
+        for item in _dedupe_order_items(order["items"]):
+            order_items_args.append(
+                (
+                    seller_id,
+                    order["order_id"],
+                    item["item_id"],
+                    item["quantity"],
+                    item["unit_price"],
+                )
+            )
+    await conn.executemany(_INSERT_ORDER, pedidos_args)
+    await conn.executemany(_INSERT_ORDER_ITEM, order_items_args)
 
-        contagens_depois = await _contagens(conn, seller_id)
+    claims_args = [
+        (
+            seller_id,
+            c["claim_id"],
+            c["order_id"],
+            c["status"],
+            _parse_boundary(c["date_created"]),
+            c["raw_json"],
+        )
+        for c in claims
+    ]
+    await conn.executemany(_INSERT_CLAIM, claims_args)
 
+    contagens_depois = await _contagens(conn, seller_id)
     return {chave: contagens_depois[chave] - contagens_antes[chave] for chave in _TABELAS}

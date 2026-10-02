@@ -12,6 +12,65 @@ TEST_DATABASE_URL = os.environ.get(
 )
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _suite_nunca_fala_com_producao():
+    """Garante que NENHUM teste desta suite alcance o banco de producao.
+
+    A exposicao nao e de uma feature, e do import: `backend/main.py` roda
+    `load_dotenv(backend/.env)` no topo do modulo, e esse arquivo guarda o
+    `DATABASE_URL` e o `DEMO_SELLER_ID` de PRODUCAO. `backend/db.py` le
+    `os.environ["DATABASE_URL"]` na HORA da chamada, nao no import -- entao
+    qualquer teste que suba o `lifespan` e esqueca o
+    `monkeypatch.setenv("DATABASE_URL", ...)` abre pool contra producao, sem
+    nenhum aviso. Isso e um `pytest` numa maquina de dev escrevendo no banco
+    que serve cliente pago.
+
+    Quem le isso tende a pensar so no refresh da demo, por causa do
+    `DELETE FROM orders`. O buraco e maior: `worker_habilitado()` continua
+    OPT-OUT (de proposito -- ver `backend/main.py`), entao o mesmo esquecimento
+    sobe o `worker_loop` contra producao, drenando a fila de verdade e
+    renovando tokens de verdade. Fixar o `DATABASE_URL` aqui fecha os dois de
+    uma vez, e fecha tambem o proximo consumidor de `DATABASE_URL` que alguem
+    adicionar sem lembrar desta armadilha.
+
+    As tres travas:
+
+    1. `DATABASE_URL` fixado em `TEST_DATABASE_URL`. O `load_dotenv` do import
+       pode ate injetar o valor de producao durante a coleta -- esta fixture
+       roda depois dele e antes do primeiro corpo de teste, e como `db.py` le
+       a variavel na hora da chamada, o valor que vale em tempo de execucao e
+       sempre este. Quem reimportar ou recarregar o `main` no meio da suite
+       tambem nao reverte nada: `load_dotenv` nao sobrescreve variavel ja
+       presente no ambiente.
+    2. `DEMO_SELLER_ID` removido. Se algo ligar o refresh, ele degrada pro
+       no-op `sem-env` em vez de mirar no seller de producao.
+    3. `DEMO_REFRESH_IN_PROCESS=0` explicito. Com o default agora opt-in (ver
+       `demo_refresh_habilitado`), essa linha e redundante -- e fica de
+       proposito: o default protege quem ESQUECE a variavel, nao quem a tem
+       setada, e `backend/.env` e um arquivo nao versionado onde um dev pode
+       deixar `=1` pra testar producao local. Com `os.environ` tendo
+       precedencia sobre o `load_dotenv`, zerar aqui e o que impede que o
+       default da suite dependa de um arquivo que ninguem revisa. Custa uma
+       linha; cobre o caso em que o default sozinho nao cobriria.
+
+    Quem precisa do caminho LIGADO liga com `monkeypatch.setenv`, que tem
+    precedencia dentro do teste e e revertido no teardown.
+    """
+    anteriores = {
+        chave: os.environ.get(chave)
+        for chave in ("DATABASE_URL", "DEMO_SELLER_ID", "DEMO_REFRESH_IN_PROCESS")
+    }
+    os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+    os.environ.pop("DEMO_SELLER_ID", None)
+    os.environ["DEMO_REFRESH_IN_PROCESS"] = "0"
+    yield
+    for chave, anterior in anteriores.items():
+        if anterior is None:
+            os.environ.pop(chave, None)
+        else:
+            os.environ[chave] = anterior
+
+
 @pytest.fixture
 async def pg_pool():
     # server_settings espelha backend/db.py: sem UTC fixo, o Postgres local

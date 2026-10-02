@@ -1,0 +1,432 @@
+# backend/tests/test_demo_refresh.py
+"""Testes do refresh do seller de demonstracao.
+
+O valor esta concentrado em dois lugares: a trava `is_demo` (o que vem depois
+dela e um DELETE nos pedidos do seller) e a prova de que o refresh de fato
+MOVE as datas -- um refresh que falha em silencio e indistinguivel de um que
+funciona, olhando so pro retorno.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import pytest
+
+from backend.demo_refresh import (
+    DIAS_PARA_VENCER,
+    SEMANAS_DEMO,
+    regenera_demo,
+    regenera_demo_se_vencida,
+)
+from backend.seed import seed_postgres
+from src.demo_data import ANCHOR_DATE, DEFAULT_SEED
+
+# Parametros pequenos pra manter os testes rapidos, iguais aos de test_seed.py.
+# `weeks_back` tem que ser o MESMO nas duas semeaduras de um teste de refresh:
+# com a mesma seed e a mesma quantidade de semanas, os `order_id` gerados
+# coincidem exatamente -- que e o cenario onde o `ON CONFLICT DO NOTHING`
+# transformaria o refresh em no-op. Mudar `weeks_back` entre as chamadas
+# esconderia o bug.
+_PEQUENO = {"n_categories": 5, "n_products": 10, "weeks_back": 2, "claim_rate": 0.04}
+
+_TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims")
+
+
+class _ConnEspia:
+    """Conexao que REGISTRA o SQL de `execute`/`fetchval` e encaminha o resto.
+
+    Existe pra um teste so: fixar que `_exige_demo` roda ANTES do primeiro
+    DELETE. Encaminha por `__getattr__` em vez de reimplementar a interface do
+    asyncpg -- `seed_na_conexao` usa `executemany`, e amanha pode usar outra
+    coisa; o que este espiao precisa observar sao exatamente as duas chamadas
+    que a ordem depende.
+    """
+
+    def __init__(self, conn, registro: list[str]) -> None:
+        self._conn = conn
+        self._registro = registro
+
+    async def execute(self, sql, *args, **kwargs):
+        self._registro.append(sql)
+        return await self._conn.execute(sql, *args, **kwargs)
+
+    async def fetchval(self, sql, *args, **kwargs):
+        self._registro.append(sql)
+        return await self._conn.fetchval(sql, *args, **kwargs)
+
+    def __getattr__(self, nome):
+        # `transaction`, `executemany`, `fetchrow`... passam direto.
+        return getattr(self._conn, nome)
+
+
+class _AquisicaoEspia:
+    def __init__(self, pool, registro: list[str]) -> None:
+        self._ctx = pool.acquire()
+        self._registro = registro
+
+    async def __aenter__(self):
+        return _ConnEspia(await self._ctx.__aenter__(), self._registro)
+
+    async def __aexit__(self, *exc):
+        return await self._ctx.__aexit__(*exc)
+
+
+class _PoolEspia:
+    """Pool que entrega `_ConnEspia`. Mesma assinatura usada por `regenera_demo`."""
+
+    def __init__(self, pool, registro: list[str]) -> None:
+        self._pool = pool
+        self._registro = registro
+
+    def acquire(self):
+        return _AquisicaoEspia(self._pool, self._registro)
+
+    def __getattr__(self, nome):
+        return getattr(self._pool, nome)
+
+
+async def _marca_demo(pg_pool, seller_id) -> None:
+    async with pg_pool.acquire() as conn:
+        await conn.execute("UPDATE sellers SET is_demo = true WHERE id = $1", seller_id)
+
+
+async def _max_date_closed(pg_pool, seller_id) -> datetime | None:
+    async with pg_pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT max(date_closed) FROM orders WHERE seller_id = $1", seller_id
+        )
+
+
+async def _contagens(pg_pool, seller_id) -> dict[str, int]:
+    async with pg_pool.acquire() as conn:
+        return {
+            tabela: await conn.fetchval(
+                f"SELECT count(*) FROM {tabela} WHERE seller_id = $1", seller_id
+            )
+            for tabela in _TABELAS
+        }
+
+
+# --------------------------------------------------------------------------
+# 1. A trava
+# --------------------------------------------------------------------------
+
+
+async def test_recusa_seller_sem_marca_de_demo_e_preserva_os_pedidos(pg_pool, test_seller):
+    """A linha mais importante do modulo: sem `is_demo`, nao apaga nada.
+
+    Conferir so o `raises` nao bastaria -- o que importa e que os pedidos do
+    seller continuem lá. E conferir so as CONTAGENS tambem nao bastaria: o
+    refresh usa a mesma seed, entao uma versao sem a trava apagaria tudo e
+    reinseriria a mesma quantidade de linhas, com as contagens batendo. O que
+    denuncia a troca e a DATA -- semeamos com a ancora congelada e pedimos o
+    refresh com `now()`.
+    """
+    _, sid = test_seller
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+    antes = await _contagens(pg_pool, sid)
+    data_antes = await _max_date_closed(pg_pool, sid)
+    assert all(n > 0 for n in antes.values())
+
+    with pytest.raises(ValueError, match="is_demo"):
+        await regenera_demo(pg_pool, sid, anchor=datetime.now(UTC), **_PEQUENO)
+
+    assert await _contagens(pg_pool, sid) == antes
+    assert await _max_date_closed(pg_pool, sid) == data_antes
+
+
+async def test_recusa_seller_inexistente_sem_apagar_o_vizinho(pg_pool, test_seller):
+    """`is_demo` NULL (seller que nao existe) tem que levantar tambem.
+
+    `if not marcado` sozinho trataria None e False igual, mas a mensagem
+    precisa distinguir: "nao existe" e um id errado, "nao e demo" e um id de
+    cliente real. Os dados do seller legitimo ao lado continuam intactos.
+    """
+    _, sid = test_seller
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+    antes = await _contagens(pg_pool, sid)
+    data_antes = await _max_date_closed(pg_pool, sid)
+
+    with pytest.raises(ValueError, match="nao existe"):
+        await regenera_demo(pg_pool, uuid.uuid4(), anchor=datetime.now(UTC), **_PEQUENO)
+
+    assert await _contagens(pg_pool, sid) == antes
+    assert await _max_date_closed(pg_pool, sid) == data_antes
+
+
+async def test_a_trava_is_demo_roda_antes_do_primeiro_delete(pg_pool, test_seller):
+    """Fixa a POSICAO da trava, nao so a existencia dela.
+
+    Os outros testes desta secao provam que um seller sem `is_demo` sai com os
+    pedidos intactos -- mas provam isso com a trava em QUALQUER lugar dentro da
+    transacao: mover `_exige_demo` pra depois dos quatro DELETEs mantem os 16
+    testes verdes, porque o `raise` dispara o rollback e o dado volta
+    (verificado por mutacao). Quem defende a ordem hoje e so a transacao.
+
+    Isso nao e defesa suficiente. Um `conn.transaction()` que alguem remova,
+    troque por autocommit, ou um DELETE que alguem mova pra fora do bloco --
+    e a ordem passa a importar de verdade, sem nenhum teste avisando. Aqui a
+    ordem e observada direto: `SELECT is_demo` tem que aparecer no SQL antes
+    do primeiro `DELETE`.
+
+    O seller usado E demo, entao o caminho e o de sucesso: o que se mede e a
+    sequencia, nao o `raise`.
+    """
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+
+    registro: list[str] = []
+    await regenera_demo(
+        _PoolEspia(pg_pool, registro), sid, anchor=datetime.now(UTC), seed=DEFAULT_SEED, **_PEQUENO
+    )
+
+    trava = next(i for i, sql in enumerate(registro) if "is_demo" in sql)
+    primeiro_delete = next(i for i, sql in enumerate(registro) if sql.lstrip().startswith("DELETE"))
+    assert trava < primeiro_delete, (
+        "a trava is_demo rodou DEPOIS de um DELETE -- hoje o rollback esconde isso, "
+        f"mas a ordem esta errada. SQL observado: {registro[: primeiro_delete + 1]}"
+    )
+
+
+# --------------------------------------------------------------------------
+# 2. O refresh move as datas de verdade
+# --------------------------------------------------------------------------
+
+
+async def test_refresh_move_as_datas_para_a_nova_ancora(pg_pool, test_seller):
+    """O teste mais importante do arquivo.
+
+    Semeia com a ancora velha, regenera com uma nova, e exige que
+    `max(date_closed)` tenha ANDADO. Sem o DELETE em `regenera_demo`, os
+    `order_id` reaparecem identicos (derivam do RNG, nao das datas), todo
+    INSERT cai no `ON CONFLICT DO NOTHING` e o refresh reporta sucesso sem
+    mudar uma linha -- falha invisivel em producao, que e justamente a que
+    este teste existe pra pegar.
+    """
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+
+    antigo = await _max_date_closed(pg_pool, sid)
+    assert antigo is not None
+    contagens_antes = await _contagens(pg_pool, sid)
+
+    nova_ancora = datetime.now(UTC)
+    await regenera_demo(pg_pool, sid, anchor=nova_ancora, seed=DEFAULT_SEED, **_PEQUENO)
+
+    novo = await _max_date_closed(pg_pool, sid)
+    assert novo is not None
+    assert novo > antigo, "o refresh nao moveu as datas (DELETE ausente? ON CONFLICT engoliu?)"
+    # O pedido mais novo cai ~1 dia antes da ancora; o pior caso do RNG e ~7
+    # dias (ver DIAS_PARA_VENCER em backend/demo_refresh.py).
+    assert nova_ancora - novo < timedelta(days=DIAS_PARA_VENCER)
+
+    # Refresh substitui, nao acumula: sem o DELETE as contagens dobrariam, e
+    # com um DELETE incompleto alguma tabela ficaria maior que antes.
+    assert await _contagens(pg_pool, sid) == contagens_antes
+
+
+async def test_refresh_nao_deixa_order_items_orfao(pg_pool, test_seller):
+    """`order_items` nao e apagada explicitamente -- quem a leva e o cascade
+    da FK `(seller_id, order_id) references orders`. Se esse cascade deixasse
+    de valer, sobrariam itens apontando pra pedido que nao existe mais."""
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+    await regenera_demo(pg_pool, sid, anchor=datetime.now(UTC), seed=DEFAULT_SEED, **_PEQUENO)
+
+    async with pg_pool.acquire() as conn:
+        orfaos = await conn.fetchval(
+            """
+            SELECT count(*) FROM order_items oi
+            WHERE oi.seller_id = $1
+              AND NOT EXISTS (
+                  SELECT 1 FROM orders o
+                  WHERE o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+              )
+            """,
+            sid,
+        )
+    assert orfaos == 0
+
+
+# --------------------------------------------------------------------------
+# 3. Atomicidade
+# --------------------------------------------------------------------------
+
+
+async def test_falha_depois_do_delete_nao_esvazia_a_demo(pg_pool, test_seller):
+    """Uma falha no meio tem que devolver o dado ANTIGO, nao uma demo vazia.
+
+    A falha e injetada por parametro, sem tocar em codigo de producao:
+    `n_categories` acima da lista curada faz `generate_catalog` levantar --
+    e ele e chamado DEPOIS dos DELETEs, dentro da transacao.
+    """
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+    antes = await _contagens(pg_pool, sid)
+    data_antes = await _max_date_closed(pg_pool, sid)
+
+    with pytest.raises(ValueError, match="n_categories"):
+        await regenera_demo(
+            pg_pool,
+            sid,
+            anchor=datetime.now(UTC),
+            seed=DEFAULT_SEED,
+            n_categories=99,
+            n_products=10,
+            weeks_back=2,
+            claim_rate=0.04,
+        )
+
+    assert await _contagens(pg_pool, sid) == antes
+    assert await _max_date_closed(pg_pool, sid) == data_antes
+
+
+async def test_falha_depois_dos_inserts_desfaz_tudo(pg_pool, test_seller, monkeypatch):
+    """Variante mais dura: a falha acontece com TODAS as linhas novas ja
+    inseridas, so faltando o commit.
+
+    Monkeypatcha `_contagens` (chamada por `seed_na_conexao` no fim, depois de
+    todos os INSERTs) pra levantar. O rollback tem que devolver exatamente o
+    dado antigo -- nem vazio, nem uma mistura dos dois conjuntos.
+    """
+    import backend.seed as seed_mod
+
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+    antes = await _contagens(pg_pool, sid)
+    data_antes = await _max_date_closed(pg_pool, sid)
+
+    real = seed_mod._contagens
+    chamadas = {"n": 0}
+
+    async def _contagens_que_falha_no_fim(conn, seller_id):
+        chamadas["n"] += 1
+        if chamadas["n"] >= 2:
+            raise RuntimeError("falha simulada depois dos INSERTs")
+        return await real(conn, seller_id)
+
+    monkeypatch.setattr(seed_mod, "_contagens", _contagens_que_falha_no_fim)
+
+    with pytest.raises(RuntimeError, match="falha simulada"):
+        await regenera_demo(pg_pool, sid, anchor=datetime.now(UTC), seed=DEFAULT_SEED, **_PEQUENO)
+
+    assert await _contagens(pg_pool, sid) == antes
+    assert await _max_date_closed(pg_pool, sid) == data_antes
+
+
+# --------------------------------------------------------------------------
+# 4. O gatilho de validade
+# --------------------------------------------------------------------------
+
+
+async def test_dado_fresco_nao_dispara_regeneracao(pg_pool, test_seller, monkeypatch):
+    """Demo recem-semeada nao deve ser regenerada a cada cold start."""
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=datetime.now(UTC), **_PEQUENO)
+    antes = await _max_date_closed(pg_pool, sid)
+    contagens_antes = await _contagens(pg_pool, sid)
+    monkeypatch.setenv("DEMO_SELLER_ID", str(sid))
+
+    assert await regenera_demo_se_vencida(pg_pool) == "atual"
+
+    # Nao basta confiar no status: se a regeneracao tivesse rodado, as
+    # contagens subiriam pras 26 semanas e a data mudaria.
+    assert await _max_date_closed(pg_pool, sid) == antes
+    assert await _contagens(pg_pool, sid) == contagens_antes
+
+
+async def test_dado_velho_dispara_regeneracao_ate_hoje(pg_pool, test_seller, monkeypatch):
+    """Demo congelada na ancora antiga tem que ser regenerada ate hoje.
+
+    Roda o caminho REAL (`SEMANAS_DEMO` semanas, catalogo cheio), porque e
+    exatamente isso que vai rodar no cold start do Render.
+    """
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+    antes = await _max_date_closed(pg_pool, sid)
+    monkeypatch.setenv("DEMO_SELLER_ID", str(sid))
+
+    agora = datetime.now(UTC)
+    assert await regenera_demo_se_vencida(pg_pool) == "regenerada"
+
+    novo = await _max_date_closed(pg_pool, sid)
+    assert novo > antes
+    assert agora - novo < timedelta(days=DIAS_PARA_VENCER)
+
+    # Profundidade: 26 semanas tem que cobrir ~180 dias de historico, a mesma
+    # janela do backfill de um seller real.
+    #
+    # A folga de 14 dias nao e arbitraria, e tambem nao e generosa: o intervalo
+    # medido aqui e entre o pedido mais ANTIGO e o mais NOVO, e os dois sao
+    # sorteados dentro da primeira e da ultima semana. Cada ponta pode encolher
+    # ate 7 dias, entao o piso teorico e `SEMANAS_DEMO * 7 - 14`. Na pratica
+    # sobra pouco: sob mutacao (DELETE removido) este assert falhou por UM dia,
+    # 167 contra 168 -- ou seja, ele morde, nao e decorativo.
+    async with pg_pool.acquire() as conn:
+        mais_antigo = await conn.fetchval(
+            "SELECT min(date_closed) FROM orders WHERE seller_id = $1", sid
+        )
+    assert (novo - mais_antigo) > timedelta(days=SEMANAS_DEMO * 7 - 14)
+
+
+async def test_sem_pedido_nenhum_tambem_dispara(pg_pool, test_seller, monkeypatch):
+    """`max(date_closed)` NULL (demo marcada mas nunca semeada) conta como
+    vencida -- senao a demo publica ficaria vazia pra sempre."""
+    _, sid = test_seller
+    await _marca_demo(pg_pool, sid)
+    monkeypatch.setenv("DEMO_SELLER_ID", str(sid))
+
+    assert await regenera_demo_se_vencida(pg_pool) == "regenerada"
+    assert await _max_date_closed(pg_pool, sid) is not None
+
+
+# --------------------------------------------------------------------------
+# 5. Ambiente nao configurado e no-op, nunca excecao
+# --------------------------------------------------------------------------
+
+
+async def test_sem_env_var_e_no_op(pg_pool, monkeypatch):
+    """API sem demo configurada e o caso normal em dev e na CI."""
+    monkeypatch.delenv("DEMO_SELLER_ID", raising=False)
+    assert await regenera_demo_se_vencida(pg_pool) == "sem-env"
+
+
+async def test_env_var_invalida_e_no_op(pg_pool, monkeypatch):
+    monkeypatch.setenv("DEMO_SELLER_ID", "nao-e-uuid")
+    assert await regenera_demo_se_vencida(pg_pool) == "env-invalida"
+
+
+async def test_seller_inexistente_e_no_op(pg_pool, monkeypatch):
+    """Diferente de `regenera_demo`, o gatilho NAO levanta aqui: derrubar o
+    boot da API por causa de uma demo nao semeada seria trocar um problema
+    cosmetico por indisponibilidade."""
+    monkeypatch.setenv("DEMO_SELLER_ID", str(uuid.uuid4()))
+    assert await regenera_demo_se_vencida(pg_pool) == "seller-ausente"
+
+
+async def test_seller_sem_marca_de_demo_e_no_op_e_preserva_os_pedidos(
+    pg_pool, test_seller, monkeypatch
+):
+    """Um typo na env var apontando pra cliente real: no-op, e sem apagar nada.
+
+    Este e o pior cenario do deploy. O gatilho checa `is_demo` ANTES de chamar
+    `regenera_demo` -- se ele chamasse direto, a trava ainda levantaria, mas
+    dentro de uma task de fundo isso viraria um traceback no log em vez de um
+    no-op deliberado.
+    """
+    _, sid = test_seller
+    await seed_postgres(pg_pool, sid, seed=DEFAULT_SEED, anchor=ANCHOR_DATE, **_PEQUENO)
+    antes = await _contagens(pg_pool, sid)
+    monkeypatch.setenv("DEMO_SELLER_ID", str(sid))
+
+    assert await regenera_demo_se_vencida(pg_pool) == "nao-e-demo"
+    assert await _contagens(pg_pool, sid) == antes
