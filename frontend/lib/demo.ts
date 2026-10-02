@@ -86,22 +86,31 @@ export function getDemoCohortProduto(dateFrom: string, dateTo: string) {
 }
 
 /**
- * Janela padrão da demonstração: julho de 2026.
+ * Janela padrão da demonstração: os últimos 90 dias, igual às telas
+ * autenticadas.
  *
- * NÃO é "últimos 90 dias" como nas telas autenticadas, e a diferença é
- * deliberada. O vendedor da demo é sintético e seus pedidos param em
- * 31/07/2026, então uma janela ancorada em `hoje` escorrega para fora do dado
- * conforme o tempo passa. Em 01/10/2026 os últimos 90 dias pegavam só julho,
- * enquanto o "período anterior" pegava abril a julho inteiros — e os três
- * cartões da Executive exibiam −54,7%. A conta estava certa; a leitura era de
- * um negócio em colapso, na única tela feita para atrair cliente.
+ * Isto já foi fixo em julho/2026, e a cicatriz vale registrar. O vendedor da
+ * demo é sintético e seus pedidos paravam em 31/07/2026, então uma janela
+ * ancorada em `hoje` escorregava para fora do dado conforme o tempo passava.
+ * Em 01/10 os últimos 90 dias pegavam só julho, enquanto o "período anterior"
+ * pegava abril a julho inteiros — e os três cartões da Executive exibiam
+ * −54,7%. A conta estava certa; a leitura era de um negócio em colapso, na
+ * única tela feita para atrair cliente.
  *
- * Julho é o mês escolhido porque é o último completo E o anterior (junho,
- * 132 pedidos) também é completo, então a comparação é entre dois meses
- * cheios: −6,2% de receita, que é variação de loja de verdade. Maio não serve
- * de base — começa em 09/05 e compararia mês cheio com mês parcial.
+ * Fixar a janela tratava o sintoma. A causa foi resolvida no backend: o
+ * seller de demonstração é regenerado no boot sempre que sua venda mais
+ * recente passa de 7 dias, com 26 semanas de histórico terminando em hoje
+ * (`backend/demo_refresh.py`). Com o dado sempre corrente, a janela relativa
+ * volta a ser a certa — e passa a ser a MESMA do dashboard, que é o ponto:
+ * a vitrine mostra o produto, não uma versão especial dele.
  *
- * Quando a demo passar a usar dado de uma loja real com ingestão corrente,
- * isto volta a ser uma janela relativa a `hoje`.
+ * Continua vivendo aqui, e não repetida nas três páginas, porque era assim
+ * que estava antes e três cópias divergem.
  */
-export const DEMO_PERIODO_PADRAO = { de: "2026-07-01", ate: "2026-08-01" } as const;
+export function periodoPadraoDaDemo() {
+  const hoje = new Date();
+  const noventaDiasAtras = new Date(hoje);
+  noventaDiasAtras.setDate(hoje.getDate() - 90);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
+}

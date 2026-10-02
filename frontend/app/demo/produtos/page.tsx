@@ -4,7 +4,7 @@ import { CohortHeatmap } from "@/components/analytics/cohort-heatmap";
 import { ParetoChart } from "@/components/analytics/pareto-chart";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import type { AbcLinha, CohortLinha } from "@/lib/api";
-import { DEMO_PERIODO_PADRAO, getDemoAbcPareto, getDemoCohortProduto } from "@/lib/demo";
+import { getDemoAbcPareto, getDemoCohortProduto, periodoPadraoDaDemo } from "@/lib/demo";
 
 /**
  * Produtos da demonstração pública — mesmo conteúdo de `/dashboard/produtos`,
@@ -16,7 +16,7 @@ export default async function DemoProdutosPage({
   searchParams,
 }: PageProps<"/demo/produtos">) {
   const params = await searchParams;
-  const padrao = DEMO_PERIODO_PADRAO;
+  const padrao = periodoPadraoDaDemo();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 

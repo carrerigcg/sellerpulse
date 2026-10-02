@@ -3,7 +3,7 @@ import { totalizarFluxo } from "@/components/analytics/executive-totals";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import { janelaAnterior, type FluxoDia } from "@/lib/api";
-import { DEMO_PERIODO_PADRAO, getDemoFluxoFinanceiro } from "@/lib/demo";
+import { getDemoFluxoFinanceiro, periodoPadraoDaDemo } from "@/lib/demo";
 
 /**
  * Executive da demonstração pública — mesmo conteúdo de `/dashboard`, dados
@@ -15,7 +15,7 @@ export default async function DemoExecutivePage({
   searchParams,
 }: PageProps<"/demo">) {
   const params = await searchParams;
-  const padrao = DEMO_PERIODO_PADRAO;
+  const padrao = periodoPadraoDaDemo();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 

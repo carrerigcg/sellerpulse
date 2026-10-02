@@ -4,7 +4,7 @@ import { RfmChart } from "@/components/analytics/rfm-chart";
 import { RfmLegend } from "@/components/analytics/rfm-legend";
 import { SegmentBand } from "@/components/analytics/segment-band";
 import type { RfmLinha } from "@/lib/api";
-import { DEMO_PERIODO_PADRAO, getDemoRfmScores } from "@/lib/demo";
+import { getDemoRfmScores, periodoPadraoDaDemo } from "@/lib/demo";
 
 /**
  * Clientes da demonstração pública — mesmo conteúdo de `/dashboard/clientes`,
@@ -16,7 +16,7 @@ export default async function DemoClientesPage({
   searchParams,
 }: PageProps<"/demo/clientes">) {
   const params = await searchParams;
-  const padrao = DEMO_PERIODO_PADRAO;
+  const padrao = periodoPadraoDaDemo();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
