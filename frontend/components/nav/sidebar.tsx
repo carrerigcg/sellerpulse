@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { Monograma, Wordmark } from "@/components/brand";
+
 import { IconeFechar, IconeMenu } from "./icones";
 import type { GrupoDeNavegacao } from "./itens";
 
@@ -26,12 +28,10 @@ import type { GrupoDeNavegacao } from "./itens";
  */
 export function Sidebar({
   grupos,
-  marca,
   rodape,
   children,
 }: {
   grupos: GrupoDeNavegacao[];
-  marca: ReactNode;
   /**
    * Função, e não `ReactNode`, pelo mesmo motivo de `comRotulos` em
    * `renderNavegacao`: o rodapé é renderizado nos dois lugares, e a gaveta
@@ -148,7 +148,15 @@ export function Sidebar({
     <div className="flex min-h-screen">
       {/* Sidebar fixa — some abaixo de md, onde vira gaveta. */}
       <aside className="hidden shrink-0 flex-col gap-6 border-r border-line p-3 md:flex md:w-16 xl:w-56 xl:p-4">
-        <div className="flex h-10 items-center justify-center xl:justify-start xl:px-2">{marca}</div>
+        {/* No trilho a marca é o monograma: o `Wordmark` tem 83px e o trilho
+            oferece 40 de área útil, então ele vazava a borda por cima do
+            conteúdo. Aqui o `xl:` é a ferramenta certa pelo mesmo motivo do
+            rodapé — o `<aside>` é um elemento só atravessando trilho e
+            rótulos, e `comRotulos` não distingue os dois. */}
+        <div className="flex h-10 items-center justify-center xl:justify-start xl:px-2">
+          <Monograma className="text-base xl:hidden" />
+          <Wordmark className="hidden text-base xl:inline" />
+        </div>
         {renderNavegacao(false)}
         <div className="border-t border-line pt-3">{rodape(false)}</div>
       </aside>
@@ -175,7 +183,8 @@ export function Sidebar({
           >
             <IconeMenu />
           </button>
-          {marca}
+          {/* No celular e na gaveta cabe a marca inteira: não é trilho. */}
+          <Wordmark className="text-base" />
         </header>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">{children}</main>
@@ -198,7 +207,7 @@ export function Sidebar({
             className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col gap-6 border-r border-line bg-bg p-4 outline-none md:hidden"
           >
             <div className="flex items-center justify-between">
-              {marca}
+              <Wordmark className="text-base" />
               <button
                 type="button"
                 onClick={() => setAberta(false)}
