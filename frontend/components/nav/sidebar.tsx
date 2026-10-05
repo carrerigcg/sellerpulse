@@ -152,7 +152,12 @@ export function Sidebar({
   return (
     <div className="flex min-h-screen">
       {/* Sidebar fixa — some abaixo de md, onde vira gaveta. */}
-      <aside className="hidden shrink-0 flex-col gap-6 border-r border-line p-3 md:flex md:w-16 xl:w-56 xl:p-4">
+      {/* `sticky top-0 h-screen` porque sem isso a sidebar rola junto com a
+          página e some — numa tela com tabela de 47 linhas, a navegação
+          desaparece exatamente quando a pessoa está mais longe do topo. O
+          `h-screen` é o que faz o `sticky` ter o que fixar; o `overflow-y-auto`
+          no `<nav>` cuida do caso de a lista crescer mais que a tela. */}
+      <aside className="sticky top-0 hidden h-screen shrink-0 flex-col gap-6 border-r border-line p-3 md:flex md:w-16 xl:w-56 xl:p-4">
         {/* No trilho a marca é o monograma: o `Wordmark` tem 83px e o trilho
             oferece 40 de área útil, então ele vazava a borda por cima do
             conteúdo. Aqui o `xl:` é a ferramenta certa pelo mesmo motivo do
