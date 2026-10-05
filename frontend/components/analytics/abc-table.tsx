@@ -79,7 +79,16 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
                   é o que permite a coluna ser estreita sem virar "Kit 3 Ca…".
                   `break-words` cobre SKU-título sem espaço, que não teria
                   onde quebrar e estouraria a célula estreita. */}
-              <td className="break-words px-2 py-2 sm:max-w-xs sm:truncate sm:px-3">
+              {/* `title` porque a partir de `sm` esta célula trunca com
+                  reticências, e aí o nome do produto fica inacessível. Com a
+                  sidebar a tabela perdeu largura na faixa de 1280 a 1400 — em
+                  1280, 7 dos 47 títulos passaram a truncar, contra nenhum
+                  antes. Truncar é o comportamento desejado; perder o texto
+                  não é. De 1440 pra cima nada trunca, como antes. */}
+              <td
+                title={linha.titulo}
+                className="break-words px-2 py-2 sm:max-w-xs sm:truncate sm:px-3"
+              >
                 {anuncioFoiRemovido(linha) ? (
                   <>
                     <AnuncioRemovidoPill />
