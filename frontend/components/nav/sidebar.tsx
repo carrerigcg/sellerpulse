@@ -12,16 +12,21 @@ import type { GrupoDeNavegacao } from "./itens";
 /**
  * Navegação lateral, compartilhada por `/dashboard` e `/demo`.
  *
- * Três estágios, e o do meio é o que justifica a sidebar neste produto:
+ * Três estágios:
  *
  *   < md (768)      gaveta atrás de um botão
- *   md–xl           trilho de 64px, só ícones
- *   >= xl (1280)    224px com rótulos
+ *   md–xl           trilho de 64px, só ícones   → tablet
+ *   >= xl (1280)    224px com rótulos           → notebook e desktop
  *
- * O trilho existe porque o conteúdo aqui é largo — tabelas de seis colunas e
- * a curva de Pareto usam os 1152px do `max-w-6xl`. Num notebook de 1366 uma
- * sidebar de 224px deixaria 1126px e apertaria justamente as telas que
- * funcionam bem; o trilho deixa 1302px e não tira nada.
+ * Medido, porque a justificativa original estava errada e vale não repetir o
+ * erro: o conteúdo aqui é largo (tabelas de seis colunas, curva de Pareto, os
+ * 1152px do `max-w-6xl`), e a primeira versão deste comentário afirmava que
+ * uma sidebar de 224px apertaria um notebook de 1366. Não aperta — em 1366 o
+ * conteúdo vai de 1152px para 1142px, dez pixels. O ponto de fato apertado é
+ * 1280 exato, com 1056px, e lá nenhum texto corta.
+ *
+ * O trilho não existe, então, para salvar o notebook: ele serve a faixa
+ * 768–1279, que é tablet, onde 224px custariam de verdade.
  *
  * Client Component por dois motivos: `usePathname`, para marcar o item ativo,
  * e o estado da gaveta.
