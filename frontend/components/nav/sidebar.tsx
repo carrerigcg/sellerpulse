@@ -32,7 +32,14 @@ export function Sidebar({
 }: {
   grupos: GrupoDeNavegacao[];
   marca: ReactNode;
-  rodape: ReactNode;
+  /**
+   * Função, e não `ReactNode`, pelo mesmo motivo de `comRotulos` em
+   * `renderNavegacao`: o rodapé é renderizado nos dois lugares, e a gaveta
+   * só existe abaixo de 768 — então um `xl:` escrito aqui dentro nunca vale
+   * lá. Um nó único com `hidden xl:block` sumiria justamente na gaveta, que
+   * é onde há mais espaço. Simplificar de volta é que seria o defeito.
+   */
+  rodape: (comRotulos: boolean) => ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -143,7 +150,7 @@ export function Sidebar({
       <aside className="hidden shrink-0 flex-col gap-6 border-r border-line p-3 md:flex md:w-16 xl:w-56 xl:p-4">
         <div className="flex h-10 items-center justify-center xl:justify-start xl:px-2">{marca}</div>
         {renderNavegacao(false)}
-        <div className="border-t border-line pt-3">{rodape}</div>
+        <div className="border-t border-line pt-3">{rodape(false)}</div>
       </aside>
 
       {/*
@@ -203,7 +210,7 @@ export function Sidebar({
             </div>
             {/* Dentro da gaveta os rótulos sempre aparecem: não é trilho. */}
             {renderNavegacao(true)}
-            <div className="border-t border-line pt-3">{rodape}</div>
+            <div className="border-t border-line pt-3">{rodape(true)}</div>
           </div>
         </>
       )}
