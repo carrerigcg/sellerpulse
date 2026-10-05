@@ -59,7 +59,11 @@ export function NavegacaoDashboard({
           >
             {email}
           </span>
-          <BotaoSair />
+          {/* Mesmo problema de largura do CTA da demo: "Sair" em `text-sm`
+              com `px-3` não cabe nos 39px do trilho. Três situações de novo —
+              o `xl:` resolve dentro do `<aside>`, o parâmetro resolve a
+              gaveta. */}
+          <BotaoSair className={comRotulos ? "px-3 text-sm" : "px-1 text-xs xl:px-3 xl:text-sm"} />
         </div>
       )}
     >
