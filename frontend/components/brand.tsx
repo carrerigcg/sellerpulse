@@ -13,3 +13,14 @@ export function Wordmark({ className = "" }: { className?: string }) {
     </span>
   );
 }
+
+/** Versão de uma letra e meia, para o trilho de ícones da sidebar, onde os
+ *  83px do `Wordmark` não cabem nos 64 disponíveis. Mantém a mesma ideia de
+ *  cor: o laranja só na segunda metade. */
+export function Monograma({ className = "" }: { className?: string }) {
+  return (
+    <span className={`font-semibold tracking-tight ${className}`} aria-hidden>
+      S<span className="text-accent">P</span>
+    </span>
+  );
+}
