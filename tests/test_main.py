@@ -221,7 +221,11 @@ def test_main_regerar_dados_creates_demo_db(tmp_path, monkeypatch) -> None:
     assert demo_path.exists()
     # Pin exact size: regression sentinel — if generator changes without
     # regenerating the versioned data/demo.db, CI catches the drift.
-    assert demo_path.stat().st_size == 278528
+    # 278528 → 290816 em 2026-10-06, quando compradores passaram a se repetir
+    # (`demo_data._pick_buyer`): menos buyer_ids distintos, porém raw_json
+    # maior por pedido. O número é para ser atualizado junto com o gerador —
+    # vê-lo falhar significa que alguém mexeu num e esqueceu do outro.
+    assert demo_path.stat().st_size == 290816
 
 
 def test_cmd_abrir_dashboard_invokes_streamlit(monkeypatch):
