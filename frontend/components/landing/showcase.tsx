@@ -20,28 +20,35 @@ const TELAS = [
   {
     titulo: "Executive",
     pergunta: "Quanto sobrou de verdade este mês, depois da comissão do Mercado Livre?",
-    desktop: { src: "/landing/demo-executive.png", width: 1104, height: 556 },
-    mobile: { src: "/landing/demo-executive-mobile.png", width: 602, height: 757 },
+    desktop: { src: "/landing/demo-executive.png", width: 1440, height: 900 },
+    mobile: { src: "/landing/demo-executive-mobile.png", width: 602, height: 1100 },
     href: "/demo",
   },
   {
     titulo: "Produtos",
     pergunta: "Quais produtos sustentam o faturamento — e quais só ocupam espaço?",
-    desktop: { src: "/landing/demo-produtos.png", width: 1104, height: 706 },
-    mobile: { src: "/landing/demo-produtos-mobile.png", width: 602, height: 744 },
+    desktop: { src: "/landing/demo-produtos.png", width: 1440, height: 900 },
+    mobile: { src: "/landing/demo-produtos-mobile.png", width: 602, height: 1100 },
     href: "/demo/produtos",
   },
   {
     titulo: "Clientes",
     pergunta: "Quem compra de novo, e quem já foi embora sem avisar?",
-    // Recorte comeca na dispersao RFM, pulando os seis cartoes de segmento.
-    // Na loja de demonstracao ninguem compra duas vezes, entao "Campeoes" e
-    // "Fieis" ficam em R$ 0 -- correto, mas dois zeros no topo da vitrine
-    // passam a impressao errada do PRODUTO por causa de um limite do DADO. E
-    // a dispersao responde melhor a pergunta da legenda: o eixo X e dias
-    // desde a ultima compra.
-    desktop: { src: "/landing/demo-clientes.png", width: 1104, height: 620 },
-    mobile: { src: "/landing/demo-clientes-mobile.png", width: 602, height: 760 },
+    // Este print mostra a tela inteira, incluindo "Campeoes" e "Fieis" em
+    // R$ 0. Nao e erro de calculo: na loja de demonstracao ninguem compra
+    // duas vezes, entao nao existe cliente fiel pra contar.
+    //
+    // A versao anterior recortava na dispersao RFM pra pular esses dois
+    // zeros. Com a sidebar o recorte deixou de funcionar -- cortar a altura
+    // deixa uma coluna lateral vazia com o botao solto no pe, que le como
+    // tela quebrada. Entre esconder e mostrar, mostrar: e o que o visitante
+    // ve ao clicar.
+    //
+    // O conserto de verdade e no gerador (`src/demo_data.py`), que sorteia o
+    // comprador num intervalo de 90 milhoes e por isso nunca repete: 766
+    // compradores pra 766 pedidos.
+    desktop: { src: "/landing/demo-clientes.png", width: 1440, height: 900 },
+    mobile: { src: "/landing/demo-clientes-mobile.png", width: 602, height: 1100 },
     href: "/demo/clientes",
   },
 ] as const;
