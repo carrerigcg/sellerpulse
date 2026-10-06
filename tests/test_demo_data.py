@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
-from datetime import timedelta
+from collections import Counter
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from src.demo_data import (
@@ -17,6 +18,14 @@ from src.demo_data import (
     generate_orders,
     write_row,
 )
+from src.segmentation import rfm_scores
+from src.storage import init_schema
+
+# Mesma forma que `backend/demo_refresh.py` semeia em producao, e mesma janela
+# que a tela de Clientes pede por padrao. Os testes de recompra medem o que o
+# visitante ve, nao uma configuracao de laboratorio.
+_SEMANAS_PRODUCAO = 26
+_JANELA_DA_TELA_DIAS = 90
 
 _DEMO_DB = Path(__file__).resolve().parents[1] / "data" / "demo.db"
 
@@ -302,3 +311,87 @@ def test_ancora_diferente_muda_as_datas_mas_nao_os_order_ids() -> None:
     )
     assert [o["order_id"] for o in antiga] == [o["order_id"] for o in nova]
     assert [o["date_closed"] for o in antiga] != [o["date_closed"] for o in nova]
+
+
+def _pedidos_de_producao() -> list[dict]:
+    """Pedidos na mesma forma que producao gera: 26 semanas, ancora movel."""
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    return generate_orders(
+        catalog=catalog,
+        seed=DEFAULT_SEED,
+        weeks_back=_SEMANAS_PRODUCAO,
+        anchor=datetime.now(UTC).replace(second=0, microsecond=0),
+    )
+
+
+def test_generate_orders_buyers_repeat() -> None:
+    """Compradores tem que se repetir, senao a analise RFM nao tem o que segmentar.
+
+    Ate 2026-10-06 o gerador sorteava `buyer_id` num intervalo de 90 milhoes,
+    entao na pratica nunca repetia -- 766 compradores pra 766 pedidos.
+    """
+    pagos = [o for o in _pedidos_de_producao() if o["status"] == "paid"]
+    distintos = {o["buyer_id"] for o in pagos}
+    assert len(distintos) < len(pagos) * 0.75, (
+        f"{len(distintos)} compradores pra {len(pagos)} pedidos -- "
+        "quase ninguem esta comprando duas vezes"
+    )
+
+
+def test_generate_orders_frequency_has_enough_distinct_values_for_rfm() -> None:
+    """O `f_score` e quintil sobre os valores DISTINTOS de frequencia.
+
+    Este e o teste que pega o bug original pela raiz. Com um comprador novo por
+    pedido existe UM valor distinto (todo mundo comprou 1 vez), o numero de
+    bins cai pra um e todo mundo recebe `f_score = 1` -- o que torna
+    `Champions` e `Loyal` (ambos exigem `f >= 4`) impossiveis, nao raros.
+    Cinco valores distintos e o minimo pra existirem cinco quintis de verdade.
+    """
+    pagos = [o for o in _pedidos_de_producao() if o["status"] == "paid"]
+    frequencias = Counter(Counter(o["buyer_id"] for o in pagos).values())
+    assert len(frequencias) >= 5, (
+        f"so {len(frequencias)} valores distintos de frequencia: {sorted(frequencias)}"
+    )
+
+
+def test_demo_data_preenche_os_seis_segmentos_rfm() -> None:
+    """Nenhum dos seis cartoes da tela de Clientes pode sair em branco.
+
+    Teste de ponta a ponta, e nao sobre a distribuicao: o que o visitante ve na
+    vitrine e a soma por segmento, e dois cartoes anunciando R$ 0 passam a
+    impressao de que o PRODUTO nao calcula -- quando o buraco estava no dado
+    sintetico. Roda contra a mesma janela que a tela pede.
+    """
+    pedidos = _pedidos_de_producao()
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    init_schema(conn)
+    try:
+        for o in pedidos:
+            write_row(
+                conn,
+                "orders",
+                {
+                    "order_id": o["order_id"],
+                    "date_closed": o["date_closed"],
+                    "status": o["status"],
+                    "total_amount": o["total_amount"],
+                    "marketplace_fee": o["marketplace_fee"],
+                    "shipping_cost": o["shipping_cost"],
+                    "buyer_id": o["buyer_id"],
+                    "raw_json": o["raw_json"],
+                },
+            )
+        conn.commit()
+        hoje = datetime.now(UTC).date()
+        df = rfm_scores(
+            conn,
+            (hoje - timedelta(days=_JANELA_DA_TELA_DIAS)).isoformat(),
+            hoje.isoformat(),
+        )
+    finally:
+        conn.close()
+
+    presentes = set(df["segmento"])
+    esperados = {"Champions", "Loyal", "At Risk", "New", "Hibernating"}
+    assert esperados <= presentes, f"segmentos vazios na tela: {sorted(esperados - presentes)}"
