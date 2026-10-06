@@ -34,19 +34,6 @@ const TELAS = [
   {
     titulo: "Clientes",
     pergunta: "Quem compra de novo, e quem já foi embora sem avisar?",
-    // Este print mostra a tela inteira, incluindo "Campeoes" e "Fieis" em
-    // R$ 0. Nao e erro de calculo: na loja de demonstracao ninguem compra
-    // duas vezes, entao nao existe cliente fiel pra contar.
-    //
-    // A versao anterior recortava na dispersao RFM pra pular esses dois
-    // zeros. Com a sidebar o recorte deixou de funcionar -- cortar a altura
-    // deixa uma coluna lateral vazia com o botao solto no pe, que le como
-    // tela quebrada. Entre esconder e mostrar, mostrar: e o que o visitante
-    // ve ao clicar.
-    //
-    // O conserto de verdade e no gerador (`src/demo_data.py`), que sorteia o
-    // comprador num intervalo de 90 milhoes e por isso nunca repete: 766
-    // compradores pra 766 pedidos.
     desktop: { src: "/landing/demo-clientes.png", width: 1440, height: 900 },
     mobile: { src: "/landing/demo-clientes-mobile.png", width: 602, height: 1100 },
     href: "/demo/clientes",
