@@ -40,3 +40,10 @@ docs/plans/
 
 # Superpowers brainstorming (visual companion mockups)
 .superpowers/
+
+# HyperFrames (HeyGen) e os arquivos do comercial animado — ferramenta e
+# midia, nao produto. O repo e peca de portfolio; video pesado e skill de
+# terceiro nao tem por que entrar no historico dele.
+.agents/
+skills-lock.json
+video/
