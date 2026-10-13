@@ -1,4 +1,5 @@
 fastapi>=0.115,<1
+mcp>=2.3,<3
 uvicorn[standard]>=0.30,<1
 asyncpg>=0.29,<1
 pyjwt[crypto]>=2.8,<3
