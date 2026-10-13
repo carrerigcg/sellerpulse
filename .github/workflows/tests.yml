@@ -134,5 +134,13 @@ jobs:
       - name: ESLint
         run: npm run lint
 
+      # O front-end passou duas sprints com zero teste enquanto o back-end
+      # tinha 270. Entrou junto com a exportacao em CSV por um motivo
+      # especifico: formatacao brasileira errada nao derruba nada -- gera um
+      # arquivo que abre, parece certo e tem os numeros errados. `lint` e
+      # `build` sao cegos pra isso.
+      - name: Vitest
+        run: npm test
+
       - name: Build (inclui checagem de tipos)
         run: npm run build

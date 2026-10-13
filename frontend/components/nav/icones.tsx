@@ -85,3 +85,16 @@ export function IconeFechar({ className = "" }: Props) {
     </svg>
   );
 }
+
+/** Seta pra baixo saindo de uma bandeja — download. Usado no botão Exportar. */
+export function IconeExportar({ className = "" }: Props) {
+  return (
+    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden>
+      <path d="M12 3v11" />
+      <path d="m8 10 4 4 4-4" />
+      <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+    </svg>
+  );
+}
