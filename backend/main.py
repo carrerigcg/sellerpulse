@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend import mcp_server
 from backend.db import close_pool, get_pool
 from backend.demo_refresh import regenera_demo_se_vencida
 from backend.ml.tokens import valida_chave_de_cifra
@@ -59,6 +60,26 @@ async def _refresca_demo(pool) -> None:
         _log.exception("[demo] refresh da demo falhou")
 
 
+def _lista_env(nome: str, padrao: list[str]) -> list[str]:
+    extras = [v.strip() for v in os.environ.get(nome, "").split(",") if v.strip()]
+    return [*padrao, *extras]
+
+
+# Protecao contra DNS-rebinding do servidor MCP. O SDK recusa Host ausente ou
+# fora da lista (421) e Origin presente fora da lista (403); Origin ausente
+# passa. As duas listas sao configuraveis por env justamente porque eu nao
+# consigo enumerar todo cliente de IA: um Origin que eu nao previ vira um 403
+# que se conserta com variavel de ambiente, sem redeploy de codigo.
+_MCP_HOSTS = _lista_env(
+    "MCP_ALLOWED_HOSTS",
+    ["sellerpulse-049j.onrender.com", "localhost:*", "127.0.0.1:*"],
+)
+_MCP_ORIGENS = _lista_env(
+    "MCP_ALLOWED_ORIGINS",
+    ["https://claude.ai", "https://chatgpt.com", "https://chat.openai.com"],
+)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Abre o pool e, se habilitado, sobe o worker da fila no mesmo processo.
@@ -80,33 +101,48 @@ async def lifespan(app: FastAPI):
     valida_chave_de_cifra()
 
     pool = await get_pool()
-    parar = asyncio.Event()
-    tarefa: asyncio.Task | None = None
-    if worker_habilitado():
-        tarefa = asyncio.create_task(worker_loop(pool, parar=parar), name="sellerpulse-worker")
 
-    tarefa_demo: asyncio.Task | None = None
-    if demo_refresh_habilitado():
-        tarefa_demo = asyncio.create_task(_refresca_demo(pool), name="sellerpulse-demo-refresh")
-    try:
-        yield
-    finally:
-        if tarefa is not None:
-            parar.set()
-            # Espera de verdade: task vazada deixaria o processo pendurado no
-            # shutdown, e o Render mataria o container a forca no deploy.
-            await tarefa
-        if tarefa_demo is not None:
-            # Diferente do worker, esta task nao tem evento de parada: ela e uma
-            # transacao unica que nao da pra interromper num ponto seguro. Entao
-            # cancela e espera o cancelamento ser processado — o `await` e o que
-            # garante que a task nao sobrevive ao shutdown. O rollback da
-            # transacao em andamento fica com o asyncpg/Postgres: a demo com dado
-            # velho e um resultado aceitavel, demo vazia nao seria.
-            tarefa_demo.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await tarefa_demo
-        await close_pool()
+    # O MCP sobe ANTES das tasks de fundo, e a ordem e load-bearing.
+    #
+    # Ele precisa ser aberto pelo lifespan do app que hospeda o mount: sem isto
+    # o servidor sobe, responde o /health e devolve erro em toda chamada MCP. E
+    # um ASGI novo por ciclo, porque o gerenciador de sessao do SDK so aceita um
+    # `run()` por instancia (ver `backend/mcp_server.py`).
+    #
+    # Por que ANTES e nao depois: `session_manager.run()` tem pontos de await.
+    # Aberto depois de agendar as tasks, ele cede o controle ao event loop e da
+    # ao refresh da demo a chance de rodar inteiro antes do `yield` — e
+    # `asyncio.all_tasks()` so lista tarefa pendente, entao o teste que confere
+    # o agendamento passaria a ver zero. Subir o que serve requisicao primeiro e
+    # agendar o trabalho de fundo depois tambem e a ordem mais honesta.
+    async with mcp_server.ciclo_de_vida(hosts=_MCP_HOSTS, origens=_MCP_ORIGENS):
+        parar = asyncio.Event()
+        tarefa: asyncio.Task | None = None
+        if worker_habilitado():
+            tarefa = asyncio.create_task(worker_loop(pool, parar=parar), name="sellerpulse-worker")
+
+        tarefa_demo: asyncio.Task | None = None
+        if demo_refresh_habilitado():
+            tarefa_demo = asyncio.create_task(_refresca_demo(pool), name="sellerpulse-demo-refresh")
+        try:
+            yield
+        finally:
+            if tarefa is not None:
+                parar.set()
+                # Espera de verdade: task vazada deixaria o processo pendurado no
+                # shutdown, e o Render mataria o container a forca no deploy.
+                await tarefa
+            if tarefa_demo is not None:
+                # Diferente do worker, esta task nao tem evento de parada: ela e uma
+                # transacao unica que nao da pra interromper num ponto seguro. Entao
+                # cancela e espera o cancelamento ser processado — o `await` e o que
+                # garante que a task nao sobrevive ao shutdown. O rollback da
+                # transacao em andamento fica com o asyncpg/Postgres: a demo com dado
+                # velho e um resultado aceitavel, demo vazia nao seria.
+                tarefa_demo.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await tarefa_demo
+            await close_pool()
 
 
 app = FastAPI(title="SellerPulse API", lifespan=lifespan)
@@ -137,3 +173,14 @@ app.include_router(segmentation.router)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+# Servidor MCP em /mcp — conector pro Claude e pro ChatGPT lerem a demonstracao.
+#
+# O mount vem DEPOIS de todas as rotas proprias de proposito: um mount casa com
+# tudo abaixo do prefixo, e rota declarada depois dele ficaria inalcancavel.
+#
+# O que e montado e um delegador estavel, nao o ASGI do MCP: o gerenciador de
+# sessao do SDK so aceita um `run()` por instancia, entao quem cria o ASGI e o
+# lifespan, uma vez por ciclo. Ver `backend/mcp_server.py`.
+app.mount("/mcp", mcp_server.delegador)
