@@ -3,9 +3,11 @@ import Link from "next/link";
 import { AbcClassCards } from "@/components/analytics/abc-class-cards";
 import { AbcTable } from "@/components/analytics/abc-table";
 import { CohortHeatmap } from "@/components/analytics/cohort-heatmap";
+import { ExportButton } from "@/components/analytics/export-button";
 import { ParetoChart } from "@/components/analytics/pareto-chart";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import { ApiError, getAbcPareto, getCohortProduto, type AbcLinha, type CohortLinha } from "@/lib/api";
+import { COLUNAS_ABC } from "@/lib/colunas-export";
 
 /**
  * Produtos — curva ABC de Pareto e cohort de lançamento.
@@ -91,8 +93,19 @@ export default async function ProdutosPage({
           </section>
 
           <section className="mt-6 rounded-xl border border-line p-5">
-            <h2 className="text-sm font-semibold">Produtos</h2>
-            <p className="mt-0.5 text-xs text-muted">{abc.length} produtos no período</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Produtos</h2>
+                <p className="mt-0.5 text-xs text-muted">{abc.length} produtos no período</p>
+              </div>
+              <ExportButton
+                linhas={abc}
+                colunas={COLUNAS_ABC}
+                tela="produtos"
+                de={de}
+                ate={ate}
+              />
+            </div>
             <AbcTable abc={abc} />
           </section>
 

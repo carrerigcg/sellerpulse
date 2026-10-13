@@ -128,11 +128,30 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # ARMADILHA, se este passo falhar com EUSAGE e "Missing: @emnapi/...":
+      # o `npm install` rodado no Windows PODA `@emnapi/core` e
+      # `@emnapi/runtime` do topo do package-lock.json. Os dois so sao
+      # alcancaveis por pacotes opcionais de outra plataforma
+      # (@unrs/...wasm32-wasi, @img/sharp-wasm32, @tailwindcss/oxide-wasm32-wasi),
+      # que nao se instalam ali -- e o `npm ci` daqui, em Linux, cobra os dois
+      # de volta. Nenhum flag evita a poda (--include=optional, --os, --cpu,
+      # --libc), e `npm ci --dry-run --os=linux` NAO reproduz a falha: passa
+      # num lockfile que a CI recusa. A correcao e devolver as duas entradas
+      # de topo, comparando com um lockfile que a CI aceitou -- nada que
+      # existia nele pode desaparecer.
       - name: Install dependencies
         run: npm ci
 
       - name: ESLint
         run: npm run lint
+
+      # O front-end passou duas sprints com zero teste enquanto o back-end
+      # tinha 270. Entrou junto com a exportacao em CSV por um motivo
+      # especifico: formatacao brasileira errada nao derruba nada -- gera um
+      # arquivo que abre, parece certo e tem os numeros errados. `lint` e
+      # `build` sao cegos pra isso.
+      - name: Vitest
+        run: npm test
 
       - name: Build (inclui checagem de tipos)
         run: npm run build
