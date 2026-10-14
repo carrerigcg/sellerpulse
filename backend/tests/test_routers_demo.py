@@ -233,6 +233,40 @@ async def test_demo_abc_responde_sem_autenticacao(client_demo, pg_pool):
     assert resp.json()[0]["titulo"] == "Produto"
 
 
+async def test_demo_custos_responde_sem_autenticacao_e_nao_aceita_escrita(client_demo, pg_pool):
+    """A demo le custo e nao escreve: nao existe PUT nem DELETE sob /demo.
+
+    Um campo editavel na vitrine que sempre falha ao salvar seria pior que
+    nenhum campo -- e um endpoint de escrita sem autenticacao seria pior
+    ainda.
+    """
+    client, seller_id = client_demo
+    async with pg_pool.acquire() as conn:
+        await conn.execute(_INSERT_ORDER, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 100.0)
+        await conn.execute(_INSERT_ITEM_CACHE, seller_id, "MLB1", "Produto")
+        await conn.execute(_INSERT_ORDER_ITEM, seller_id, 1, "MLB1", 100.0)
+        await conn.execute(
+            "INSERT INTO product_costs (seller_id, item_id, vigente_desde, custo_unitario)"
+            " VALUES ($1,'MLB1',$2,40.0)",
+            seller_id,
+            date(2026, 7, 1),
+        )
+
+    resp = client.get("/demo/custos", params={"date_from": "2026-07-01", "date_to": "2026-08-01"})
+
+    assert resp.status_code == 200
+    linha = resp.json()[0]
+    assert linha["sku"] == "MLB1"
+    assert linha["custo_unitario"] == 40.0
+
+    # 405 no caminho que EXISTE (so GET) e 404 no que nunca foi registrado:
+    # nao ha rota de escrita sob /demo, que e a unica porta sem autenticacao
+    # do sistema.
+    assert client.put("/demo/custos", json={"custo_unitario": 1.0}).status_code == 405
+    assert client.put("/demo/custos/MLB1", json={"custo_unitario": 1.0}).status_code == 404
+    assert client.delete("/demo/custos/MLB1").status_code == 404
+
+
 async def test_demo_abc_ignora_seller_id_vindo_do_cliente(client_demo, pg_pool, outro_seller):
     client, seller_id = client_demo
     _ub, seller_b = outro_seller

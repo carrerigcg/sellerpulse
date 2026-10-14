@@ -1,10 +1,12 @@
 import { AbcClassCards } from "@/components/analytics/abc-class-cards";
 import { AbcTable } from "@/components/analytics/abc-table";
 import { CohortHeatmap } from "@/components/analytics/cohort-heatmap";
+import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { ParetoChart } from "@/components/analytics/pareto-chart";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import type { AbcLinha, CohortLinha } from "@/lib/api";
 import { getDemoAbcPareto, getDemoCohortProduto, periodoPadraoDaDemo } from "@/lib/demo";
+import { coberturaDosProdutos, produtosSemCusto } from "@/lib/cobertura";
 
 /**
  * Produtos da demonstração pública — mesmo conteúdo de `/dashboard/produtos`,
@@ -54,6 +56,15 @@ export default async function DemoProdutosPage({
       ) : (
         <>
           <AbcClassCards abc={abc} />
+
+          {/* A margem de cada produto só está completa se houver custo
+              informado para ele. Aqui a conta é por produto. */}
+          <IndicadorCobertura
+            cobertura={coberturaDosProdutos(abc)}
+            semCusto={produtosSemCusto(abc)}
+            href="/demo/custos"
+            rotuloDoAtalho="Ver custos"
+          />
 
           <section className="mt-6 rounded-xl border border-line p-5">
             <h2 className="text-sm font-semibold">Curva ABC de Pareto</h2>

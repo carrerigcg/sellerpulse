@@ -18,6 +18,8 @@ export const COLUNAS_FLUXO: Coluna<FluxoDia>[] = [
   { titulo: "Receita bruta", campo: "receita_bruta" },
   { titulo: "Comissão do Mercado Livre", campo: "taxas_ml" },
   { titulo: "Frete", campo: "frete" },
+  { titulo: "Custo dos produtos", campo: "custo_produtos" },
+  { titulo: "Receita sem custo informado", campo: "receita_sem_custo" },
   { titulo: "Margem de contribuição", campo: "margem_contribuicao" },
 ];
 
@@ -28,6 +30,8 @@ export const COLUNAS_ABC: Coluna<AbcLinha>[] = [
   { titulo: "Receita", campo: "receita" },
   { titulo: "% da receita", campo: "receita_pct" },
   { titulo: "% acumulado", campo: "receita_acumulada_pct" },
+  { titulo: "Custo dos produtos", campo: "custo_produtos" },
+  { titulo: "Receita sem custo informado", campo: "receita_sem_custo" },
 ];
 
 export const COLUNAS_RFM: Coluna<RfmLinha>[] = [

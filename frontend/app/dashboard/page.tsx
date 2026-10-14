@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { FlowChart } from "@/components/analytics/flow-chart";
 import { totalizarFluxo } from "@/components/analytics/executive-totals";
+import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
 import { PeriodPicker } from "@/components/analytics/period-picker";
@@ -9,6 +10,7 @@ import { ApiError, getFluxoFinanceiro, janelaAnterior, type FluxoDia } from "@/l
 import { COLUNAS_FLUXO } from "@/lib/colunas-export";
 
 import { DisparaDelta } from "./delta";
+import { coberturaDoFluxo } from "@/lib/cobertura";
 
 /**
  * Executive — receita, custos do Mercado Livre e margem de contribuição do
@@ -92,7 +94,14 @@ export default async function ExecutivePage({
         </p>
       ) : (
         <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Quatro colunas quando há custo de produto, três quando não há:
+              com o cartão a conta fecha na tela (receita − custos do ML −
+              custo dos produtos = margem), e sem ele a tela fica como era. */}
+          <div
+            className={`mt-6 grid gap-4 sm:grid-cols-2 ${
+              atual.custoProdutos > 0 ? "lg:grid-cols-4" : "lg:grid-cols-3"
+            }`}
+          >
             <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
             {/* "Custos do Mercado Livre", não "Custo total": este cartão é
                 comissão + frete, e chamá-lo de total seria repetir num rótulo
@@ -103,13 +112,28 @@ export default async function ExecutivePage({
               anterior={passado.custo}
               subirEhRuim
             />
+            {atual.custoProdutos > 0 && (
+              <KpiCard
+                rotulo="Custo dos produtos"
+                valor={atual.custoProdutos}
+                anterior={passado.custoProdutos}
+                subirEhRuim
+              />
+            )}
             <KpiCard
               rotulo="Margem de contribuição"
               valor={atual.margem}
               anterior={passado.margem}
-              nota="receita − comissão do Mercado Livre − frete"
+              nota="receita − comissão do Mercado Livre − frete − custo dos produtos"
             />
           </div>
+
+          {/* A regra de honestidade: a margem acima só está completa se
+              houver custo informado para toda a receita do período. */}
+          <IndicadorCobertura
+            cobertura={coberturaDoFluxo(fluxo)}
+            href={"/dashboard/custos"}
+          />
 
           <section className="mt-6 rounded-xl border border-line p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">

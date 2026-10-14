@@ -22,13 +22,14 @@ ou (em caso de erro) nada e gravado.
 
 from __future__ import annotations
 
-from datetime import datetime
+import hashlib
+from datetime import datetime, timedelta
 from typing import Any
 
 from backend.analytics._common import _parse_boundary
 from src.demo_data import DEFAULT_SEED, generate_catalog, generate_claims, generate_orders
 
-_TABELAS = ("categories", "items", "orders", "order_items", "claims")
+_TABELAS = ("categories", "items", "orders", "order_items", "claims", "product_costs")
 
 _TABELA_SQL = {
     "categories": "categories_cache",
@@ -36,6 +37,7 @@ _TABELA_SQL = {
     "orders": "orders",
     "order_items": "order_items",
     "claims": "claims",
+    "product_costs": "product_costs",
 }
 
 _INSERT_CATEGORY = """
@@ -65,6 +67,12 @@ _INSERT_ORDER_ITEM = """
     ON CONFLICT DO NOTHING
 """
 
+_INSERT_PRODUCT_COST = """
+    INSERT INTO product_costs (seller_id, item_id, vigente_desde, custo_unitario)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (seller_id, item_id, vigente_desde) DO NOTHING
+"""
+
 _INSERT_CLAIM = """
     INSERT INTO claims (seller_id, claim_id, order_id, status, date_created, raw_json, fetched_at)
     VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
@@ -87,6 +95,43 @@ def _dedupe_order_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
         else:
             vistos[item["item_id"]] = dict(item)
     return list(vistos.values())
+
+
+# Fatia dos produtos deixada DE PROPOSITO sem custo informado.
+#
+# Semear 100% faria o indicador de cobertura nunca aparecer, e ele e parte do
+# que a demonstracao precisa mostrar: a promessa do produto nao e "temos a
+# margem", e "nunca apresentamos um numero incompleto como completo". Com uns
+# poucos produtos vazios, a vitrine exibe a feature funcionando em vez de
+# esconde-la — e e o estado real de qualquer vendedor, que nunca preenche tudo.
+_FATIA_SEM_CUSTO = 0.10
+
+# Custo entre 35% e 62% do preco de venda. Depois da comissao do ML (~12%) e do
+# frete, sobra uma margem de contribuicao plausivel para marketplace.
+_CUSTO_MIN, _CUSTO_MAX = 0.35, 0.62
+
+
+def _sorteio_estavel(item_id: str, tempero: str) -> float:
+    """Fracao em [0, 1) derivada do item_id. Estavel entre processos.
+
+    `hash()` de string NAO serve: o Python o randomiza por processo (PYTHONHASHSEED),
+    entao a demo mudaria de custo a cada reinicio do Render.
+
+    Nao usa o `random.Random(seed)` do gerador de proposito. Aquele RNG e
+    consumido em sequencia por `generate_catalog`; pedir mais um numero dentro
+    do laco deslocaria o fluxo e TODO preco seguinte mudaria — a demo inteira
+    viraria outra, sem que nada falhasse.
+    """
+    digest = hashlib.sha256(f"{tempero}:{item_id}".encode()).digest()
+    return int.from_bytes(digest[:4], "big") / 2**32
+
+
+def custo_de_demonstracao(item_id: str, unit_price: float) -> float | None:
+    """Custo sintetico do produto, ou `None` para os deixados sem custo."""
+    if _sorteio_estavel(item_id, "cobertura") < _FATIA_SEM_CUSTO:
+        return None
+    fracao = _CUSTO_MIN + _sorteio_estavel(item_id, "custo") * (_CUSTO_MAX - _CUSTO_MIN)
+    return round(unit_price * fracao, 2)
 
 
 async def _contagens(conn, seller_id) -> dict[str, int]:
@@ -227,6 +272,19 @@ async def seed_na_conexao(
         for c in claims
     ]
     await conn.executemany(_INSERT_CLAIM, claims_args)
+
+    # Vigencia um dia ANTES do pedido mais antigo: o custo precisa valer para
+    # a janela inteira que a demo exibe. Com vigencia dentro da janela, os
+    # primeiros dias apareceriam descobertos e a cobertura ficaria baixa por
+    # um motivo que nao diz nada sobre a feature.
+    primeiro_pedido = min(_parse_boundary(o["date_closed"]) for o in orders)
+    vigencia = (primeiro_pedido - timedelta(days=1)).date()
+    custos_args = [
+        (seller_id, prod["item_id"], vigencia, custo)
+        for prod in catalog["products"]
+        if (custo := custo_de_demonstracao(prod["item_id"], prod["unit_price"])) is not None
+    ]
+    await conn.executemany(_INSERT_PRODUCT_COST, custos_args)
 
     contagens_depois = await _contagens(conn, seller_id)
     return {chave: contagens_depois[chave] - contagens_antes[chave] for chave in _TABELAS}

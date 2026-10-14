@@ -17,10 +17,21 @@ export type FluxoDia = {
   receita_bruta: number;
   taxas_ml: number;
   frete: number;
+  /** Custo de produto informado pelo vendedor, na vigência da data do pedido. */
+  custo_produtos: number;
   /**
-   * receita_bruta − taxas_ml − frete. Não existe mais um `custo_estimado`
-   * (55% da receita chutados) nem o `liquido` que saía dele — ver o
-   * comentário no topo de `src/metrics.py`.
+   * Quanto da receita do dia veio de item SEM custo informado.
+   *
+   * É o que torna `custo_produtos` honesto: sem esta coluna, quem preencheu
+   * 3 de 47 produtos veria a margem quase intacta e concluiria que lucra
+   * muito.
+   */
+  receita_sem_custo: number;
+  /**
+   * receita_bruta − taxas_ml − frete − custo_produtos. Não existe mais um
+   * `custo_estimado` (55% da receita chutados) nem o `liquido` que saía dele
+   * — ver o comentário no topo de `src/metrics.py`. O custo de produto que
+   * entra aqui é informado pelo vendedor, nunca estimado.
    */
   margem_contribuicao: number;
 };
@@ -34,6 +45,10 @@ export type AbcLinha = {
   receita_pct: number;
   receita_acumulada_pct: number;
   classe: ClasseAbc;
+  /** Custo informado para este produto, somado nas vendas da janela. */
+  custo_produtos: number;
+  /** Quanto da receita deste produto veio de venda sem custo informado. */
+  receita_sem_custo: number;
 };
 
 /** Rótulo bruto de `src/segmentation.py` (Fase 2, congelado) — não traduzir aqui. */
@@ -109,6 +124,32 @@ export function getFluxoFinanceiro(dateFrom: string, dateTo: string) {
 
 export function getAbcPareto(dateFrom: string, dateTo: string) {
   return buscar<AbcLinha[]>("/segmentation/abc", {
+    date_from: dateFrom,
+    date_to: dateTo,
+  });
+}
+
+/** Uma linha da tela de Custos: produto vendido na janela + custo vigente hoje. */
+export type CustoLinha = {
+  sku: string;
+  titulo: string;
+  classe: ClasseAbc;
+  receita: number;
+  unidades: number;
+  /**
+   * `null` = não informado, e isso NÃO é zero.
+   *
+   * Zero é uma afirmação — "este produto não me custa nada" — e precisa ser
+   * digitada. A distinção é a feature inteira: custo ausente não desconta
+   * nada e conta como receita descoberta.
+   */
+  custo_unitario: number | null;
+  /** Desde quando o custo acima vale. `null` quando não há custo. */
+  vigente_desde: string | null;
+};
+
+export function getCustos(dateFrom: string, dateTo: string) {
+  return buscar<CustoLinha[]>("/custos", {
     date_from: dateFrom,
     date_to: dateTo,
   });

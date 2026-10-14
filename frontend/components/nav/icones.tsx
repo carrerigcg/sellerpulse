@@ -68,6 +68,18 @@ export function IconeConectar({ className = "" }: Props) {
   );
 }
 
+/** Etiqueta de preço: o que o produto custa a você. */
+export function IconeCustos({ className = "" }: Props) {
+  return (
+    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden>
+      <path d="M12.6 3.2H20a.8.8 0 0 1 .8.8v7.4a2 2 0 0 1-.6 1.4l-7 7a2 2 0 0 1-2.8 0l-6-6a2 2 0 0 1 0-2.8l7-7a2 2 0 0 1 1.2-.8Z" />
+      <circle cx="16.5" cy="7.5" r="1.3" />
+    </svg>
+  );
+}
+
 export function IconeMenu({ className = "" }: Props) {
   return (
     <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"

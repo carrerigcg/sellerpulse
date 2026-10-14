@@ -201,6 +201,8 @@ async def test_fluxo_vazio_tem_as_colunas_certas(pg_pool, test_seller):
         "receita_bruta",
         "taxas_ml",
         "frete",
+        "custo_produtos",
+        "receita_sem_custo",
         "margem_contribuicao",
     ]
 
@@ -271,12 +273,22 @@ async def test_fluxo_paridade_com_a_versao_sqlite(pg_pool, test_seller):
         await _order(pg_pool, sid, oid, dt, total, fee, ship)
     obtido = await fluxo_financeiro(pg_pool, sid, "2026-07-25", "2026-07-27")
 
+    # Compara so as colunas que as DUAS camadas calculam. `custo_produtos` e
+    # `receita_sem_custo` existem so no lado Postgres: o SQLite legado nao tem
+    # `product_costs` e nao vai ter.
+    #
+    # Como este teste nao cadastra custo nenhum, ele tambem e o teste de que a
+    # feature de custo NAO muda os numeros de quem nao a usa: se um custo
+    # vazasse pra conta, `margem_contribuicao` -- que esta entre as colunas
+    # comparadas -- divergiria aqui.
+    compartilhadas = list(esperado.columns)
     pd.testing.assert_frame_equal(
         esperado.reset_index(drop=True),
-        obtido.reset_index(drop=True),
+        obtido[compartilhadas].reset_index(drop=True),
         check_dtype=False,
         atol=1e-6,
     )
+    assert (obtido["custo_produtos"] == 0).all(), "sem custo cadastrado, nada pode ser descontado"
 
 
 async def test_fluxo_diverge_do_sqlite_no_fuso_do_dia(pg_pool, test_seller):

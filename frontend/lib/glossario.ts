@@ -42,6 +42,15 @@ export const GLOSSARIO_FLUXO: Glossario<FluxoDia> = {
     "produto: o SellerPulse não conhece esse custo até você informar, e " +
     "chutar um percentual daria um número que parece lucro e não é. Por isso " +
     "a coluna se chama margem de contribuição, e não lucro.",
+  custo_produtos:
+    "O custo dos produtos vendidos no dia: quantidade vezes o custo unitário " +
+    "que você informou, valendo a vigência da data do pedido. Só entra o que " +
+    "você informou — o SellerPulse nunca estima esse valor. Informar o custo " +
+    "hoje não muda a margem de ontem.",
+  receita_sem_custo:
+    "Quanto da receita do dia veio de produto sem custo informado. É a coluna " +
+    "que mede o quanto a margem ao lado está incompleta: zero aqui significa " +
+    "que a margem já considera o custo de tudo que foi vendido naquele dia.",
 };
 
 /** `backend/analytics/segmentation_pg.py`, `abc_pareto` (regra 80/15/5). */
@@ -66,6 +75,14 @@ export const GLOSSARIO_ABC: Glossario<AbcLinha> = {
     "A soma das porcentagens desde o produto de maior receita até este, na " +
     "ordem do arquivo. É esta coluna que define a classe: é a curva de " +
     "Pareto escrita em números.",
+  custo_produtos:
+    "O custo informado para este produto, somado nas vendas do período. Zero " +
+    "aqui pode significar duas coisas: custo informado como zero, ou custo " +
+    "não informado. A coluna seguinte desempata.",
+  receita_sem_custo:
+    "Quanto da receita deste produto veio de venda sem custo informado. " +
+    "Igual à receita significa que este produto não tem custo cadastrado; " +
+    "zero significa que tem.",
 };
 
 /** `src/segmentation.py`, `rfm_scores` e `_RFM_SEGMENT_RULES`. */
