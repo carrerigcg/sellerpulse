@@ -4,6 +4,7 @@ import {
   IconeClientes,
   IconeConectar,
   IconeExecutive,
+  IconeExportar,
   IconeProdutos,
 } from "./icones";
 
@@ -33,6 +34,7 @@ export const GRUPOS_DASHBOARD: GrupoDeNavegacao[] = [
       { href: "/dashboard", rotulo: "Executive", Icone: IconeExecutive, exata: true },
       { href: "/dashboard/produtos", rotulo: "Produtos", Icone: IconeProdutos },
       { href: "/dashboard/clientes", rotulo: "Clientes", Icone: IconeClientes },
+      { href: "/dashboard/exportar", rotulo: "Exportar", Icone: IconeExportar },
     ],
   },
   {
@@ -50,6 +52,7 @@ export const GRUPOS_DEMO: GrupoDeNavegacao[] = [
       { href: "/demo", rotulo: "Executive", Icone: IconeExecutive, exata: true },
       { href: "/demo/produtos", rotulo: "Produtos", Icone: IconeProdutos },
       { href: "/demo/clientes", rotulo: "Clientes", Icone: IconeClientes },
+      { href: "/demo/exportar", rotulo: "Exportar", Icone: IconeExportar },
     ],
   },
 ];
