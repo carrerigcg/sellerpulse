@@ -53,13 +53,37 @@ export type Coluna<T> = {
  * mesma regra do custo de produto e das visitas: ausência não é zero. Um `0`
  * numa planilha é uma afirmação, e quem somar a coluna vai acreditar nela.
  */
+/**
+ * Tira o ruído de representação binária de um número, sem mexer na precisão
+ * que o número de fato tem.
+ *
+ * O backend soma dinheiro em `SUM()` no Postgres e manda o resultado como
+ * double. A soma de centavos em binário não fecha: 4263.24 chega como
+ * 4263.240000000001, e `String()` reproduz isso fielmente. O arquivo ficava
+ * com `4263,240000000001` numa coluna de reais — soma certo no Excel e
+ * parece defeito, que é o pior dos dois mundos.
+ *
+ * 15 algarismos significativos é o ponto de corte: um double carrega entre
+ * 15 e 17, então reduzir a 15 descarta exatamente a parte que é artefato de
+ * representação e preserva todo dígito que o número realmente tem. Por isso
+ * `32.8503` (a porcentagem da curva ABC, com 4 casas de propósito) atravessa
+ * intacta, enquanto `37.120000000000005` vira `37.12`.
+ *
+ * NÃO troque por `toFixed(2)`: arredondar tudo a duas casas destruiria as
+ * porcentagens, que vêm com quatro. A regra aqui é não inventar nem perder
+ * precisão — só não imprimir lixo.
+ */
+function semRuidoBinario(valor: number): number {
+  return Number(valor.toPrecision(15));
+}
+
 export function formataCampo(valor: string | number | null | undefined): string {
   if (valor === null || valor === undefined) return "";
 
   if (typeof valor === "number") {
     // NaN e Infinity viram vazio: é ausência de número, não um número.
     if (!Number.isFinite(valor)) return "";
-    return String(valor).replace(".", ",");
+    return String(semRuidoBinario(valor)).replace(".", ",");
   }
 
   const precisaDeAspas = /[;"\r\n]/.test(valor);

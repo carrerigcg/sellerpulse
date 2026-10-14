@@ -47,10 +47,12 @@ export const GLOSSARIO_FLUXO: Glossario<FluxoDia> = {
 /** `backend/analytics/segmentation_pg.py`, `abc_pareto` (regra 80/15/5). */
 export const GLOSSARIO_ABC: Glossario<AbcLinha> = {
   classe:
-    "A, B ou C pela regra 80/15/5 sobre a receita acumulada: A até 80%, B " +
-    "até 95%, C o resto. O produto que cruza a fronteira fica na classe de " +
-    "cima. As classes são calculadas sobre o período inteiro que você " +
-    "escolheu, então mudar o período pode mudar a classe de um produto.",
+    "A, B ou C pela regra 80/15/5, lida na coluna de porcentagem acumulada: " +
+    "A enquanto a acumulada for de até 80%, B até 95%, C daí em diante. O " +
+    "produto que empurra a acumulada para além dos 80% já entra em B — a " +
+    "fronteira fica logo antes dele, não nele. As classes saem do período " +
+    "que você escolheu, então mudar o período pode mudar a classe de um " +
+    "produto.",
   sku:
     "O identificador do anúncio no Mercado Livre. Quando o anúncio foi " +
     "apagado, a venda continua no arquivo — a receita é real — e este campo " +

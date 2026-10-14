@@ -55,6 +55,25 @@ describe("formataCampo", () => {
   it("deixa texto simples intocado", () => {
     expect(formataCampo("Luminária LED 50W")).toBe("Luminária LED 50W");
   });
+
+  it("não deixa vazar o ruído binário da soma do backend", () => {
+    // Valores reais do arquivo baixado da demo em 14/10/2026. O backend soma
+    // dinheiro com SUM() no Postgres e o double não fecha em centavos; sem
+    // tratamento, a coluna de reais sai com "4263,240000000001".
+    expect(formataCampo(4263.240000000001)).toBe("4263,24");
+    expect(formataCampo(1031.6399999999999)).toBe("1031,64");
+    expect(formataCampo(37.120000000000005)).toBe("37,12");
+    expect(formataCampo(0.1 + 0.2)).toBe("0,3");
+  });
+
+  it("preserva a precisão que o número de fato tem", () => {
+    // A porcentagem da curva ABC vem com 4 casas de propósito. Um arredonda-
+    // mento cego a 2 casas aqui destruiria a coluna inteira, e o arquivo
+    // continuaria "parecendo certo".
+    expect(formataCampo(32.8503)).toBe("32,8503");
+    expect(formataCampo(0.0865)).toBe("0,0865");
+    expect(formataCampo(99.9413)).toBe("99,9413");
+  });
 });
 
 describe("montaCsv", () => {

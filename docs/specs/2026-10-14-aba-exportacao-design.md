@@ -110,7 +110,10 @@ Fluxo financeiro (5 colunas, `metrics_pg.py:180`):
 Produtos (6 colunas, `segmentation_pg.py:157`):
 
 - Classes pela regra **80/15/5** sobre a receita acumulada: A até 80%, B até
-  95%, C o resto. O produto que cruza a fronteira fica na classe superior.
+  95%, C o resto. `_classify` compara com `<=`, então o produto que empurra a
+  acumulada além de 80% já é B — a fronteira fica logo antes dele. O docstring
+  de `segmentation_pg.py` diz "incluído na classe superior", o que induz ao
+  erro oposto; o código é que manda.
 
 Clientes (8 colunas, `src/segmentation.py`):
 
