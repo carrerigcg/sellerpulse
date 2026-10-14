@@ -33,7 +33,10 @@ def abc_pareto(conn: sqlite3.Connection, date_from: str, date_to: str) -> pd.Dat
         - A: receita_acumulada_pct <= 80  (produtos "cabeça")
         - B: receita_acumulada_pct <= 95  (intermediários)
         - C: caso contrário               (cauda)
-        O produto que cruza a fronteira é incluído na classe superior.
+        A comparação é `<=` sobre a acumulada, que já inclui a receita do
+        próprio produto. Então o produto que empurra a acumulada ALÉM de 80
+        cai em B, não em A: a fronteira fica logo antes dele, não nele. Na
+        demonstração, acumulada 79,4955 é A e a linha seguinte, 80,7894, é B.
     """
     query = """
         SELECT
