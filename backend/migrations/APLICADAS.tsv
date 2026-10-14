@@ -1,0 +1,46 @@
+# Registro do que esta aplicado no Supabase de PRODUCAO.
+#
+# POR QUE ESTE ARQUIVO EXISTE
+#
+# Em 2026-10-14 a feature de custo de produto foi mergeada na main com o
+# codigo ja consultando `product_costs` -- e a tabela nao existia em
+# producao. O deploy teria quebrado o dashboard e a demo publica com erro de
+# relacao inexistente. Foi pego por sorte, depois do merge.
+#
+# `backend/scripts/checa_migrations.py` recusa qualquer .sql em
+# backend/migrations/ que nao esteja listado aqui, e a CI roda esse script.
+# Entao: criar uma migration e nao aplicar passa a ser um PR vermelho, em vez
+# de um deploy quebrado.
+#
+# O QUE ESTA TRAVA GARANTE, E O QUE NAO GARANTE
+#
+# Garante que ninguem ESQUECA. Nao garante que ninguem MINTA: a linha e
+# escrita a mao, e quem a escrever sem ter aplicado nada engana a CI. A trava
+# existe porque o modo de falha real foi esquecimento, nao ma-fe.
+#
+# Uma checagem ao vivo contra o banco pegaria os dois casos, mas exigiria o
+# DATABASE_URL de producao como secret do GitHub Actions. Num projeto de um
+# desenvolvedor so, dar credencial de producao pro CI amplia a superficie de
+# ataque muito alem do que o problema justifica.
+#
+# COMO ATUALIZAR
+#
+# Depois de aplicar a migration em producao, acrescente a linha com a
+# `version` que o Supabase registrou (visivel em `list_migrations` do MCP, ou
+# em supabase_migrations.schema_migrations) e a data.
+#
+# arquivo	version_no_supabase	data_de_aplicacao
+0001_init.sql	20260923133315	2026-09-23
+0002_rls.sql	20260923133322	2026-09-23
+0003_auth_trigger.sql	20260923133329	2026-09-23
+0004_ml_tokens_e_fila.sql	20260929141516	2026-09-29
+0005_rls_sprint2.sql	20260929141523	2026-09-29
+0006_ml_seller_id_unico.sql	20260929141531	2026-09-29
+0007_seller_demo.sql	20260929141536	2026-09-29
+0008_custo_de_produto.sql	20261014163254	2026-10-14
+0009_rls_custo_de_produto.sql	20261014163304	2026-10-14
+
+# SO PARA O BANCO DE TESTE -- nunca vai para producao.
+# Prefixo `!`. O `auth.users` do Supabase e nativo; este arquivo e o stub que
+# o banco de teste precisa para ter a tabela.
+!0000_test_auth_stub.sql

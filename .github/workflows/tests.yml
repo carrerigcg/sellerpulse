@@ -88,6 +88,17 @@ jobs:
       - name: Ruff format check
         run: python -m ruff format --check backend
 
+      # Antes do banco, porque nao precisa dele e porque e a falha mais barata
+      # de descobrir: um PR com migration nao aplicada em producao fica
+      # vermelho em segundos, em vez de verde e quebrando o deploy.
+      #
+      # Em 2026-10-14 o custo de produto foi mergeado com o codigo consultando
+      # `product_costs` sem a tabela existir em producao. Ruff, 166 testes e o
+      # build passaram -- o banco de TESTE e reconstruido do zero a cada CI e
+      # sempre tem a migration nova, entao nenhum teste podia ver a diferenca.
+      - name: Migrations aplicadas em producao
+        run: python backend/scripts/checa_migrations.py
+
       - name: Prepare test database
         run: python backend/scripts/setup_test_db.py
 
