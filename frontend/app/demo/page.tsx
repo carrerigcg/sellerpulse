@@ -1,9 +1,11 @@
 import { FlowChart } from "@/components/analytics/flow-chart";
 import { totalizarFluxo } from "@/components/analytics/executive-totals";
+import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import { janelaAnterior, type FluxoDia } from "@/lib/api";
 import { getDemoFluxoFinanceiro, periodoPadraoDaDemo } from "@/lib/demo";
+import { coberturaDoFluxo } from "@/lib/cobertura";
 
 /**
  * Executive da demonstração pública — mesmo conteúdo de `/dashboard`, dados
@@ -71,9 +73,16 @@ export default async function DemoExecutivePage({
               rotulo="Margem de contribuição"
               valor={atual.margem}
               anterior={passado.margem}
-              nota="receita − comissão do Mercado Livre − frete"
+              nota="receita − comissão do Mercado Livre − frete − custo dos produtos"
             />
           </div>
+
+          {/* A regra de honestidade: a margem acima só está completa se
+              houver custo informado para toda a receita do período. */}
+          <IndicadorCobertura
+            cobertura={coberturaDoFluxo(fluxo)}
+            /* sem atalho: a demonstração não tem tela de Custos */
+          />
 
           <section className="mt-6 rounded-xl border border-line p-5">
             <h2 className="text-sm font-semibold">Fluxo financeiro por dia</h2>

@@ -52,7 +52,16 @@ import pandas as pd
 from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary
 from src.segmentation import _assign_segment, _score_by_quintile
 
-_ABC_COLUMNS = ["sku", "titulo", "receita", "receita_pct", "receita_acumulada_pct", "classe"]
+_ABC_COLUMNS = [
+    "sku",
+    "titulo",
+    "receita",
+    "receita_pct",
+    "receita_acumulada_pct",
+    "classe",
+    "custo_produtos",
+    "receita_sem_custo",
+]
 
 _RFM_COLUMNS = [
     "buyer_id",
@@ -65,7 +74,7 @@ _RFM_COLUMNS = [
     "segmento",
 ]
 
-_ABC_PARETO_QUERY = """
+_ABC_PARETO_QUERY = f"""
     SELECT
         oi.item_id                                       AS sku,
         -- Item sem linha em items_cache = anuncio apagado (a ingestao leva 404
@@ -74,12 +83,34 @@ _ABC_PARETO_QUERY = """
         -- sumia junto com o dinheiro (11,2% numa loja real) e a tela Produtos
         -- passava a divergir da Executive.
         COALESCE(ic.title, oi.item_id)                    AS titulo,
-        ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita
+        ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita,
+        -- Mesmas duas colunas do fluxo financeiro, aqui por produto. Na tela
+        -- de Custos e o que diz "este e o produto classe A que ainda nao tem
+        -- custo", que e a ordem em que vale a pena preencher.
+        ROUND(COALESCE(SUM(oi.quantity * pc.custo_unitario), 0), 2) AS custo_produtos,
+        ROUND(
+            COALESCE(
+                SUM(oi.quantity * oi.unit_price) FILTER (WHERE pc.custo_unitario IS NULL),
+                0
+            ),
+            2
+        )                                                 AS receita_sem_custo
     FROM order_items oi
     JOIN orders o
       ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
     LEFT JOIN items_cache ic
       ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
+    -- Custo vigente na data do pedido. Identico ao de metrics_pg.py, e pela
+    -- mesma razao: a data entra no fuso do VENDEDOR, nao em UTC.
+    LEFT JOIN LATERAL (
+        SELECT c.custo_unitario
+          FROM product_costs c
+         WHERE c.seller_id = oi.seller_id
+           AND c.item_id   = oi.item_id
+           AND c.vigente_desde <= (o.date_closed AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date
+         ORDER BY c.vigente_desde DESC
+         LIMIT 1
+    ) pc ON TRUE
     WHERE oi.seller_id = $1
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz
@@ -164,7 +195,13 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
 
     Returns:
         DataFrame ordenado por receita desc com colunas:
-        sku, titulo, receita, receita_pct, receita_acumulada_pct, classe.
+        sku, titulo, receita, receita_pct, receita_acumulada_pct, classe,
+        custo_produtos, receita_sem_custo.
+
+        As duas ultimas sao o custo de produto informado pelo vendedor
+        (migration 0008), na vigencia que valia na data de cada pedido, e
+        quanto da receita do produto veio de venda sem custo informado. Com
+        nenhum custo cadastrado as duas sao zero e nada mais muda.
         Vazio (colunas presentes) se período sem dados.
 
         Item vendido sem linha em `items_cache` (anúncio apagado no ML) entra
@@ -187,7 +224,8 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
         return pd.DataFrame(columns=_ABC_COLUMNS)
 
     df = pd.DataFrame([dict(r) for r in rows])
-    df["receita"] = df["receita"].astype(float)
+    for col in ("receita", "custo_produtos", "receita_sem_custo"):
+        df[col] = df[col].astype(float)
 
     total = df["receita"].sum()
     df["receita_pct"] = (100.0 * df["receita"] / total).round(4)

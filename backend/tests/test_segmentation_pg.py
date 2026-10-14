@@ -193,6 +193,8 @@ async def test_abc_pareto_vazio_tem_as_colunas_certas(pg_pool, test_seller):
         "receita_pct",
         "receita_acumulada_pct",
         "classe",
+        "custo_produtos",
+        "receita_sem_custo",
     ]
 
 
@@ -254,11 +256,20 @@ async def test_abc_pareto_paridade_com_a_versao_sqlite(pg_pool, test_seller):
             await _order_item(pg_pool, sid, order_id, item_id, qty, price)
     obtido = await abc_pareto(pg_pool, sid, "2026-07-01", "2026-08-01")
 
+    # So as colunas que as DUAS camadas calculam: `custo_produtos` e
+    # `receita_sem_custo` existem so aqui, porque o SQLite legado nao tem
+    # `product_costs`. Como este teste nao cadastra custo nenhum, o
+    # `assert` seguinte e a prova de que a feature nao mexe em quem nao a usa.
+    compartilhadas = list(esperado.columns)
     pd.testing.assert_frame_equal(
         esperado.reset_index(drop=True),
-        obtido.reset_index(drop=True),
+        obtido[compartilhadas].reset_index(drop=True),
         check_dtype=False,
         atol=1e-6,
+    )
+    assert (obtido["custo_produtos"] == 0).all()
+    assert (obtido["receita_sem_custo"] == obtido["receita"]).all(), (
+        "sem custo cadastrado, 100% da receita e receita sem custo"
     )
 
 

@@ -3,6 +3,7 @@ import type { ComponentType } from "react";
 import {
   IconeClientes,
   IconeConectar,
+  IconeCustos,
   IconeExecutive,
   IconeExportar,
   IconeProdutos,
@@ -40,6 +41,7 @@ export const GRUPOS_DASHBOARD: GrupoDeNavegacao[] = [
   {
     titulo: "Configuração",
     itens: [
+      { href: "/dashboard/custos", rotulo: "Custos", Icone: IconeCustos },
       { href: "/dashboard/conectar", rotulo: "Conectar conta", Icone: IconeConectar },
     ],
   },

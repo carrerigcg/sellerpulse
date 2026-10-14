@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { FlowChart } from "@/components/analytics/flow-chart";
 import { totalizarFluxo } from "@/components/analytics/executive-totals";
+import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
 import { PeriodPicker } from "@/components/analytics/period-picker";
@@ -9,6 +10,7 @@ import { ApiError, getFluxoFinanceiro, janelaAnterior, type FluxoDia } from "@/l
 import { COLUNAS_FLUXO } from "@/lib/colunas-export";
 
 import { DisparaDelta } from "./delta";
+import { coberturaDoFluxo } from "@/lib/cobertura";
 
 /**
  * Executive — receita, custos do Mercado Livre e margem de contribuição do
@@ -107,9 +109,16 @@ export default async function ExecutivePage({
               rotulo="Margem de contribuição"
               valor={atual.margem}
               anterior={passado.margem}
-              nota="receita − comissão do Mercado Livre − frete"
+              nota="receita − comissão do Mercado Livre − frete − custo dos produtos"
             />
           </div>
+
+          {/* A regra de honestidade: a margem acima só está completa se
+              houver custo informado para toda a receita do período. */}
+          <IndicadorCobertura
+            cobertura={coberturaDoFluxo(fluxo)}
+            href={"/dashboard/custos"}
+          />
 
           <section className="mt-6 rounded-xl border border-line p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
