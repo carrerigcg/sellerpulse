@@ -25,6 +25,7 @@ import uuid
 import asyncpg
 from fastapi import APIRouter, HTTPException, Response
 
+from backend.analytics.custos_pg import listar_custos
 from backend.analytics.metrics_pg import fluxo_financeiro, top_produtos
 from backend.analytics.segmentation_pg import abc_pareto, cohort_produto, rfm_scores
 from backend.db import get_pool
@@ -100,6 +101,21 @@ async def demo_abc(date_from: str, date_to: str, response: Response) -> list[dic
     pool = await get_pool()
     seller_id = await _seller_de_demo(pool)
     df = await abc_pareto(pool, seller_id, date_from, date_to)
+    return df.to_dict(orient="records")
+
+
+@router.get("/custos")
+async def demo_custos(date_from: str, date_to: str, response: Response) -> list[dict]:
+    """Somente leitura: a demonstracao nao tem usuario para escrever.
+
+    Nao ha PUT nem DELETE sob /demo. O custo do seller sintetico e semeado por
+    `backend/seed.py` e so muda quando a demo e regenerada.
+    """
+    date_from, date_to = validate_window(date_from, date_to)
+    response.headers["Cache-Control"] = _CACHE
+    pool = await get_pool()
+    seller_id = await _seller_de_demo(pool)
+    df = await listar_custos(pool, seller_id, date_from, date_to)
     return df.to_dict(orient="records")
 
 

@@ -94,7 +94,14 @@ export default async function ExecutivePage({
         </p>
       ) : (
         <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Quatro colunas quando há custo de produto, três quando não há:
+              com o cartão a conta fecha na tela (receita − custos do ML −
+              custo dos produtos = margem), e sem ele a tela fica como era. */}
+          <div
+            className={`mt-6 grid gap-4 sm:grid-cols-2 ${
+              atual.custoProdutos > 0 ? "lg:grid-cols-4" : "lg:grid-cols-3"
+            }`}
+          >
             <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
             {/* "Custos do Mercado Livre", não "Custo total": este cartão é
                 comissão + frete, e chamá-lo de total seria repetir num rótulo
@@ -105,6 +112,14 @@ export default async function ExecutivePage({
               anterior={passado.custo}
               subirEhRuim
             />
+            {atual.custoProdutos > 0 && (
+              <KpiCard
+                rotulo="Custo dos produtos"
+                valor={atual.custoProdutos}
+                anterior={passado.custoProdutos}
+                subirEhRuim
+              />
+            )}
             <KpiCard
               rotulo="Margem de contribuição"
               valor={atual.margem}

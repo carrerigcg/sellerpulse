@@ -107,6 +107,13 @@ async def regenera_demo(
         # `sellers`, `oauth_tokens` e `sync_jobs` ficam intactos: a linha do
         # seller, o vinculo OAuth e o historico da fila nao sao dado
         # sintetico, e apagar `sellers` cascatearia pra tudo.
+        # `product_costs` entra na limpeza: para o seller de demonstracao o custo
+        # e sintetico como o resto, e cada refresh grava uma vigencia nova (a
+        # data deriva da ancora). Sem o DELETE elas se acumulam a cada boot --
+        # redundantes, porque o valor por item e deterministico, e crescendo
+        # para sempre. Para um seller REAL isso seria dado do usuario, e por
+        # isso esta funcao aborta antes se `is_demo` nao for true.
+        await conn.execute("DELETE FROM product_costs WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM claims WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM orders WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM items_cache WHERE seller_id = $1", seller_id)

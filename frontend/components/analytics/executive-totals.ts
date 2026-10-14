@@ -10,14 +10,23 @@ import type { FluxoDia } from "@/lib/api";
  * `custo` é comissão do ML + frete, e nada mais: a parcela de custo estimado
  * em 55% da receita saiu, porque era número inventado sendo somado a dois
  * números reais. Ver o comentário no topo de `src/metrics.py`.
+ *
+ * `custoProdutos` fica separado dele de propósito, e não somado: o cartão da
+ * tela se chama "Custos do Mercado Livre", e juntar as duas coisas num rótulo
+ * só repetiria, com outro nome, a mentira do custo total que saiu daqui.
+ *
+ * Existe porque sem ele a conta da tela não fecha: receita menos custos do ML
+ * não dá a margem quando há custo de produto descontado. Três números grandes
+ * que não batem são piores que quatro que batem.
  */
 export function totalizarFluxo(dias: FluxoDia[]) {
   return dias.reduce(
     (acc, d) => ({
       receita: acc.receita + d.receita_bruta,
       custo: acc.custo + d.taxas_ml + d.frete,
+      custoProdutos: acc.custoProdutos + d.custo_produtos,
       margem: acc.margem + d.margem_contribuicao,
     }),
-    { receita: 0, custo: 0, margem: 0 },
+    { receita: 0, custo: 0, custoProdutos: 0, margem: 0 },
   );
 }

@@ -62,7 +62,8 @@ export default async function DemoProdutosPage({
           <IndicadorCobertura
             cobertura={coberturaDosProdutos(abc)}
             semCusto={produtosSemCusto(abc)}
-            /* sem atalho: a demonstração não tem tela de Custos */
+            href="/demo/custos"
+            rotuloDoAtalho="Ver custos"
           />
 
           <section className="mt-6 rounded-xl border border-line p-5">

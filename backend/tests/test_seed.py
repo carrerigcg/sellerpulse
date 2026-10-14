@@ -4,14 +4,14 @@ from __future__ import annotations
 from datetime import timedelta
 
 from backend.analytics.metrics_pg import fluxo_financeiro, top_produtos
-from backend.seed import seed_postgres
+from backend.seed import custo_de_demonstracao, seed_postgres
 from src.demo_data import ANCHOR_DATE, DEFAULT_SEED, generate_catalog, generate_orders
 
 # Parametros pequenos pra manter os testes rapidos (default e weeks_back=12,
 # ~360 pedidos -- bom demais pro seed real, lento demais pro teste unitario).
 _SMALL = {"n_categories": 5, "n_products": 10, "weeks_back": 2, "claim_rate": 0.04}
 
-_TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims")
+_TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims", "product_costs")
 
 
 def _janela(weeks_back: int) -> tuple[str, str]:
@@ -59,6 +59,19 @@ async def test_contagem_bate_com_o_gerador(pg_pool, test_seller):
     assert resumo["order_items"] == n_order_items_esperado
     assert resumo["claims"] >= 1
 
+    # Custo de produto: um por item que `custo_de_demonstracao` nao deixa de
+    # fora. A fatia sem custo e deliberada -- semear 100% faria o indicador de
+    # cobertura nunca aparecer na demonstracao, escondendo a feature que ele e.
+    custos_esperados = sum(
+        1
+        for prod in catalog["products"]
+        if custo_de_demonstracao(prod["item_id"], prod["unit_price"]) is not None
+    )
+    assert resumo["product_costs"] == custos_esperados
+    assert 0 < custos_esperados < len(catalog["products"]), (
+        "nem tudo coberto, nem nada coberto: a demo precisa dos dois estados"
+    )
+
     contagens_db = await _contagens(pg_pool, sid)
     assert contagens_db == {
         "categories_cache": resumo["categories"],
@@ -66,6 +79,7 @@ async def test_contagem_bate_com_o_gerador(pg_pool, test_seller):
         "orders": resumo["orders"],
         "order_items": resumo["order_items"],
         "claims": resumo["claims"],
+        "product_costs": resumo["product_costs"],
     }
 
 
@@ -84,6 +98,10 @@ async def test_idempotente(pg_pool, test_seller):
         "orders": 0,
         "order_items": 0,
         "claims": 0,
+        # O custo de produto entra na idempotencia como o resto: o upsert bate
+        # na chave (seller_id, item_id, vigente_desde) e a vigencia deriva do
+        # pedido mais antigo, que e o mesmo nas duas chamadas.
+        "product_costs": 0,
     }
     assert contagens_apos_segunda == contagens_apos_primeira
     assert all(n > 0 for n in contagens_apos_primeira.values())

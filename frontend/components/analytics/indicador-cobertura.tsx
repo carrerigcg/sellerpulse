@@ -19,20 +19,24 @@ import type { Cobertura } from "@/lib/cobertura";
  *   ainda não usou a feature, e o aviso leva à tela de Custos.
  * - 1 a 99%: o número com a porcentagem ao lado, sempre.
  *
- * `href` ausente (a demonstração) mostra o aviso sem o atalho: o texto
- * continua verdadeiro, e não há tela de Custos para onde mandar quem não tem
- * conta.
+ * O atalho muda de rótulo conforme o destino: no dashboard leva à tela onde
+ * se informa o custo; na demonstração, que é só de leitura, leva à mesma tela
+ * para ver o que já está preenchido. `href` ausente mostra o aviso sem atalho
+ * nenhum — o texto continua verdadeiro sozinho.
  */
 export function IndicadorCobertura({
   cobertura,
   semCusto,
   href,
+  rotuloDoAtalho = "Informar custos",
 }: {
   cobertura: Cobertura;
   /** Quantos produtos ainda não têm custo informado. */
   semCusto?: number;
   /** Destino do atalho para preencher custos. Omitido = sem atalho. */
   href?: string;
+  /** Texto do atalho. Na demonstração a tela é só de leitura. */
+  rotuloDoAtalho?: string;
 }) {
   if (cobertura.semReceita || cobertura.completa) return null;
 
@@ -57,7 +61,7 @@ export function IndicadorCobertura({
       )}{" "}
       {href && (
         <Link href={href} className="font-medium text-accent underline-offset-2 hover:underline">
-          Informar custos
+          {rotuloDoAtalho}
         </Link>
       )}
     </p>

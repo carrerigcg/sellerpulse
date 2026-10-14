@@ -37,7 +37,18 @@ type Estado = "parado" | "salvando" | "salvo" | "erro";
  * A ordem vem do servidor (receita decrescente, que é "classe A primeiro") e
  * não é reordenada aqui: é a ordem em que preencher muda mais a conta.
  */
-export function TabelaCustos({ linhas }: { linhas: CustoLinha[] }) {
+export function TabelaCustos({
+  linhas,
+  somenteLeitura = false,
+}: {
+  linhas: CustoLinha[];
+  /**
+   * `true` na demonstração: ela não tem usuário para escrever, e não existe
+   * `PUT /demo/custos`. Um campo editável que sempre falha ao salvar seria
+   * pior que nenhum campo.
+   */
+  somenteLeitura?: boolean;
+}) {
   // Estado por SKU. Um `useState` por linha exigiria um componente por linha;
   // um mapa só mantém o componente simples e a linha independente.
   const [estados, setEstados] = useState<Record<string, Estado>>({});
@@ -107,6 +118,16 @@ export function TabelaCustos({ linhas }: { linhas: CustoLinha[] }) {
                 <td className="py-2.5 pr-3 text-right tabular">{brl.format(linha.receita)}</td>
                 <td className="py-2.5 pr-3 text-right tabular">{linha.unidades}</td>
                 <td className="py-2.5 text-right">
+                  {somenteLeitura ? (
+                    <span className="tabular">
+                      {linha.custo_unitario === null ? (
+                        <span className="text-muted">não informado</span>
+                      ) : (
+                        brlExato.format(linha.custo_unitario)
+                      )}
+                    </span>
+                  ) : (
+                    <>
                   <div className="flex items-center justify-end gap-2">
                     {estado === "salvando" && <span className="text-xs text-muted">salvando…</span>}
                     {estado === "salvo" && <span className="text-xs text-positive">salvo</span>}
@@ -129,6 +150,8 @@ export function TabelaCustos({ linhas }: { linhas: CustoLinha[] }) {
                   </div>
                   {estado === "erro" && (
                     <p className="mt-1 text-xs text-negative">{erros[linha.sku]}</p>
+                  )}
+                    </>
                   )}
                 </td>
               </tr>

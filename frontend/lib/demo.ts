@@ -13,7 +13,7 @@
  * cliente mande.
  */
 
-import type { AbcLinha, CohortLinha, FluxoDia, RfmLinha } from "@/lib/api";
+import type { AbcLinha, CohortLinha, CustoLinha, FluxoDia, RfmLinha } from "@/lib/api";
 import { ApiError } from "@/lib/api";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL!;
@@ -66,6 +66,13 @@ export function getDemoFluxoFinanceiro(dateFrom: string, dateTo: string) {
 
 export function getDemoAbcPareto(dateFrom: string, dateTo: string) {
   return buscarDemo<AbcLinha[]>("/demo/abc", {
+    date_from: dateFrom,
+    date_to: dateTo,
+  });
+}
+
+export function getDemoCustos(dateFrom: string, dateTo: string) {
+  return buscarDemo<CustoLinha[]>("/demo/custos", {
     date_from: dateFrom,
     date_to: dateTo,
   });

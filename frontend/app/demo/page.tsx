@@ -59,7 +59,14 @@ export default async function DemoExecutivePage({
         </p>
       ) : (
         <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Quatro colunas quando há custo de produto, três quando não há:
+              com o cartão a conta fecha na tela (receita − custos do ML −
+              custo dos produtos = margem), e sem ele a tela fica como era. */}
+          <div
+            className={`mt-6 grid gap-4 sm:grid-cols-2 ${
+              atual.custoProdutos > 0 ? "lg:grid-cols-4" : "lg:grid-cols-3"
+            }`}
+          >
             <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
             {/* Mesmos rótulos de `/dashboard` — a demo não pode prometer uma
                 conta diferente da que o produto entrega. */}
@@ -69,6 +76,14 @@ export default async function DemoExecutivePage({
               anterior={passado.custo}
               subirEhRuim
             />
+            {atual.custoProdutos > 0 && (
+              <KpiCard
+                rotulo="Custo dos produtos"
+                valor={atual.custoProdutos}
+                anterior={passado.custoProdutos}
+                subirEhRuim
+              />
+            )}
             <KpiCard
               rotulo="Margem de contribuição"
               valor={atual.margem}
@@ -81,7 +96,8 @@ export default async function DemoExecutivePage({
               houver custo informado para toda a receita do período. */}
           <IndicadorCobertura
             cobertura={coberturaDoFluxo(fluxo)}
-            /* sem atalho: a demonstração não tem tela de Custos */
+            href="/demo/custos"
+            rotuloDoAtalho="Ver custos"
           />
 
           <section className="mt-6 rounded-xl border border-line p-5">

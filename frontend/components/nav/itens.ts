@@ -54,6 +54,7 @@ export const GRUPOS_DEMO: GrupoDeNavegacao[] = [
       { href: "/demo", rotulo: "Executive", Icone: IconeExecutive, exata: true },
       { href: "/demo/produtos", rotulo: "Produtos", Icone: IconeProdutos },
       { href: "/demo/clientes", rotulo: "Clientes", Icone: IconeClientes },
+      { href: "/demo/custos", rotulo: "Custos", Icone: IconeCustos },
       { href: "/demo/exportar", rotulo: "Exportar", Icone: IconeExportar },
     ],
   },
