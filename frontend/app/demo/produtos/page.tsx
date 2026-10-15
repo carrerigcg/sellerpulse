@@ -3,8 +3,10 @@ import { AbcTable } from "@/components/analytics/abc-table";
 import { CohortHeatmap } from "@/components/analytics/cohort-heatmap";
 import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { ParetoChart } from "@/components/analytics/pareto-chart";
+import { ExportButton } from "@/components/analytics/export-button";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import type { AbcLinha, CohortLinha } from "@/lib/api";
+import { COLUNAS_ABC } from "@/lib/colunas-export";
 import { getDemoAbcPareto, getDemoCohortProduto, periodoPadraoDaDemo } from "@/lib/demo";
 import { coberturaDosProdutos, produtosSemCusto } from "@/lib/cobertura";
 import { incluiDiasNaoConsolidados, temVisitaColhida } from "@/lib/visitas";
@@ -77,8 +79,23 @@ export default async function DemoProdutosPage({
           </section>
 
           <section className="mt-6 rounded-xl border border-line p-5">
-            <h2 className="text-sm font-semibold">Produtos</h2>
-            <p className="mt-0.5 text-xs text-muted">{abc.length} produtos no período</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Produtos</h2>
+                <p className="mt-0.5 text-xs text-muted">{abc.length} produtos no período</p>
+              </div>
+              {/* `demo-` no nome do arquivo: o dado é de um vendedor
+                  sintético, e quem reabrir o CSV semana que vem precisa
+                  saber disso. A ressalva não vai DENTRO do arquivo — uma
+                  linha acima do cabeçalho desloca as colunas no Excel. */}
+              <ExportButton
+                linhas={abc}
+                colunas={COLUNAS_ABC}
+                tela="demo-produtos"
+                de={de}
+                ate={ate}
+              />
+            </div>
             <AbcTable abc={abc} />
           </section>
 

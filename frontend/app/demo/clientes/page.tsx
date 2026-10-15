@@ -1,9 +1,11 @@
 import { BuyersTable } from "@/components/analytics/buyers-table";
+import { ExportButton } from "@/components/analytics/export-button";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import { RfmChart } from "@/components/analytics/rfm-chart";
 import { RfmLegend } from "@/components/analytics/rfm-legend";
 import { SegmentBand } from "@/components/analytics/segment-band";
 import type { RfmLinha } from "@/lib/api";
+import { COLUNAS_RFM } from "@/lib/colunas-export";
 import { getDemoRfmScores, periodoPadraoDaDemo } from "@/lib/demo";
 
 /**
@@ -62,8 +64,23 @@ export default async function DemoClientesPage({
           </section>
 
           <section className="mt-6 rounded-xl border border-line p-5">
-            <h2 className="text-sm font-semibold">Compradores</h2>
-            <p className="mt-0.5 text-xs text-muted">{rfm.length} compradores no período</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Compradores</h2>
+                <p className="mt-0.5 text-xs text-muted">{rfm.length} compradores no período</p>
+              </div>
+              {/* `demo-` no nome do arquivo: o dado é de um vendedor
+                  sintético, e quem reabrir o CSV semana que vem precisa
+                  saber disso. A ressalva não vai DENTRO do arquivo — uma
+                  linha acima do cabeçalho desloca as colunas no Excel. */}
+              <ExportButton
+                linhas={rfm}
+                colunas={COLUNAS_RFM}
+                tela="demo-clientes"
+                de={de}
+                ate={ate}
+              />
+            </div>
             <BuyersTable dados={rfm} />
           </section>
         </>

@@ -2,8 +2,10 @@ import { FlowChart } from "@/components/analytics/flow-chart";
 import { totalizarFluxo } from "@/components/analytics/executive-totals";
 import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { KpiCard } from "@/components/analytics/kpi-card";
+import { ExportButton } from "@/components/analytics/export-button";
 import { PeriodPicker } from "@/components/analytics/period-picker";
 import { janelaAnterior, type FluxoDia } from "@/lib/api";
+import { COLUNAS_FLUXO } from "@/lib/colunas-export";
 import { getDemoFluxoFinanceiro, periodoPadraoDaDemo } from "@/lib/demo";
 import { coberturaDoFluxo } from "@/lib/cobertura";
 
@@ -101,10 +103,25 @@ export default async function DemoExecutivePage({
           />
 
           <section className="mt-6 rounded-xl border border-line p-5">
-            <h2 className="text-sm font-semibold">Fluxo financeiro por dia</h2>
-            <p className="mt-0.5 text-xs text-muted">
-              {fluxo.length} dias com pedidos pagos
-            </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Fluxo financeiro por dia</h2>
+                <p className="mt-0.5 text-xs text-muted">
+                  {fluxo.length} dias com pedidos pagos
+                </p>
+              </div>
+              {/* `demo-` no nome do arquivo: o dado é de um vendedor
+                  sintético, e quem reabrir o CSV semana que vem precisa
+                  saber disso. A ressalva não vai DENTRO do arquivo — uma
+                  linha acima do cabeçalho desloca as colunas no Excel. */}
+              <ExportButton
+                linhas={fluxo}
+                colunas={COLUNAS_FLUXO}
+                tela="demo-executive"
+                de={de}
+                ate={ate}
+              />
+            </div>
             <FlowChart dias={fluxo} />
           </section>
         </>
