@@ -317,8 +317,9 @@ def test_ingest_persist_failure_does_not_count_toward_total():
 def test_ingest_reuses_item_cache_across_orders():
     """Regressão: dois pedidos do mesmo item disparam apenas UMA chamada /items/{id}.
 
-    Prova que _ensure_item_cache respeita o cache (early return quando presente)
-    — importante pra claim do README sobre custo de API amigável em portfolio.
+    Prova que _ensure_item_cache respeita o cache (early return quando
+    presente). Importa de verdade: sem ele, uma loja com 900 pedidos do mesmo
+    catálogo multiplicaria as chamadas ao ML e bateria no rate limit.
     """
     same_item_order = {
         "id": None,  # preenchido abaixo

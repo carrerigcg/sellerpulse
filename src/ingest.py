@@ -1,6 +1,6 @@
 """Orquestração do backfill dos últimos 6 meses de dados ML.
 
-Puro Python — zero import de streamlit. UI de progresso é passada via
+Puro Python, sem dependência de interface. Progresso é passado via
 callback opcional on_progress(fase, atual, total).
 """
 

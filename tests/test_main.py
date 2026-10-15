@@ -116,7 +116,7 @@ def test_main_help_lists_all_subcommands(capsys) -> None:
         main(["--help"])
     assert exc.value.code == 0
     out = capsys.readouterr().out
-    for subcmd in ["ingerir", "regerar-dados", "gerar-pdf", "abrir-dashboard"]:
+    for subcmd in ["ingerir", "regerar-dados", "gerar-pdf"]:
         assert subcmd in out
 
 
@@ -228,28 +228,6 @@ def test_main_regerar_dados_creates_demo_db(tmp_path, monkeypatch) -> None:
     assert demo_path.stat().st_size == 290816
 
 
-def test_cmd_abrir_dashboard_invokes_streamlit(monkeypatch):
-    """abrir-dashboard chama `streamlit run src/dashboard.py` via subprocess."""
-    from src import main as main_mod
-
-    captured: dict = {}
-
-    class _FakeResult:
-        returncode = 0
-
-    def _fake_run(cmd, check):
-        captured["cmd"] = cmd
-        captured["check"] = check
-        return _FakeResult()
-
-    monkeypatch.setattr("subprocess.run", _fake_run)
-
-    exit_code = main_mod.main(["abrir-dashboard"])
-    assert exit_code == 0
-    assert captured["cmd"] == ["streamlit", "run", str(main_mod._DASHBOARD_PATH)]
-    assert captured["check"] is False
-
-
 def test_cmd_ingerir_reports_missing_env_var(monkeypatch, tmp_path, capsys):
     """Faltando ML_CLIENT_ID: retorna 1 com msg amigável, sem traceback."""
     monkeypatch.chdir(tmp_path)
@@ -264,18 +242,3 @@ def test_cmd_ingerir_reports_missing_env_var(monkeypatch, tmp_path, capsys):
     err = capsys.readouterr().err
     assert "ML_CLIENT_ID" in err
     assert ".env.example" in err
-
-
-def test_cmd_abrir_dashboard_reports_missing_streamlit(monkeypatch, capsys):
-    """Quando streamlit não está no PATH, retorna 1 e imprime erro."""
-    from src import main as main_mod
-
-    def _fake_run(cmd, check):
-        raise FileNotFoundError("streamlit")
-
-    monkeypatch.setattr("subprocess.run", _fake_run)
-
-    exit_code = main_mod.main(["abrir-dashboard"])
-    assert exit_code == 1
-    captured = capsys.readouterr()
-    assert "streamlit" in captured.err.lower()

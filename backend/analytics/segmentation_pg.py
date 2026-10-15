@@ -32,9 +32,9 @@ Armadilhas de tradução de dialeto tratadas explicitamente aqui:
    cohort tem que ser o mês em que o vendedor conta a venda. Divergência
    INTENCIONAL de `src/segmentation.py`, que lê SQLite onde `date_closed` é
    string ISO e a query usa `strftime`/`substr` sem conversão de fuso
-   nenhuma — lá não existe UTC pra trocar. Aquela camada está congelada na
-   Fase 2 e serve o Streamlit e o PDF a partir de um banco de demonstração
-   local.
+   nenhuma — lá não existe UTC pra trocar. Aquela camada está congelada e
+   hoje serve só de referência de paridade para esta, a partir de um banco
+   SQLite local.
 4. O cálculo de `recency_dias` em `rfm_scores` trunca pra DATA (descarta
    hora), igual ao original em SQLite (`ultima_compra.str[:10]`). Sem essa
    truncagem, uma compra às 14:30 de ontem daria 0 dias de recência em vez

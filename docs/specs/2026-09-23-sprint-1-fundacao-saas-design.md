@@ -60,9 +60,9 @@ Design baseado em decisões tomadas em sessão de brainstorm 2026-09-22/23 (aná
 | 8 | Destino do Streamlit atual | **Sai do ar já**, no início da Sprint 1 | Manter no ar em paralelo até o site novo estar pronto; manter no ar com banner |
 | 9 | Método de login do SaaS | **Email/senha + Google OAuth** (Supabase Auth) | Só email/senha; só Google; magic link |
 
-### Ponto em aberto (não bloqueia esta sprint)
+### Ponto em aberto — resolvido depois
 
-O plano da Fase 4 (PDF v2 — enriquecer o *conteúdo* do relatório com seções ABC/RFM/cohort, `docs/plans/2026-08-25-pdf-v2-guia-analytics.md`, worktree em `.worktrees/pdf-v2`) ainda não tem decisão sobre se entra junto da Sprint 4 ou fica pra depois. Decidir ao chegar na Sprint 4.
+> **Atualização de 2026-10-15.** O PDF v2 não entrou, e não vai entrar nesta forma: `build_ctx()` e `classificar_faixa()`, as funções que aquele desenho contratava, nunca foram escritas. A intenção — guia educativo, regra genérica, sem opinião sobre o negócio de quem lê — foi levada para a futura aba Relatórios do SaaS. Ver `docs/specs/2026-08-25-pdf-v2-guia-analytics-design.md`.
 
 ## 4. Arquitetura geral
 

@@ -22,9 +22,9 @@ Duas armadilhas de tradução de dialeto que este módulo trata explicitamente:
    `src/metrics.py`, na mesma linha do desempate de `ORDER BY` explicado
    abaixo: lá `date_closed` é string ISO no SQLite e a query usa
    `substr(date_closed, 1, 10)`, sem conversão de fuso nenhuma — não existe
-   UTC pra trocar. Aquela camada está congelada na Fase 2, lê um banco de
-   demonstração local e serve o Streamlit e o PDF; mexer nela é uma mudança
-   diferente e mais arriscada, sem usuário real do outro lado.
+   UTC pra trocar. Aquela camada está congelada: ela lê um banco SQLite
+   local e hoje serve só de referência de paridade para esta — mexer nela é
+   uma mudança diferente, sem usuário real do outro lado.
 """
 
 from __future__ import annotations

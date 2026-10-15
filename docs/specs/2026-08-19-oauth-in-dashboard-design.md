@@ -42,7 +42,7 @@ Design baseado em decisões travadas em sessão de brainstorm 2026-08-19 (5 perg
 - **Migração do frontend Streamlit → Next.js/FastAPI** — fica pra Fase 6. O dashboard Streamlit vai ser eventualmente substituído; esta fase só faz ele funcionar bem hospedado.
 - **Persistência dos dados ingeridos entre sessões** — quando o usuário fecha a aba (ou o worker do Streamlit reinicia), os dados dele desaparecem. Comportamento intencional pra privacidade e simplicidade. Reconectar re-ingere.
 - **Landing page comercial / marketing** — a "landing" é o próprio dashboard-first com toggle Demo. Fase 6 pode adicionar landing dedicada.
-- **Publicação do app ML no marketplace público de aplicações** — pra portfólio, o app fica em modo desenvolvedor no ML e recrutadores são adicionados como test users explicitamente. Publicação plena exige processo de aprovação do ML que fica pra Fase 6.
+- **Publicação do app ML no marketplace público de aplicações** — o app fica em modo desenvolvedor no ML, com test users adicionados explicitamente. Publicação plena exige processo de aprovação do ML, que fica para depois.
 - **Revogação ativa do token no ML (`/oauth/revoke`)** — desconectar limpa `session_state` (o token some da memória) mas não chama endpoint de revoke. Tokens ML expiram em 6h de qualquer jeito. Revoke ativo é backlog.
 - **Cache persistente / cron de re-ingestão** — cada sessão ingere do zero. Otimização pra Fase 6.
 - **Ingestão em background / worker queue** — ingestão bloqueia a sessão do usuário (com progresso visual). Aceitável pros ~30-50s esperados. Worker queue fica pra Fase 6.
@@ -544,7 +544,7 @@ Checklist executado por Guilherme antes do go-live:
 - Redirect URI: `https://sellerpulse.streamlit.app/`
 - Escopos: `offline_access read`
 - Modo: **desenvolvedor** (não publicar plenamente ainda — publicação é backlog Fase 6)
-- Test users: adicionar contas dos recrutadores que forem testar (ou orientar a usar conta test ML)
+- Test users: adicionar explicitamente as contas que forem testar, ou orientar o uso de conta de teste do ML
 
 ### 2. Deploy Streamlit Cloud
 
