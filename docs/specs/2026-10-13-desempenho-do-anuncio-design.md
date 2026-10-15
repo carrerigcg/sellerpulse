@@ -1,7 +1,7 @@
 # SellerPulse — Desempenho do anúncio: visitas e conversão
 
 **Data:** 2026-10-13
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado em 2026-10-15. Três desvios do desenho original, todos registrados abaixo.
 
 ---
 
@@ -61,8 +61,18 @@ Três consequências, e elas mandam no resto da spec:
 
 ## 5. Modelo de dados
 
+> **Numeração:** esta spec reservava `0009`; ele foi usado pela RLS do custo de
+> produto em 2026-10-14. A tabela foi para `0010_visitas_do_anuncio.sql`, e a
+> RLS dela para `0011_rls_visitas_do_anuncio.sql` — que **não** estava nesta
+> spec e foi um buraco: `item_visits` nasceu como a única tabela do schema sem
+> RLS, com o papel `anon` (a chave pública do front-end) tendo `SELECT`,
+> `INSERT`, `UPDATE`, `DELETE` e `TRUNCATE` sobre ela. Medido e fechado no
+> mesmo dia, com a tabela ainda vazia. A lição: o padrão do projeto é "toda
+> tabela de tenant ganha policy", e seguir a spec sem comparar com o schema ao
+> lado foi o que deixou passar.
+
 ```sql
--- backend/migrations/0009_visitas_do_anuncio.sql
+-- backend/migrations/0010_visitas_do_anuncio.sql
 create table item_visits (
     seller_id  uuid not null references sellers(id) on delete cascade,
     item_id    text not null,
@@ -107,7 +117,11 @@ Job `visitas`:
 
 **Por que a lista de itens vem de `order_items` e não do catálogo do ML:** porque o produto que nunca vendeu não tem conversão para calcular, e buscar o catálogo inteiro multiplicaria as chamadas sem responder nenhuma pergunta da tela. **Consequência aceita e registrada:** um produto com muitas visitas e **zero** vendas não aparece — e esse é justamente um caso interessante ("é visto e ninguém compra"). Fica para a versão que cruzar com o catálogo; está na seção 10.
 
-**Agendamento.** O job é enfileirado junto com o `delta`, porque o Render hiberna e não existe cron. A sincronização que já acontece é o único momento garantido. Enfileirado, não executado inline: o worker drena a fila.
+**Agendamento.** ~~O job é enfileirado junto com o `delta`~~ — **não funciona**, e o desenho mudou na implementação. `uniq_sync_job_ativo` garante UM job ativo por seller (migration `0004`, para impedir o botão manual de empilhar backfills), então o segundo `enqueue` devolveria `None` e a colheita nunca aconteceria, em silêncio.
+
+**O que foi feito:** o job de pedidos ENCADEIA o de visitas ao concluir. A fila drena `delta → visitas` sozinha. Mantém a garantia do índice intacta, não põe duas sequências de chamadas ao ML no ar ao mesmo tempo, e custa um ciclo de atraso num dado que já nasce com 48h de defasagem.
+
+Duas armadilhas corrigidas junto, ambas encontradas lendo o worker: o despacho era `if backfill ... else delta`, então um `kind` novo cairia no delta em silêncio e ingeriria pedidos; e `_conclui` gravava `last_synced_at`, que é a marca d'água dos PEDIDOS — um job de visitas que a atualizasse faria o delta seguinte achar que já sincronizou, e um dia de venda sumiria.
 
 ## 7. O que a tela mostra
 
@@ -132,7 +146,11 @@ A tela **Produtos** ganha duas colunas na tabela ABC:
 
 O gerador sintético não produz visitas. Sem elas, a vitrine mostraria uma coluna vazia e a feature pareceria quebrada — foi exatamente o que aconteceu com os cartões em R$ 0 em outubro.
 
-`src/demo_data.py` passa a gerar visitas por item e por dia, com conversão plausível por classe ABC (classe A converte mais que C, que é o que acontece de verdade). Isso obriga a regerar `data/demo.db`, o golden do PDF e o sentinela de tamanho — como sempre que o gerador muda.
+~~`src/demo_data.py` passa a gerar visitas~~ — **mudou na implementação.** As visitas são derivadas em `backend/seed.py`, no seeding do Postgres, a partir dos pedidos que o gerador já produziu. `data/demo.db` fica intocado, e com ele o golden do PDF e o sentinela de tamanho.
+
+É a mesma escolha feita para o custo de produto, pela mesma razão: a camada SQLite está congelada e a linha Streamlit, encerrada — mexer no schema dela custaria regenerar o arquivo inteiro sem ganhar nada.
+
+~10% dos produtos ficam **sem visita colhida**, de propósito: é o que mantém visível o estado "—", que distingue "não medimos" de "medimos e deu zero". E os dois últimos dias saem subcontados, na mesma proporção que o ML entrega antes de consolidar, para que o aviso da tela corresponda a algo real na demonstração em vez de ser texto decorativo.
 
 ## 9. Testes
 

@@ -11,6 +11,9 @@ const brl = new Intl.NumberFormat("pt-BR", {
 
 const pct = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
+/** Visitas sao contagem: separador de milhar, nenhuma casa decimal. */
+const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
+
 /** Tabela por produto — sku, título, receita, participação, classe. */
 export function AbcTable({ abc }: { abc: AbcLinha[] }) {
   return (
@@ -61,6 +64,18 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
                 diz o mesmo que as duas porcentagens, em uma coluna só. */}
             <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">% receita</th>
             <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">% acumulado</th>
+            {/* As tres de visitas entram como desktop-only pelo mesmo motivo
+                das porcentagens: o orcamento do celular sao 283px e ja esta
+                gasto com Titulo, Receita e Classe, que e o que a tela existe
+                pra mostrar. Quem quiser o funil no celular rola de lado. */}
+            <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">Unidades</th>
+            <th className="hidden px-3 py-2 font-medium text-right sm:table-cell">Visitas</th>
+            <th
+              className="hidden px-3 py-2 font-medium text-right sm:table-cell"
+              title="Unidades vendidas ÷ visitas. Um pedido com três unidades conta três, embora tenha sido uma visita só."
+            >
+              Conversão
+            </th>
             <th className="w-[23%] px-2 py-2 font-medium sm:w-auto sm:px-3">Classe</th>
           </tr>
         </thead>
@@ -114,6 +129,22 @@ export function AbcTable({ abc }: { abc: AbcLinha[] }) {
               </td>
               <td className="tabular hidden px-3 py-2 text-right sm:table-cell">
                 {pct.format(linha.receita_acumulada_pct)}%
+              </td>
+              <td className="tabular hidden px-3 py-2 text-right sm:table-cell">
+                {linha.unidades}
+              </td>
+              {/* "—" e nao 0 quando nunca foi colhido. Zero por cento e uma
+                  afirmacao, e so se pode faze-la sobre quem tem visita
+                  medida — mesma regra do custo de produto. */}
+              <td className="tabular hidden px-3 py-2 text-right text-muted sm:table-cell">
+                {linha.visitas === null ? "—" : inteiro.format(linha.visitas)}
+              </td>
+              <td className="tabular hidden px-3 py-2 text-right sm:table-cell">
+                {linha.conversao === null ? (
+                  <span className="text-muted">—</span>
+                ) : (
+                  `${pct.format(linha.conversao)}%`
+                )}
               </td>
               <td className="px-2 py-2 sm:px-3">
                 <span

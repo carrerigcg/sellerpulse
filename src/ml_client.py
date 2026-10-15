@@ -158,3 +158,61 @@ class MLClient:
         if date_to is not None:
             claims = [c for c in claims if (c.get("date_created") or "") < date_to]
         return claims
+
+    # Teto da janela de visitas. A API recusa pedidos acima disso com erro, e
+    # o limite e da plataforma, nao escolha nossa: visita so fica consultavel
+    # por 150 dias. Conferido na documentacao em 2026-10-15.
+    #
+    # Aplicado do lado de ca em vez de deixar a API reclamar porque um job que
+    # pede 180 dias falha inteiro e nao colhe nada -- e o dado dos 150 dias
+    # validos, que existia, se perde junto.
+    MAX_DIAS_DE_VISITAS = 150
+
+    def get_item_visits(
+        self,
+        item_id: str,
+        *,
+        last: int,
+        ending: str | None = None,
+    ) -> dict[str, int]:
+        """Visitas diarias de um item. Devolve `{"YYYY-MM-DD": visitas}`.
+
+        `last` e o numero de dias pedidos, limitado a `MAX_DIAS_DE_VISITAS`.
+        `ending` e o ultimo dia da janela (ISO, `YYYY-MM-DD`); omitido, a API
+        usa hoje.
+
+        UMA CHAMADA POR ITEM. E o custo real desta feature: um vendedor com 50
+        produtos ativos sao 50 chamadas por sincronizacao, e e por isso que o
+        job dela e proprio e tem cursor.
+
+        Os dois ultimos dias costumam vir subcontados: o ML leva ~48h pra
+        consolidar. Quem chama precisa recolher essa borda, nao confiar nela.
+
+        A resposta do ML traz uma lista de dias; dias sem visita podem vir com
+        zero ou simplesmente nao vir. O dicionario devolvido so tem o que veio
+        -- ausencia continua significando zero, e quem grava nao cria linha.
+        """
+        dias = max(1, min(int(last), self.MAX_DIAS_DE_VISITAS))
+        params: dict[str, Any] = {"last": dias, "unit": "day"}
+        if ending is not None:
+            params["ending"] = ending
+
+        data = self.get(f"/items/{item_id}/visits/time_window", params=params)
+
+        # Formato defensivo: a documentacao do ML e antiga e o portal muda. O
+        # que interessa e um par (dia, total) por entrada, e o dia pode vir
+        # como data pura ou como timestamp completo -- os 10 primeiros
+        # caracteres sao a data nos dois casos.
+        visitas: dict[str, int] = {}
+        for entrada in data.get("results") or []:
+            if not isinstance(entrada, dict):
+                continue
+            dia = entrada.get("date") or entrada.get("day")
+            total = entrada.get("total", entrada.get("visits"))
+            if not dia or total is None:
+                continue
+            try:
+                visitas[str(dia)[:10]] = int(total)
+            except (TypeError, ValueError):
+                continue
+        return visitas

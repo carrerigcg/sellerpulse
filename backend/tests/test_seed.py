@@ -1,17 +1,25 @@
 # backend/tests/test_seed.py
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from backend.analytics.metrics_pg import fluxo_financeiro, top_produtos
-from backend.seed import custo_de_demonstracao, seed_postgres
+from backend.seed import custo_de_demonstracao, seed_postgres, visitas_de_demonstracao
 from src.demo_data import ANCHOR_DATE, DEFAULT_SEED, generate_catalog, generate_orders
 
 # Parametros pequenos pra manter os testes rapidos (default e weeks_back=12,
 # ~360 pedidos -- bom demais pro seed real, lento demais pro teste unitario).
 _SMALL = {"n_categories": 5, "n_products": 10, "weeks_back": 2, "claim_rate": 0.04}
 
-_TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims", "product_costs")
+_TABELAS = (
+    "categories_cache",
+    "items_cache",
+    "orders",
+    "order_items",
+    "claims",
+    "product_costs",
+    "item_visits",
+)
 
 
 def _janela(weeks_back: int) -> tuple[str, str]:
@@ -72,6 +80,8 @@ async def test_contagem_bate_com_o_gerador(pg_pool, test_seller):
         "nem tudo coberto, nem nada coberto: a demo precisa dos dois estados"
     )
 
+    assert resumo["item_visits"] > 0
+
     contagens_db = await _contagens(pg_pool, sid)
     assert contagens_db == {
         "categories_cache": resumo["categories"],
@@ -80,6 +90,7 @@ async def test_contagem_bate_com_o_gerador(pg_pool, test_seller):
         "order_items": resumo["order_items"],
         "claims": resumo["claims"],
         "product_costs": resumo["product_costs"],
+        "item_visits": resumo["item_visits"],
     }
 
 
@@ -102,6 +113,9 @@ async def test_idempotente(pg_pool, test_seller):
         # na chave (seller_id, item_id, vigente_desde) e a vigencia deriva do
         # pedido mais antigo, que e o mesmo nas duas chamadas.
         "product_costs": 0,
+        # Idem visitas: a chave e (seller_id, item_id, dia) e os dias
+        # derivam dos pedidos, que sao os mesmos nas duas chamadas.
+        "item_visits": 0,
     }
     assert contagens_apos_segunda == contagens_apos_primeira
     assert all(n > 0 for n in contagens_apos_primeira.values())
@@ -156,3 +170,58 @@ async def test_acentos_sobrevivem(pg_pool, test_seller):
             produto["item_id"],
         )
     assert titulo_db == produto["title"]
+
+
+async def test_demo_deixa_produto_sem_visita_de_proposito():
+    """O estado "—" precisa aparecer na vitrine.
+
+    E metade do valor da feature: distingue "nao medimos" de "medimos e deu
+    zero". Com todo produto coberto ele ficaria invisivel justamente onde
+    alguem vai olhar.
+
+    A asserção e sobre o catalogo REAL da demonstracao (50 produtos), nao
+    sobre o reduzido que os outros testes usam: medido, o pequeno nao sorteia
+    nenhum item pra fora, e um teste sobre ele daria falso verde.
+    """
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=26)
+
+    com_visita = {item for item, _, _ in visitas_de_demonstracao(orders, hoje=date.today())}
+    vendidos = {i["item_id"] for o in orders if o["status"] == "paid" for i in o["items"]}
+
+    assert com_visita, "sem visita nenhuma a coluna fica vazia e a feature parece quebrada"
+    assert com_visita < vendidos, "todo produto coberto esconde o estado de ausencia"
+
+
+async def test_demo_subconta_os_dois_ultimos_dias():
+    """Os dias nao consolidados sao menores de proposito.
+
+    Assim o aviso que a tela mostra corresponde a algo real na demonstracao,
+    em vez de ser texto decorativo.
+    """
+    catalog = generate_catalog(seed=DEFAULT_SEED, n_categories=10, n_products=50)
+    orders = generate_orders(catalog=catalog, seed=DEFAULT_SEED, weeks_back=26)
+    ultimo = max(_dia_do_pedido(o) for o in orders if o["status"] == "paid")
+
+    por_dia: dict[date, list[int]] = {}
+    for _, dia, visitas in visitas_de_demonstracao(orders, hoje=ultimo):
+        por_dia.setdefault(dia, []).append(visitas)
+
+    def media(dia):
+        valores = por_dia.get(dia, [])
+        return sum(valores) / len(valores) if valores else 0.0
+
+    recentes = [media(ultimo), media(ultimo - timedelta(days=1))]
+    antigos = [media(ultimo - timedelta(days=n)) for n in range(5, 15)]
+    antigos = [m for m in antigos if m > 0]
+
+    assert antigos, "sem dias antigos pra comparar o teste nao mede nada"
+    assert max(recentes) < sum(antigos) / len(antigos), (
+        "os dois ultimos dias tem que sair subcontados, como o ML entrega"
+    )
+
+
+def _dia_do_pedido(pedido):
+    from backend.analytics._common import _parse_boundary
+
+    return _parse_boundary(pedido["date_closed"]).date()

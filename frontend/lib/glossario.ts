@@ -83,6 +83,20 @@ export const GLOSSARIO_ABC: Glossario<AbcLinha> = {
     "Quanto da receita deste produto veio de venda sem custo informado. " +
     "Igual à receita significa que este produto não tem custo cadastrado; " +
     "zero significa que tem.",
+  unidades: "Quantas unidades deste produto foram vendidas no período.",
+  visitas:
+    "Quantas vezes o anúncio foi visto no período. Vazio significa que o " +
+    "Mercado Livre ainda não entregou visitas deste anúncio — diferente de " +
+    "zero, que significa que entregou e ninguém visitou. As visitas dos " +
+    "últimos dois dias chegam incompletas: o Mercado Livre leva cerca de 48 " +
+    "horas para consolidar.",
+  conversao:
+    "Unidades vendidas divididas pelas visitas, em porcentagem. É a coluna " +
+    "que separa dois problemas diferentes: produto com muita visita e pouca " +
+    "venda é problema do anúncio — preço, foto, título; produto com pouca " +
+    "visita é problema de tráfego. Um pedido com três unidades do mesmo " +
+    "item conta como três aqui, embora tenha sido uma visita só — por isso " +
+    "a tela chama de conversão por unidades, e não por pedido.",
 };
 
 /** `src/segmentation.py`, `rfm_scores` e `_RFM_SEGMENT_RULES`. */

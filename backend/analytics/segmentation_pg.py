@@ -61,6 +61,9 @@ _ABC_COLUMNS = [
     "classe",
     "custo_produtos",
     "receita_sem_custo",
+    "unidades",
+    "visitas",
+    "conversao",
 ]
 
 _RFM_COLUMNS = [
@@ -75,6 +78,12 @@ _RFM_COLUMNS = [
 ]
 
 _ABC_PARETO_QUERY = f"""
+    -- As visitas entram DEPOIS da agregacao, numa CTE. Visita e por ITEM e
+    -- por dia; `order_items` tem uma linha por item por PEDIDO. Juntar antes
+    -- do GROUP BY multiplicaria as visitas pelo numero de pedidos daquele
+    -- item -- um produto vendido 40 vezes apareceria com 40x as visitas que
+    -- teve, e a conversao sairia 40 vezes menor sem nada falhar.
+    WITH por_item AS (
     SELECT
         oi.item_id                                       AS sku,
         -- Item sem linha em items_cache = anuncio apagado (a ingestao leva 404
@@ -84,6 +93,7 @@ _ABC_PARETO_QUERY = f"""
         -- passava a divergir da Executive.
         COALESCE(ic.title, oi.item_id)                    AS titulo,
         ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita,
+        SUM(oi.quantity)::int                             AS unidades,
         -- Mesmas duas colunas do fluxo financeiro, aqui por produto. Na tela
         -- de Custos e o que diz "este e o produto classe A que ainda nao tem
         -- custo", que e a ordem em que vale a pena preencher.
@@ -116,12 +126,33 @@ _ABC_PARETO_QUERY = f"""
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
     GROUP BY oi.item_id, ic.title
+    )
+    SELECT
+        p.*,
+        -- Visitas da janela. `linhas_de_visita` conta TODAS as linhas do item,
+        -- dentro ou fora da janela, e e o que distingue "colhemos e deu zero"
+        -- de "nunca colhemos". Sem essa distincao um produto sem colheita
+        -- apareceria com 0% de conversao, que e uma afirmacao -- e a mesma
+        -- regra do custo de produto: ausencia nao e zero.
+        COALESCE(v.visitas_na_janela, 0)::int AS visitas,
+        COALESCE(v.linhas_de_visita, 0)::int  AS linhas_de_visita
+    FROM por_item p
+    LEFT JOIN LATERAL (
+        SELECT
+            SUM(iv.visitas) FILTER (
+                WHERE iv.dia >= ($2::timestamptz AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date
+                  AND iv.dia <  ($3::timestamptz AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date
+            ) AS visitas_na_janela,
+            COUNT(*) AS linhas_de_visita
+          FROM item_visits iv
+         WHERE iv.seller_id = $1 AND iv.item_id = p.sku
+    ) v ON TRUE
     -- Desempate por sku: divergencia INTENCIONAL de src/segmentation.py
     -- (que tem o mesmo defeito de ORDER BY sem desempate, mas esta
     -- congelado). Sem isso, empates de receita tem ordem nao-deterministica
     -- no Postgres e a classe A/B/C (que depende da ordem acumulada) podia
     -- variar entre recarregamentos.
-    ORDER BY receita DESC, oi.item_id
+    ORDER BY p.receita DESC, p.sku
 """
 
 _RFM_BASE_QUERY = """
@@ -196,7 +227,11 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     Returns:
         DataFrame ordenado por receita desc com colunas:
         sku, titulo, receita, receita_pct, receita_acumulada_pct, classe,
-        custo_produtos, receita_sem_custo.
+        custo_produtos, receita_sem_custo, unidades, visitas, conversao.
+
+        `visitas` e `None` quando o item nunca teve visita colhida, e 0 quando
+        foi colhido e deu zero -- a tela mostra "—" no primeiro caso. Idem
+        `conversao`, que e None sem visita para dividir.
 
         As duas ultimas sao o custo de produto informado pelo vendedor
         (migration 0008), na vigencia que valia na data de cada pedido, e
@@ -226,6 +261,29 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     df = pd.DataFrame([dict(r) for r in rows])
     for col in ("receita", "custo_produtos", "receita_sem_custo"):
         df[col] = df[col].astype(float)
+
+    # `visitas` vira None quando o item NUNCA foi colhido, e continua 0 quando
+    # foi colhido e deu zero. A distincao e a mesma do custo de produto:
+    # ausencia nao e zero, e "0% de conversao" e uma afirmacao que so se pode
+    # fazer sobre quem tem visita medida.
+    nunca_colhido = df["linhas_de_visita"] == 0
+    df["visitas"] = df["visitas"].astype(object).where(~nunca_colhido, None)
+
+    # Conversao = unidades / visitas, em porcentagem.
+    #
+    # E uma APROXIMACAO, e a tela diz isso: um pedido com tres unidades do
+    # mesmo item e uma visita que converteu, nao tres. A metrica honesta seria
+    # pedidos/visitas; a util pra quem decide estoque e unidades. Rotulada
+    # "conversao (unidades)" na tela -- inventar um numero sem dizer qual e
+    # seria repetir o erro do custo estimado.
+    def _conversao(linha):
+        visitas = linha["visitas"]
+        if visitas is None or visitas <= 0:
+            return None
+        return round(100.0 * linha["unidades"] / visitas, 2)
+
+    df["conversao"] = df.apply(_conversao, axis=1)
+    df = df.drop(columns=["linhas_de_visita"])
 
     total = df["receita"].sum()
     df["receita_pct"] = (100.0 * df["receita"] / total).round(4)
