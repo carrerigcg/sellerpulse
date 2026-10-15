@@ -23,13 +23,21 @@ ou (em caso de erro) nada e gravado.
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from backend.analytics._common import _parse_boundary
 from src.demo_data import DEFAULT_SEED, generate_catalog, generate_claims, generate_orders
 
-_TABELAS = ("categories", "items", "orders", "order_items", "claims", "product_costs")
+_TABELAS = (
+    "categories",
+    "items",
+    "orders",
+    "order_items",
+    "claims",
+    "product_costs",
+    "item_visits",
+)
 
 _TABELA_SQL = {
     "categories": "categories_cache",
@@ -38,6 +46,7 @@ _TABELA_SQL = {
     "order_items": "order_items",
     "claims": "claims",
     "product_costs": "product_costs",
+    "item_visits": "item_visits",
 }
 
 _INSERT_CATEGORY = """
@@ -71,6 +80,12 @@ _INSERT_PRODUCT_COST = """
     INSERT INTO product_costs (seller_id, item_id, vigente_desde, custo_unitario)
     VALUES ($1, $2, $3, $4)
     ON CONFLICT (seller_id, item_id, vigente_desde) DO NOTHING
+"""
+
+_INSERT_VISITA = """
+    INSERT INTO item_visits (seller_id, item_id, dia, visitas)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (seller_id, item_id, dia) DO NOTHING
 """
 
 _INSERT_CLAIM = """
@@ -132,6 +147,66 @@ def custo_de_demonstracao(item_id: str, unit_price: float) -> float | None:
         return None
     fracao = _CUSTO_MIN + _sorteio_estavel(item_id, "custo") * (_CUSTO_MAX - _CUSTO_MIN)
     return round(unit_price * fracao, 2)
+
+
+# Fatia dos produtos deixada DE PROPOSITO sem visita colhida, pelo mesmo
+# motivo da fatia sem custo: a demonstracao precisa mostrar o estado "—", que
+# e o que distingue "nao medimos" de "medimos e deu zero". Com tudo preenchido
+# essa distincao -- que e metade do valor da feature -- ficaria invisivel.
+_FATIA_SEM_VISITA = 0.10
+
+# Faixa de conversao por produto. 1% a 9% cobre o que se ve em marketplace:
+# anuncio bom converte perto de 5%, anuncio caro ou mal fotografado fica em 1%.
+_CONVERSAO_MIN, _CONVERSAO_MAX = 0.01, 0.09
+
+# Os dois ultimos dias saem subcontados DE PROPOSITO, na mesma proporcao que o
+# ML entrega antes de consolidar. Assim o aviso que a tela mostra corresponde a
+# algo real na demonstracao, em vez de ser um texto decorativo.
+_FATOR_DIAS_NAO_CONSOLIDADOS = 0.4
+
+# Quantos dias do fim da serie saem subcontados. Mesmo numero que
+# backend/ml/visitas_pg.DIAS_DE_BORDA, e pela mesma razao fisica.
+_DIAS_NAO_CONSOLIDADOS = 2
+
+
+def visitas_de_demonstracao(
+    orders: list[dict[str, Any]], *, hoje: date
+) -> list[tuple[str, date, int]]:
+    """Visitas sinteticas por (item, dia), derivadas dos pedidos gerados.
+
+    Nao mexe em `data/demo.db`: a camada SQLite esta congelada e a linha
+    Streamlit, encerrada. Derivar aqui deixa o arquivo intocado e o golden do
+    PDF junto -- o custo de produto foi semeado do mesmo jeito, pela mesma
+    razao.
+
+    Cada item ganha uma taxa de conversao estavel, e as visitas do dia saem de
+    `unidades / taxa`, mais um ruido de quem olhou e nao comprou. Dia sem venda
+    tambem tem visita: produto e visto sem ser comprado, que e justamente o
+    caso que a feature existe pra revelar.
+    """
+    unidades_por_item_dia: dict[tuple[str, date], int] = {}
+    for pedido in orders:
+        if pedido["status"] != "paid":
+            continue
+        dia = _parse_boundary(pedido["date_closed"]).date()
+        for item in _dedupe_order_items(pedido["items"]):
+            chave = (item["item_id"], dia)
+            unidades_por_item_dia[chave] = unidades_por_item_dia.get(chave, 0) + item["quantity"]
+
+    dias_mudos = {hoje - timedelta(days=n) for n in range(_DIAS_NAO_CONSOLIDADOS)}
+    linhas: list[tuple[str, date, int]] = []
+    for (item_id, dia), unidades in sorted(unidades_por_item_dia.items()):
+        if _sorteio_estavel(item_id, "visita") < _FATIA_SEM_VISITA:
+            continue
+        taxa = _CONVERSAO_MIN + _sorteio_estavel(item_id, "conversao") * (
+            _CONVERSAO_MAX - _CONVERSAO_MIN
+        )
+        ruido = int(_sorteio_estavel(f"{item_id}:{dia}", "ruido") * 12)
+        visitas = max(1, round(unidades / taxa) + ruido)
+        if dia in dias_mudos:
+            visitas = max(1, round(visitas * _FATOR_DIAS_NAO_CONSOLIDADOS))
+        linhas.append((item_id, dia, visitas))
+    return linhas
 
 
 async def _contagens(conn, seller_id) -> dict[str, int]:
@@ -285,6 +360,17 @@ async def seed_na_conexao(
         if (custo := custo_de_demonstracao(prod["item_id"], prod["unit_price"])) is not None
     ]
     await conn.executemany(_INSERT_PRODUCT_COST, custos_args)
+
+    # As visitas sao derivadas dos pedidos que acabaram de ser gerados, entao
+    # o "hoje" delas e o fim da serie -- nao `date.today()`. Com ancora
+    # congelada (o `data/demo.db`), usar hoje poria os dias subcontados fora
+    # da serie e o efeito nao apareceria.
+    ultimo_dia = max(_parse_boundary(o["date_closed"]).date() for o in orders)
+    visitas_args = [
+        (seller_id, item_id, dia, visitas)
+        for item_id, dia, visitas in visitas_de_demonstracao(orders, hoje=ultimo_dia)
+    ]
+    await conn.executemany(_INSERT_VISITA, visitas_args)
 
     contagens_depois = await _contagens(conn, seller_id)
     return {chave: contagens_depois[chave] - contagens_antes[chave] for chave in _TABELAS}

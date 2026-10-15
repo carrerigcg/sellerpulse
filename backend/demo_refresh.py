@@ -113,6 +113,7 @@ async def regenera_demo(
         # redundantes, porque o valor por item e deterministico, e crescendo
         # para sempre. Para um seller REAL isso seria dado do usuario, e por
         # isso esta funcao aborta antes se `is_demo` nao for true.
+        await conn.execute("DELETE FROM item_visits WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM product_costs WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM claims WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM orders WHERE seller_id = $1", seller_id)

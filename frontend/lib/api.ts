@@ -49,6 +49,25 @@ export type AbcLinha = {
   custo_produtos: number;
   /** Quanto da receita deste produto veio de venda sem custo informado. */
   receita_sem_custo: number;
+  /** Unidades vendidas no período. */
+  unidades: number;
+  /**
+   * Visitas ao anúncio no período.
+   *
+   * `null` = nunca colhido, que é diferente de `0` = colhido e deu zero. A
+   * tela mostra "—" no primeiro caso: zero por cento é uma afirmação, e só
+   * se pode fazê-la sobre quem tem visita medida.
+   */
+  visitas: number | null;
+  /**
+   * Unidades ÷ visitas, em porcentagem. `null` sem visita para dividir.
+   *
+   * É uma aproximação declarada: um pedido com três unidades do mesmo item é
+   * uma visita que converteu, não três. A métrica honesta seria
+   * pedidos ÷ visitas; a útil para quem decide estoque é unidades. Por isso
+   * a tela rotula "conversão (unidades)".
+   */
+  conversao: number | null;
 };
 
 /** Rótulo bruto de `src/segmentation.py` (Fase 2, congelado) — não traduzir aqui. */

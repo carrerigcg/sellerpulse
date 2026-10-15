@@ -32,6 +32,9 @@ export const COLUNAS_ABC: Coluna<AbcLinha>[] = [
   { titulo: "% acumulado", campo: "receita_acumulada_pct" },
   { titulo: "Custo dos produtos", campo: "custo_produtos" },
   { titulo: "Receita sem custo informado", campo: "receita_sem_custo" },
+  { titulo: "Unidades", campo: "unidades" },
+  { titulo: "Visitas", campo: "visitas" },
+  { titulo: "Conversão (%)", campo: "conversao" },
 ];
 
 export const COLUNAS_RFM: Coluna<RfmLinha>[] = [

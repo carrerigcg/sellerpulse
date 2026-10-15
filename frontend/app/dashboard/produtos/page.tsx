@@ -10,6 +10,7 @@ import { PeriodPicker } from "@/components/analytics/period-picker";
 import { ApiError, getAbcPareto, getCohortProduto, type AbcLinha, type CohortLinha } from "@/lib/api";
 import { COLUNAS_ABC } from "@/lib/colunas-export";
 import { coberturaDosProdutos, produtosSemCusto } from "@/lib/cobertura";
+import { incluiDiasNaoConsolidados, temVisitaColhida } from "@/lib/visitas";
 
 /**
  * Produtos — curva ABC de Pareto e cohort de lançamento.
@@ -116,6 +117,17 @@ export default async function ProdutosPage({
                 ate={ate}
               />
             </div>
+            {/* O ML leva ~48h pra consolidar visitas. Um periodo que alcance
+                ontem mostra numeros que ainda vao subir, e conversao calculada
+                sobre eles sai alta demais: as vendas ja estao todas la e as
+                visitas nao. Nao e motivo pra esconder o numero — e pra dizer
+                que ele ainda vai mudar. */}
+            {temVisitaColhida(abc) && incluiDiasNaoConsolidados(ate) && (
+              <p className="mt-3 rounded-lg bg-highlight-soft px-3 py-2 text-xs leading-relaxed text-ink">
+                As visitas dos últimos dois dias ainda estão sendo consolidadas pelo Mercado
+                Livre. A conversão desse período tende a aparecer mais alta do que vai ficar.
+              </p>
+            )}
             <AbcTable abc={abc} />
           </section>
 
