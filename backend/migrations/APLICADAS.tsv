@@ -29,6 +29,31 @@
 # `version` que o Supabase registrou (visivel em `list_migrations` do MCP, ou
 # em supabase_migrations.schema_migrations) e a data.
 #
+# DUAS VERSIONS EM PRODUCAO NAO TEM ARQUIVO AQUI, E ESTA CERTO
+#
+# `supabase_migrations.schema_migrations` lista 13 versions; este registro tem
+# 11 linhas. As duas que sobram sao de 2026-09-23:
+#
+#   20260923133423  harden_handle_new_user_execute
+#   20260923133449  sellers_user_fk_on_delete_cascade
+#
+# Nao e esquecimento, e o inverso do que esta trava procura. As duas correcoes
+# entraram no repo pelo commit e873392 EDITANDO as migrations que elas
+# consertam, em vez de virar arquivo novo: o `on delete cascade` esta na linha
+# do `user_id` em `0001_init.sql`, e os tres `revoke` estao no fim de
+# `0003_auth_trigger.sql`. Producao precisou delas como migration separada
+# porque la o schema ja estava criado.
+#
+# Conferido contra producao em 2026-10-15 -- os dois estados coincidem:
+#
+#   sellers_user_id_fkey  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+#   handle_new_user()     postgres=X/postgres | service_role=X/postgres   (sem anon)
+#
+# Entao um banco construido so com os arquivos deste diretorio chega no mesmo
+# lugar que producao. NAO recrie as duas como 0012/0013: sobre um schema que
+# ja nasce correto elas sao no-op, e um `drop constraint` no-op em migration
+# e a coisa que se olha com medo no proximo incidente.
+#
 # arquivo	version_no_supabase	data_de_aplicacao
 0001_init.sql	20260923133315	2026-09-23
 0002_rls.sql	20260923133322	2026-09-23
