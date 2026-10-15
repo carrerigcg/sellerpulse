@@ -3,7 +3,11 @@
 **Fase:** 4 de 6 do roadmap
 **Tag alvo:** `v0.5.0`
 **Data:** 2026-08-25
-**Status:** Design aprovado — implementação pendente.
+**Status:** NAO implementado, e provavelmente nao sera nesta forma.
+
+Conferido em 2026-10-15: `build_ctx()` e `classificar_faixa()`, as duas funcoes que a secao 5 contrata, tem zero definicoes no repo, e `src/forecasting.py` nao existe.
+
+A linha Streamlit foi encerrada em 2026-10-13; o produto hoje e o SaaS em `backend/` + `frontend/`. A INTENCAO deste documento — guia educativo, regras genericas, sem opiniao sobre o negocio de quem le — continua valendo e foi levada para a futura aba Relatorios do SaaS.
 
 ---
 

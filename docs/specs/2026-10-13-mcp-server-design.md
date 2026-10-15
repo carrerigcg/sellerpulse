@@ -1,7 +1,7 @@
 # SellerPulse — Servidor MCP (fase 1: demonstração)
 
 **Data:** 2026-10-13
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado em 2026-10-13 (PR #8). Fase 1 no ar; a fase 2 (OAuth) esta adiada por decisao registrada.
 
 ---
 

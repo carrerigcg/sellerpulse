@@ -3,7 +3,8 @@
 **Fase:** 3 de 6 do roadmap
 **Tag alvo:** `v0.4.0`
 **Data:** 2026-08-19
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado e lancado como `v0.4.0` em 2026-09-03.
+A linha Streamlit foi encerrada em 2026-10-13; o produto hoje e o SaaS em `backend/` + `frontend/`. O OAuth do SaaS e outro codigo (`backend/ml/oauth.py`, Sprint 2) — este documento descreve o fluxo do Streamlit.
 
 ---
 

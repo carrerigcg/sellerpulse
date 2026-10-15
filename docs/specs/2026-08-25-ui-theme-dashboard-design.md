@@ -1,7 +1,8 @@
 # Identidade visual do dashboard — Fase 2.5 (v0.3.1)
 
 **Data:** 2026-08-25
-**Status:** aprovado, pronto para plano de implementação
+**Status:** Implementado em 2026-08-25 (`src/theme.py`, `v0.3.1`).
+A linha Streamlit foi encerrada em 2026-10-13; o produto hoje e o SaaS em `backend/` + `frontend/`. A identidade do SaaS e outra — branco com laranja de acao — e vive em `frontend/app/globals.css`.
 **Escopo:** estilização da interface Streamlit. Nenhuma métrica, query ou regra de negócio é alterada.
 
 ## Problema

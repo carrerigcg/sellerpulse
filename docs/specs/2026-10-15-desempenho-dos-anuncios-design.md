@@ -1,7 +1,7 @@
 # SellerPulse — Seção Desempenho dos anúncios
 
 Data: 2026-10-15
-Estado: desenho aprovado, implementação a seguir
+Estado: implementado em 2026-10-15 (PR #14). O limiar de amostra mudou de uma para duas vendas esperadas durante a implementacao, por medicao na loja real — ver secao 4.
 
 ## 1. Por quê
 

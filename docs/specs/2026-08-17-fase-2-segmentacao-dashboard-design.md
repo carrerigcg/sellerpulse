@@ -3,7 +3,8 @@
 **Fase:** 2 de 6 do roadmap definido em `docs/specs/2026-08-07-camadas-analiticas-design.md`
 **Tag alvo:** `v0.3.0`
 **Data:** 2026-08-17
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado em 2026-08-18 (`src/segmentation.py`).
+A linha Streamlit foi encerrada em 2026-10-13; o produto hoje e o SaaS em `backend/` + `frontend/`. As analises vivem em `backend/analytics/segmentation_pg.py` e nas telas Produtos e Clientes.
 
 ---
 

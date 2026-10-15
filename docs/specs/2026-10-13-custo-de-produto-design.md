@@ -1,7 +1,7 @@
 # SellerPulse — Custo de produto informado pelo vendedor
 
 **Data:** 2026-10-13
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado em 2026-10-14 (PR #11), checkpoints 1 a 6. Duas divergencias do desenho estao registradas no PR.
 
 ---
 
