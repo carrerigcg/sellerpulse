@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend import mcp_server
 from backend.db import close_pool, get_pool
 from backend.demo_refresh import regenera_demo_se_vencida
+from backend.logging_setup import configura_logging
 from backend.ml.tokens import valida_chave_de_cifra
 from backend.routers import custos, demo, metrics, ml, segmentation
 from backend.worker.runner import loop as worker_loop
@@ -23,6 +24,13 @@ from backend.worker.runner import worker_habilitado
 # variaveis ja presentes no ambiente, entao em producao (Render) os valores
 # da plataforma continuam valendo e a ausencia do arquivo e inofensiva.
 load_dotenv(Path(__file__).resolve().parent / ".env")
+
+# Logging do processo. Aqui porque este modulo e o entry point, e DEPOIS do
+# `load_dotenv` porque e isso que permite `LOG_LEVEL` vir do `backend/.env`.
+# Antes disto ninguem configurava: quem pendurava um handler na raiz era o
+# construtor do `FastMCP`, por efeito colateral do import de `mcp_server`, e
+# no formato dele -- sem nivel na linha. Ver `backend/logging_setup.py`.
+configura_logging()
 
 _log = logging.getLogger(__name__)
 
