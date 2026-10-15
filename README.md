@@ -2,7 +2,7 @@
 
 > **Analytics para vendedores do Mercado Livre — do pedido bruto à decisão de negócio.**
 
-O vendedor conecta a conta dele pelo fluxo oficial do Mercado Livre, os últimos 6 meses de pedidos entram sozinhos, e três telas respondem o que a plataforma não responde: **quanto sobra de cada venda, quais produtos sustentam a loja, e quem são os compradores que valem a pena reconquistar.**
+O vendedor conecta a conta dele pelo fluxo oficial do Mercado Livre, os últimos 6 meses de pedidos entram sozinhos, e o produto responde o que a plataforma não responde: **quanto sobra de cada venda, quais produtos sustentam a loja, quem são os compradores que valem reconquistar, e quais anúncios são vistos sem converter.**
 
 Sem planilha, sem CSV, sem campo digitado à mão.
 
@@ -18,7 +18,7 @@ Sem planilha, sem CSV, sem campo digitado à mão.
 
 ---
 
-## As três telas
+## As telas
 
 Os prints abaixo são capturas da demonstração pública. Os dados dela são sintéticos e **se regeneram periodicamente para terminar sempre no dia de hoje**, então os valores exatos mudam com o tempo — a forma, o volume e o catálogo são os mesmos.
 
@@ -45,6 +45,21 @@ Tem também cohort por mês de lançamento, para ver se produto novo vinga ou mo
 Segmentação RFM (recência, frequência, valor). Cada ponto é um comprador, colorido pelo segmento; o eixo X é dias desde a última compra, então quem está indo embora aparece à direita.
 
 É o que transforma *"tive 372 compradores"* em *"95 deles estão sumindo e valem R$ 154 mil"*.
+
+### Custos — o que falta para a margem ser a margem
+
+Receita menos comissão menos frete não é margem de contribuição: falta o custo
+da mercadoria, que é o maior custo variável de todos. O SellerPulse nunca o
+estima — ele pergunta. A tela lista os produtos em ordem de receita, salva cada
+valor ao sair do campo, e toda tela que mostra margem diz quanto dela está
+coberta por custo informado.
+
+### Exportar — as tabelas na planilha, e o que cada coluna quer dizer
+
+CSV que o Excel em português abre com dois cliques, com um glossário das 19
+colunas. É onde estão escritas, pela primeira vez no produto, duas regras que
+antes só existiam no código: o campo "Até" não entra na janela, e a recência
+conta a partir do fim do período.
 
 ---
 
@@ -81,11 +96,11 @@ Conta do Mercado Livre
 | Camada | |
 |---|---|
 | **Backend** | Python 3.11 · FastAPI · asyncpg · pandas |
-| **Banco** | PostgreSQL 17 (Supabase) · 8 migrations versionadas · chave composta por `seller_id` |
+| **Banco** | PostgreSQL 17 (Supabase) · 12 migrations versionadas · RLS em todas as tabelas |
 | **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind · Recharts |
 | **Auth** | Supabase Auth (JWT ES256) + OAuth 2.0 do Mercado Livre |
 | **Infra** | Render (Docker) · Vercel |
-| **Testes** | pytest · 564 testes · CI em 4 jobs (Linux + Windows) |
+| **Testes** | pytest · vitest · 659 testes · CI em 4 jobs (Linux + Windows) |
 
 ---
 
@@ -137,19 +152,19 @@ sellerpulse/
 │   ├── ml/               # OAuth, cifra de tokens, ingestão da API do ML
 │   ├── jobs/ worker/     # fila de sincronização com lease e retomada
 │   ├── routers/          # endpoints REST (autenticados + /demo público)
-│   ├── migrations/       # 8 migrations SQL versionadas
-│   └── tests/            # 248 testes
+│   ├── migrations/       # 12 migrations SQL versionadas
+│   └── tests/            # 317 testes
 ├── frontend/
 │   ├── app/              # landing, /demo público, /dashboard autenticado
 │   ├── components/       # gráficos, tabelas, seções da landing
 │   └── lib/              # clientes da API (um por contexto de auth)
-├── src/                  # camada analítica original (SQLite) — alimenta o PDF
-├── tests/                # 316 testes da camada pura
+├── src/                  # camada original (SQLite) — cliente do ML, ingestão e paridade
+├── tests/                # 275 testes da camada pura
 ├── templates/            # template Jinja2 do relatório em PDF
 └── docs/specs/           # design docs de cada sprint
 ```
 
-> `src/` é a camada da primeira versão, single-tenant sobre SQLite. Ela continua viva porque o gerador de relatório em PDF depende dela, e `backend/analytics/` é um porte fiel dela para Postgres — as divergências deliberadas entre as duas estão documentadas em comentário, no ponto exato em que divergem.
+> `src/` é a primeira versão, single-tenant sobre SQLite. Continua viva por dois motivos: o cliente da API do Mercado Livre, o OAuth e o gerador de dados sintéticos rodam em produção a partir dela, e `backend/analytics/` é um porte fiel das suas métricas para Postgres — as divergências deliberadas entre as duas estão documentadas em comentário, no ponto exato em que divergem.
 
 ---
 
@@ -159,11 +174,15 @@ sellerpulse/
 |---|---|
 | Conexão com conta real do Mercado Livre | ✅ em produção |
 | Importação de 6 meses + sincronização incremental | ✅ em produção |
-| Três telas, autenticadas e públicas | ✅ em produção |
-| Demonstração sem cadastro | ✅ [no ar](https://frontend-three-rosy-iwes33l1kk.vercel.app/demo) |
-| Custo do produto informado pelo vendedor | 📋 planejado |
+| Telas autenticadas e demonstração sem cadastro | ✅ [no ar](https://frontend-three-rosy-iwes33l1kk.vercel.app/demo) |
+| Custo de produto informado pelo vendedor | ✅ em produção |
+| Exportação em CSV com glossário das colunas | ✅ em produção |
+| Visitas e conversão por anúncio | ✅ em produção |
+| Diagnóstico de anúncio por quadrante | ✅ em produção |
+| Servidor MCP somente leitura sobre a demonstração | ✅ em produção |
+| Produtos com visita e zero venda | 📋 planejado |
 | Custo de frete via API de shipments | 📋 planejado |
-| Relatório em PDF sobre dados reais | 📋 planejado |
+| Impostos por regime tributário | 📋 planejado |
 
 ---
 
@@ -175,6 +194,6 @@ sellerpulse/
 
 ## Autor
 
-**Guilherme Carreri** — analista de dados, aplicando para posições de estágio em BI / Data & Analytics.
+**Guilherme Carreri**
 
-[carreri.gui@gmail.com](mailto:carreri.gui@gmail.com)
+[carreri.gcg@gmail.com](mailto:carreri.gcg@gmail.com)

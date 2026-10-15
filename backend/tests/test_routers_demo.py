@@ -63,7 +63,7 @@ async def client_demo(monkeypatch, pg_pool, test_seller):
 
 
 async def test_demo_responde_sem_autenticacao(client_demo, pg_pool):
-    """Zero atrito e o ponto: recrutador e prospect veem o produto sem cadastro."""
+    """Zero atrito e o ponto: o prospect ve o produto antes de criar conta."""
     client, seller_id = client_demo
     async with pg_pool.acquire() as conn:
         await conn.execute(_INSERT_ORDER, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 250.0)

@@ -20,7 +20,7 @@ from src.session_auth import (
 def test_build_authorize_url_includes_state_and_redirect():
     url = build_authorize_url(
         client_id="APP-123",
-        redirect_uri="https://sellerpulse.streamlit.app/",
+        redirect_uri="https://sellerpulse.app/callback",
         state="csrf-token-abc",
     )
     parsed = urlparse(url)
@@ -30,7 +30,7 @@ def test_build_authorize_url_includes_state_and_redirect():
     qs = parse_qs(parsed.query)
     assert qs["response_type"] == ["code"]
     assert qs["client_id"] == ["APP-123"]
-    assert qs["redirect_uri"] == ["https://sellerpulse.streamlit.app/"]
+    assert qs["redirect_uri"] == ["https://sellerpulse.app/callback"]
     assert qs["state"] == ["csrf-token-abc"]
 
 
@@ -50,7 +50,7 @@ def test_exchange_code_for_tokens_returns_tokenset():
         client_id="APP-123",
         client_secret="secret",
         code="AUTH_CODE_ABC",
-        redirect_uri="https://sellerpulse.streamlit.app/",
+        redirect_uri="https://sellerpulse.app/callback",
     )
     assert isinstance(tokens, TokenSet)
     assert tokens.access_token == "APP_USR-fake-access"
@@ -71,7 +71,7 @@ def test_exchange_code_raises_on_ml_error():
             client_id="APP-123",
             client_secret="secret",
             code="INVALID",
-            redirect_uri="https://sellerpulse.streamlit.app/",
+            redirect_uri="https://sellerpulse.app/callback",
         )
     assert "400" in str(exc_info.value)
 
@@ -94,7 +94,7 @@ def test_exchange_code_sanitizes_ml_token_in_error_message():
             client_id="APP-123",
             client_secret="secret",
             code="X",
-            redirect_uri="https://sellerpulse.streamlit.app/",
+            redirect_uri="https://sellerpulse.app/callback",
         )
     assert "APP_USR-leaked-abc123" not in str(exc_info.value)
     assert "[REDACTED]" in str(exc_info.value)

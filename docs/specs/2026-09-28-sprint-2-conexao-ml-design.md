@@ -64,7 +64,7 @@ Isso é aceitável porque a fila em Postgres com `SKIP LOCKED` é idêntica nas 
 
 ### Justificativa da decisão 3
 
-A demo não é andaime de portfólio, é superfície permanente do produto: serve tanto pra recrutador avaliar o trabalho sem criar conta quanto pra prospect ver o sistema funcionando antes de assinar. Duas consequências que isso impõe:
+A demo não é andaime: é superfície permanente do produto, e serve para quem está avaliando ver o sistema funcionando antes de assinar. Duas consequências que isso impõe:
 
 - O dado do seller demo é **determinístico** — semeado com seed fixa, não regenerado a cada deploy. Prospect que volta na semana seguinte vê os mesmos números, e print de tela não envelhece.
 - É a única porta do sistema sem autenticação, então é read-only **por construção**: router só com GET e `seller_id` fixo em constante no servidor, nunca aceito por query param ou header.

@@ -4,7 +4,6 @@ Subcomandos:
     python -m src.main ingerir [--week=YYYY-WNN | --from=... --to=...]
     python -m src.main regerar-dados     # regera data/demo.db determinístico
     python -m src.main gerar-pdf
-    python -m src.main abrir-dashboard
 """
 
 from __future__ import annotations
@@ -220,7 +219,6 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p_pdf.add_argument(
         "--output", help="Path do PDF de saída (default RELATORIOS/relatorio-YYYY-WNN.pdf)."
     )
-    sub.add_parser("abrir-dashboard", help="Abre o dashboard Streamlit.")
 
     return parser.parse_args(argv)
 
@@ -333,31 +331,10 @@ def _cmd_gerar_pdf(args: argparse.Namespace) -> int:
     return 0
 
 
-_DASHBOARD_PATH = Path(__file__).parent / "dashboard.py"
-
-
-def _cmd_abrir_dashboard(_args: argparse.Namespace) -> int:
-    import subprocess
-
-    try:
-        result = subprocess.run(
-            ["streamlit", "run", str(_DASHBOARD_PATH)],
-            check=False,
-        )
-        return result.returncode
-    except FileNotFoundError:
-        print(
-            "ERRO: `streamlit` não encontrado no PATH. Rode `pip install -r requirements.txt`.",
-            file=sys.stderr,
-        )
-        return 1
-
-
 _DISPATCH = {
     "ingerir": _cmd_ingerir,
     "regerar-dados": _cmd_regerar_dados,
     "gerar-pdf": _cmd_gerar_pdf,
-    "abrir-dashboard": _cmd_abrir_dashboard,
 }
 
 
@@ -365,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
     if args.cmd is None:
         print(
-            "usage: sellerpulse <ingerir|regerar-dados|gerar-pdf|abrir-dashboard>",
+            "usage: sellerpulse <ingerir|regerar-dados|gerar-pdf>",
             file=sys.stderr,
         )
         return 1

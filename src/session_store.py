@@ -10,9 +10,8 @@
 
 - create_session_db: cria conexão SQLite :memory: com schema aplicado.
 
-Este módulo não é thread-safe — assume acesso serializado dentro de uma
-sessão Streamlit (o runtime do Streamlit garante isso naturalmente).
-Não compartilhar instâncias via @st.cache_resource.
+Este módulo NÃO é thread-safe: assume acesso serializado dentro de uma
+única sessão. Não compartilhar uma instância entre requisições concorrentes.
 """
 
 from __future__ import annotations

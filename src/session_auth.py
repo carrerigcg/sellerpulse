@@ -1,7 +1,10 @@
-"""OAuth helpers para contexto web (Streamlit + futuro Next.js/FastAPI).
+"""OAuth helpers para contexto web.
 
-Camada fina sobre src/auth.OAuthClient. Módulo puro Python — zero
-import de streamlit. Testável isoladamente com biblioteca `responses`.
+Camada fina sobre src/auth.OAuthClient. Módulo puro Python, sem dependência
+de interface — testável isoladamente com a biblioteca `responses`.
+
+Usado em produção por `backend/ml/oauth.py`, que é quem conduz o fluxo de
+conexão da conta do Mercado Livre no SaaS.
 """
 
 from __future__ import annotations
@@ -23,9 +26,9 @@ class OAuthError(Exception):
 
     NOTA: distinta de src.auth.OAuthError, que sinaliza falha em fluxo
     com persistência em disco (setup_auth.py). Esta exceção é para
-    callers em contexto web (Streamlit callback) que gerenciam tokens
-    via session_state em memória. Não são intercambiáveis — capture a
-    correta conforme a origem da chamada.
+    callers em contexto web que gerenciam tokens em memória, sem tocar o
+    disco. Não são intercambiáveis — capture a correta conforme a origem da
+    chamada.
     """
 
 

@@ -174,9 +174,9 @@ def visitas_de_demonstracao(
 ) -> list[tuple[str, date, int]]:
     """Visitas sinteticas por (item, dia), derivadas dos pedidos gerados.
 
-    Nao mexe em `data/demo.db`: a camada SQLite esta congelada e a linha
-    Streamlit, encerrada. Derivar aqui deixa o arquivo intocado e o golden do
-    PDF junto -- o custo de produto foi semeado do mesmo jeito, pela mesma
+    Nao mexe em `data/demo.db`: a camada SQLite esta congelada e serve de
+    referencia de paridade. Derivar aqui deixa o arquivo intocado e o golden
+    do PDF junto -- o custo de produto foi semeado do mesmo jeito, pela mesma
     razao.
 
     Cada item ganha uma taxa de conversao estavel, e as visitas do dia saem de

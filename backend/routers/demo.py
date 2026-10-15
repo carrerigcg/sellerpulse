@@ -2,8 +2,8 @@
 """Endpoints publicos do seller de demonstracao.
 
 Esta e a UNICA porta do sistema sem autenticacao. Ela existe porque a demo e
-canal de aquisicao: recrutador avalia o produto e prospect ve o sistema
-funcionando sem criar conta. Tres travas, todas por construcao:
+canal de aquisicao: quem esta avaliando o produto ve o sistema funcionando com
+dado real de verdade, sem criar conta. Tres travas, todas por construcao:
 
 1. So GET. Nenhum verbo de escrita registrado.
 2. O seller_id vem de variavel de ambiente no servidor. NUNCA de parametro —
