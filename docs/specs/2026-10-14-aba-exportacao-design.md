@@ -1,7 +1,7 @@
 # Aba Exportar — tutorial e glossário de colunas
 
 Data: 2026-10-14
-Estado: desenho aprovado, não implementado
+Estado: implementado em 2026-10-14 (`224c297`, direto na main por ser so front-end).
 
 ## Por quê
 

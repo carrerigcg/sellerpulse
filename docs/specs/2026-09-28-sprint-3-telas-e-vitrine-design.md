@@ -2,7 +2,7 @@
 
 **Sprint:** 3 de 4 da migração pra SaaS real
 **Data:** 2026-09-28
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado em 2026-09-28 (telas Executive, Produtos e Clientes, e a demonstracao publica).
 
 ---
 

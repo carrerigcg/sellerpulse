@@ -2,7 +2,8 @@
 
 **Layer:** Analytics (metrics, segmentation, forecasting, patrimony) + Outputs (PDF, Dashboard, Notebook)
 **Data:** 2026-08-07
-**Status:** Design aprovado — implementação pendente (Fase 0 a seguir).
+**Status:** Implementado em 2026-08-13 (`src/metrics.py`, `src/segmentation.py`).
+A linha Streamlit foi encerrada em 2026-10-13; o produto hoje e o SaaS em `backend/` + `frontend/`. Esta camada foi portada para `backend/analytics/`, que mantem paridade testada com ela.
 
 ---
 

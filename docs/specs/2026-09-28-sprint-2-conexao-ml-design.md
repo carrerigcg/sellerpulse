@@ -2,7 +2,7 @@
 
 **Sprint:** 2 de 4 da migração pra SaaS real (v0.4.0 → v1.0.0-saas)
 **Data:** 2026-09-28
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado em 2026-09-28 (OAuth do ML, fila `sync_jobs` e worker).
 
 ---
 

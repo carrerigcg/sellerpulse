@@ -8,6 +8,7 @@ import type { AbcLinha, CohortLinha } from "@/lib/api";
 import { getDemoAbcPareto, getDemoCohortProduto, periodoPadraoDaDemo } from "@/lib/demo";
 import { coberturaDosProdutos, produtosSemCusto } from "@/lib/cobertura";
 import { incluiDiasNaoConsolidados, temVisitaColhida } from "@/lib/visitas";
+import { DesempenhoAnuncios } from "@/components/analytics/desempenho-anuncios";
 
 /**
  * Produtos da demonstração pública — mesmo conteúdo de `/dashboard/produtos`,
@@ -78,17 +79,6 @@ export default async function DemoProdutosPage({
           <section className="mt-6 rounded-xl border border-line p-5">
             <h2 className="text-sm font-semibold">Produtos</h2>
             <p className="mt-0.5 text-xs text-muted">{abc.length} produtos no período</p>
-            {/* O ML leva ~48h pra consolidar visitas. Um periodo que alcance
-                ontem mostra numeros que ainda vao subir, e conversao calculada
-                sobre eles sai alta demais: as vendas ja estao todas la e as
-                visitas nao. Nao e motivo pra esconder o numero — e pra dizer
-                que ele ainda vai mudar. */}
-            {temVisitaColhida(abc) && incluiDiasNaoConsolidados(ate) && (
-              <p className="mt-3 rounded-lg bg-highlight-soft px-3 py-2 text-xs leading-relaxed text-ink">
-                As visitas dos últimos dois dias ainda estão sendo consolidadas pelo Mercado
-                Livre. A conversão desse período tende a aparecer mais alta do que vai ficar.
-              </p>
-            )}
             <AbcTable abc={abc} />
           </section>
 
@@ -101,6 +91,20 @@ export default async function DemoProdutosPage({
             </p>
             <CohortHeatmap linhas={cohort} />
           </section>
+
+          {/* O funil fica abaixo do cohort e separado da tabela ABC: aquela e
+              sobre receita e precisa continuar ordenada por ela (a classe
+              A/B/C e o acumulado SAEM dessa ordem). Esta e sobre o funil e
+              pode ser ordenada por qualquer coluna sem quebrar nada. */}
+          <DesempenhoAnuncios abc={abc} />
+
+          {/* Aviso dos 48h aqui, junto do que ele descreve. */}
+          {temVisitaColhida(abc) && incluiDiasNaoConsolidados(ate) && (
+            <p className="mt-3 rounded-lg bg-highlight-soft px-3 py-2 text-xs leading-relaxed text-ink">
+              As visitas dos últimos dois dias ainda estão sendo consolidadas pelo Mercado
+              Livre. A conversão desse período tende a aparecer mais alta do que vai ficar.
+            </p>
+          )}
         </>
       )}
     </>

@@ -1,7 +1,7 @@
 # SellerPulse — Exportação das tabelas
 
 **Data:** 2026-10-13
-**Status:** Design aprovado — implementação pendente.
+**Status:** Implementado em 2026-10-13 (PR #9). A aba dedicada veio depois, em `2026-10-14-aba-exportacao-design.md`.
 
 ---
 
