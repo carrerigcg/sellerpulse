@@ -35,6 +35,11 @@ e `metrics`/`segmentation` são a referência de paridade que os testes do
   deduzido do código ao lado, ele é ruído.
 - **Fluxo de merge:** mudança só de front-end vai direto para `main`. Back-end,
   banco e migrations passam por PR com CI verde.
+- **`docs/plans/` é local**, nunca versionado (`.gitignore`). São rascunhos de
+  trabalho, e as caixinhas `- [ ]` deles **nunca** foram marcadas — inclusive
+  em features que estão em produção há semanas. Contar caixinha para saber o
+  que foi feito dá a resposta errada em todos os casos; a verdade está no
+  código, nas specs e nas mensagens de commit.
 
 ## Armadilhas que já custaram caro
 
