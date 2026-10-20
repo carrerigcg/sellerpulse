@@ -100,7 +100,7 @@ Conta do Mercado Livre
 | **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind · Recharts |
 | **Auth** | Supabase Auth (JWT ES256) + OAuth 2.0 do Mercado Livre |
 | **Infra** | Render (Docker) · Vercel |
-| **Testes** | pytest · vitest · 659 testes · CI em 4 jobs (Linux + Windows) |
+| **Testes** | pytest · vitest · 666 testes · CI em 4 jobs (Linux + Windows) |
 
 ---
 
