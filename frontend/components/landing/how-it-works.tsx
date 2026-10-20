@@ -25,6 +25,16 @@ const PASSOS = [
     titulo: "Os últimos 6 meses carregam sozinhos",
     texto: "Pedidos, produtos e compradores entram automaticamente, sem planilha e sem digitar nada.",
   },
+  {
+    // O 4o passo existe porque a sequencia terminava no automatico -- e uma
+    // sequencia que so fala do que a ferramenta faz sozinha nunca chega no
+    // que depende do vendedor. Este e o passo dele, e e o unico que a
+    // ferramenta nao pode dar sozinha: o ML nao sabe quanto o produto custou.
+    numero: "4",
+    titulo: "Informe o custo dos seus produtos",
+    texto:
+      "É o único número que o Mercado Livre não sabe. Com ele, a margem deixa de ser estimativa e vira conta fechada — e dá pra saber qual produto dá lucro, não só qual vende.",
+  },
 ] as const;
 
 export function HowItWorks() {
@@ -33,8 +43,11 @@ export function HowItWorks() {
       <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
         Como funciona
       </h2>
+      <p className="mt-4 max-w-2xl text-lg text-muted">
+        Três passos são nossos. O quarto é seu, e é o que fecha a conta.
+      </p>
 
-      <div className="mt-16 grid gap-10 lg:grid-cols-3 lg:gap-8">
+      <div className="mt-16 grid gap-10 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
         {PASSOS.map((passo, i) => (
           <div key={passo.numero} className="relative">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-lg font-semibold text-accent">

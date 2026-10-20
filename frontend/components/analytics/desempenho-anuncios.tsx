@@ -104,7 +104,7 @@ export function DesempenhoAnuncios({ abc }: { abc: AbcLinha[] }) {
     totalDeVisitas > 0 ? Math.round((100 * visitasDesperdicadas) / totalDeVisitas) : 0;
 
   return (
-    <section className="mt-6 rounded-xl border border-line p-5">
+    <section id="desempenho-anuncios" className="mt-6 rounded-xl border border-line p-5">
       <h2 className="text-sm font-semibold">Desempenho dos anúncios</h2>
       <p className="mt-0.5 text-xs text-muted">
         Quem é visto, quem converte, e o que fazer com cada um.

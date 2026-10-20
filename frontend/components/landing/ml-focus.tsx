@@ -27,6 +27,11 @@ const VANTAGENS = [
     titulo: "Cancelamentos e devoluções",
     texto: "Pedido cancelado não é receita. As reversões saem do resultado sozinhas.",
   },
+  {
+    titulo: "Visitas de cada anúncio",
+    texto:
+      "Quantas pessoas viram cada anúncio, direto do Mercado Livre. É o que transforma “vendeu pouco” em “foi visto e rejeitado” ou “quase ninguém viu”.",
+  },
 ] as const;
 
 export function MlFocus() {
@@ -47,7 +52,7 @@ export function MlFocus() {
           </p>
         </div>
 
-        <div className="mt-14 grid gap-6 sm:grid-cols-3">
+        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {VANTAGENS.map((v) => (
             <div key={v.titulo} className="rounded-xl border border-line bg-bg p-6 shadow-sm">
               <h3 className="text-base font-semibold text-ink">{v.titulo}</h3>

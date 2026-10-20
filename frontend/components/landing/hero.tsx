@@ -49,18 +49,24 @@ export function Hero() {
           </p>
 
           <h1 className="mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
-            A sua margem no Mercado Livre, <span className="text-accent">calculada</span> — não
-            estimada.
+            Todo vendedor tem os números. Poucos têm as{" "}
+            <span className="text-accent">respostas</span>.
           </h1>
 
-          {/* A última frase assume o limite em voz alta: é ela que torna o
-              resto crível. Não suavizar — o produto já prometeu "calculado"
-              enquanto chutava 55% de custo, e foi assim que a headline virou
-              mentira. */}
+          {/* A H1 nomeia QUATRO capacidades no subtítulo, nunca uma. A versão
+              anterior desta vitrine liderava só com a margem, e uma proposta
+              que liderava só com o funil foi recusada pelo mesmo motivo: o
+              produto não é uma função.
+
+              E o subtítulo põe a lacuna no MERCADO LIVRE ("te mostra o que
+              entrou"), não em quem está lendo. A headline já insinua que o
+              visitante pode não estar entre os que têm resposta; se o
+              subtítulo repetir a cobrança, a primeira tela vira acusação. */}
           <p className="mt-6 text-lg text-white/80">
-            Receita menos a comissão do Mercado Livre e o frete, a partir dos seus
-            pedidos reais. O custo do seu produto é o único número que a gente não
-            chuta.
+            O Mercado Livre te mostra o que entrou. O SellerPulse mostra o que
+            sobrou, qual produto puxa o faturamento, qual anúncio queima visita sem
+            vender e qual cliente valia reconquistar — tudo calculado a partir dos
+            seus pedidos reais.
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">

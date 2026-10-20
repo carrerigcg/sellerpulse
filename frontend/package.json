@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prints": "node scripts/captura-prints.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -50,7 +50,9 @@ export function Showcase() {
           </h2>
           <p className="mt-4 text-lg text-muted">
             Nada aqui é maquete — são as telas reais, com dados de demonstração
-            navegáveis agora, sem cadastro.
+            navegáveis agora, sem cadastro. Os prints saem da própria
+            demonstração, e é por isso que o custo do produto e a cobertura da
+            margem aparecem neles: existem mesmo.
           </p>
         </div>
 
