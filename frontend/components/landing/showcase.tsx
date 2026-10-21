@@ -4,10 +4,16 @@ import { BrowserFrame } from "./browser-frame";
 
 /**
  * Seção 3 — as três análises, com prints reais de `/demo`, `/demo/produtos`
- * e `/demo/clientes` (capturados da própria demonstração rodando local
- * contra o seller semeado `is_demo = true`). Nenhum número aqui é
- * fabricado: é o mesmo dado que qualquer visitante vê ao clicar em "ver
- * tela completa".
+ * e `/demo/clientes`, capturados da própria demonstração por
+ * `scripts/captura-prints.mjs`. Nenhum número aqui é fabricado.
+ *
+ * Mas eles NÃO são os mesmos números que o visitante vê ao clicar em "ver
+ * tela completa", e o texto da seção nunca promete isso. A demonstração se
+ * regenera a cada `DIAS_PARA_VENCER` (7 dias, em `backend/demo_refresh.py`)
+ * com semente nova, então qualquer print congela um estado que some na
+ * semana seguinte. Divergência entre o print e a demo é o normal, não um
+ * bug a perseguir — e também não é motivo pra regerar: o que o print tem
+ * que mostrar é a TELA certa, com as seções que existem hoje.
  *
  * Cada tela tem dois recortes (`desktop`/`mobile`, ver `browser-frame.tsx`
  * pro porquê de dois arquivos em vez de um só encolhido por CSS).
