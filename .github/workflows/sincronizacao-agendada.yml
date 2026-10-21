@@ -1,0 +1,101 @@
+# Sincronização diária dos vendedores conectados.
+#
+# POR QUE EXISTE
+#
+# 1. A demonstração pública para de estar fria. O Render hiberna após 15 min
+#    sem tráfego, e o projeto do Supabase no plano gratuito é pausado após
+#    7 dias de "baixa atividade". Quem clica em "ver demonstração" depois de
+#    um fim de semana parado espera ~25 s, ou encontra o banco pausado. Uma
+#    visita por dia mantém os dois acordados — e com atividade real (escreve
+#    pedido e visita), não ping cosmético.
+# 2. O dado chega pronto, em vez de o painel mostrar o estado antigo enquanto
+#    o job roda.
+# 3. As visitas param de ter buraco: o ML devolve no máximo 150 dias.
+#
+# POR QUE AQUI, E NÃO NO RENDER OU NO SUPABASE
+#
+# O repositório é público, então Actions é gratuito e ilimitado. Cron Job do
+# Render é serviço cobrado à parte, e `pg_cron` + `pg_net` no Supabase é
+# dispara-e-esquece: sem log legível, sem retry visível, e o segredo passaria
+# a morar no banco. Aqui a falha aparece na aba Actions e tem botão de
+# re-executar.
+#
+# ESTE ARQUIVO É TEMPORÁRIO DE PROPÓSITO
+#
+# Quando o worker virar serviço próprio e sempre ligado (ver
+# `docs/2026-10-21-avaliacao-de-escala.md`, bloco B), ele agenda a si mesmo e
+# este gatilho externo deixa de fazer sentido. O ENDPOINT continua útil —
+# enfileirar sincronização para todos serve com qualquer gatilho. Este YAML é
+# que se apaga.
+
+name: Sincronização agendada
+
+on:
+  schedule:
+    # 09:00 UTC = 06:00 em São Paulo, antes do expediente.
+    # O cron do GitHub é "melhor esforço" e pode atrasar alguns minutos.
+    # Para uma vez por dia, irrelevante.
+    - cron: "0 9 * * *"
+  # Permite disparar à mão pela aba Actions — é assim que se testa sem
+  # esperar o dia seguinte.
+  workflow_dispatch:
+
+# Duas execuções simultâneas não quebrariam nada (a constraint
+# `uniq_sync_job_ativo` recusa job duplicado por vendedor), mas a segunda só
+# geraria ruído no log.
+concurrency:
+  group: sincronizacao-agendada
+  cancel-in-progress: false
+
+jobs:
+  sincronizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enfileirar sincronização de todos os vendedores
+        env:
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SYNC_SECRET}" ]; then
+            echo "::error::O segredo SYNC_SECRET não está definido neste repositório."
+            exit 1
+          fi
+
+          # --max-time generoso: o Render hiberna, e a primeira requisição
+          # paga o cold start de ~25 s antes de responder qualquer coisa.
+          resposta=$(curl -sS --max-time 120 \
+            -w '\n%{http_code}' \
+            -X POST \
+            -H "X-Sync-Secret: ${SYNC_SECRET}" \
+            https://sellerpulse-049j.onrender.com/ml/sync-todos)
+
+          corpo=$(echo "${resposta}" | head -n -1)
+          status=$(echo "${resposta}" | tail -n 1)
+
+          echo "HTTP ${status}"
+          echo "${corpo}"
+
+          # Sem isto o passo passa em verde com 401 ou 503, e a sincronização
+          # silenciosamente nunca acontece.
+          if [ "${status}" != "200" ]; then
+            echo "::error::A sincronização agendada falhou com HTTP ${status}"
+            exit 1
+          fi
+
+      - name: Manter o serviço acordado enquanto a fila drena
+        run: |
+          set -euo pipefail
+
+          # O Render derruba o serviço após 15 min SEM TRÁFEGO DE ENTRADA —
+          # worker ocupado não conta. Com poucos vendedores o job termina bem
+          # antes disso, mas conforme a base cresce a colheita de visitas
+          # passa de uma chamada por item, e aí o serviço dormiria no meio do
+          # trabalho. Dez minutos de presença cobrem a fila de hoje com folga
+          # e custam ~5 h/mês das 750 gratuitas.
+          for i in $(seq 1 10); do
+            sleep 60
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+              https://sellerpulse-049j.onrender.com/health || echo "000")
+            echo "ping ${i}/10 -> ${codigo}"
+          done

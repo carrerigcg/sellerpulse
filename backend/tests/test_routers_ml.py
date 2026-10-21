@@ -293,13 +293,16 @@ async def test_disconnect_de_outro_seller_nao_afeta_o_meu(
 # ---------- sync ----------
 
 
-async def _conectado(pool, seller_id, *, ultimo_sync=None):
+async def _conectado(pool, seller_id, *, ultimo_sync=None, ml_seller_id=987654):
+    """`ml_seller_id` e parametro porque `uniq_ml_seller_id` e UNICO: dois
+    sellers conectados com o mesmo numero violam a constraint."""
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE sellers SET ml_seller_id = 987654, ml_nickname = 'LOJA', "
+            "UPDATE sellers SET ml_seller_id = $3, ml_nickname = 'LOJA', "
             "last_synced_at = $2 WHERE id = $1",
             seller_id,
             ultimo_sync,
+            ml_seller_id,
         )
     await PostgresTokenStore(pool, seller_id).save(
         TokenSet(
@@ -477,3 +480,128 @@ async def test_historico_completo_nao_olha_backfill_de_outro_seller(
         )
     corpo = client.get("/ml/sync/status", headers=_auth(user_a)).json()
     assert corpo["historico_completo"] is False
+
+
+# --------------------------------------------------------------------------
+# POST /ml/sync-todos -- o endpoint que o agendador externo chama.
+#
+# O teste que carrega peso aqui e o primeiro: sem `SYNC_SECRET` configurado o
+# endpoint tem que RECUSAR. A alternativa tentadora (sem segredo = sem
+# exigencia) transformaria uma variavel esquecida no Render num endpoint
+# aberto que enfileira trabalho para todos os vendedores.
+# --------------------------------------------------------------------------
+
+SEGREDO = "segredo-do-agendador-de-teste"
+
+
+def _cabecalho(segredo=SEGREDO) -> dict[str, str]:
+    return {"X-Sync-Secret": segredo}
+
+
+async def test_sync_todos_sem_segredo_configurado_recusa(client, monkeypatch, pg_pool, test_seller):
+    """Falha FECHADA: variavel ausente nao pode virar endpoint aberto."""
+    monkeypatch.delenv("SYNC_SECRET", raising=False)
+    _, seller_id = test_seller
+    await _conectado(pg_pool, seller_id)
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.status_code == 503
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 0
+
+
+async def test_sync_todos_com_segredo_errado_recusa(client, monkeypatch, pg_pool, test_seller):
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    _, seller_id = test_seller
+    await _conectado(pg_pool, seller_id)
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho("chute"))
+
+    assert resp.status_code == 401
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 0
+
+
+async def test_sync_todos_sem_cabecalho_recusa(client, monkeypatch):
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    assert client.post("/ml/sync-todos").status_code == 401
+
+
+async def test_sync_todos_enfileira_para_cada_seller_conectado(
+    client, monkeypatch, pg_pool, test_seller, outro_seller
+):
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    _, seller_a = test_seller
+    _, seller_b = outro_seller
+    velho = datetime.now(UTC) - timedelta(days=2)
+    await _conectado(pg_pool, seller_a, ultimo_sync=velho, ml_seller_id=111)
+    await _conectado(pg_pool, seller_b, ultimo_sync=velho, ml_seller_id=222)
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.status_code == 200
+    assert resp.json()["enfileirados"] == 2
+    async with pg_pool.acquire() as conn:
+        alvos = await conn.fetch("SELECT seller_id FROM sync_jobs")
+    assert {r["seller_id"] for r in alvos} == {seller_a, seller_b}
+
+
+async def test_sync_todos_ignora_quem_nao_conectou_o_mercado_livre(
+    client, monkeypatch, pg_pool, test_seller, outro_seller
+):
+    """Seller sem `ml_seller_id` nao tem o que sincronizar.
+
+    E tambem o que mantem o seller de DEMONSTRACAO fora da fila: ele existe,
+    mas nunca teve conta do ML ligada.
+    """
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    _, conectado = test_seller
+    await _conectado(pg_pool, conectado, ultimo_sync=datetime.now(UTC) - timedelta(days=2))
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.json()["sellers"] == 1
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 1
+
+
+async def test_sync_todos_pula_quem_sincronizou_ha_pouco(client, monkeypatch, pg_pool, test_seller):
+    """Mesma janela de 6h do login -- nao queimar cota de quem acabou de usar."""
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    _, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(minutes=30))
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.json() == {"sellers": 1, "enfileirados": 0, "pulados": {"recente": 1}}
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 0
+
+
+async def test_sync_todos_nao_duplica_job_em_andamento(client, monkeypatch, pg_pool, test_seller):
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    _, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(days=2))
+    await queue.enqueue(pg_pool, seller_id, "delta")
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.json()["pulados"] == {"ja-em-andamento": 1}
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 1
+
+
+async def test_sync_todos_de_quem_nunca_sincronizou_pede_backfill(
+    client, monkeypatch, pg_pool, test_seller
+):
+    """Sem `last_synced_at`, delta cairia numa janela de 7 dias e o seller
+    ficaria preso nela para sempre. Mesma decisao do /ml/sync."""
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    _, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=None)
+
+    client.post("/ml/sync-todos", headers=_cabecalho())
+
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT kind FROM sync_jobs") == "backfill"
