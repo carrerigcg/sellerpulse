@@ -12,11 +12,12 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 
 from backend.db import get_pool
@@ -172,6 +173,94 @@ async def sync(
     if job_id is None:
         return {"enfileirado": False, "motivo": "ja-em-andamento"}
     return {"enfileirado": True, "job_id": job_id}
+
+
+# Nome da variavel com o segredo do agendador. Mesma convencao de
+# `STATE_SECRET` e `TOKEN_ENCRYPTION_KEY`.
+SEGREDO_DO_AGENDADOR = "SYNC_SECRET"
+
+
+def _confere_segredo(recebido: str | None) -> None:
+    """Autentica o agendador. FALHA FECHADA quando nao ha segredo configurado.
+
+    Se `SYNC_SECRET` estiver ausente, este endpoint devolve 503 em vez de
+    liberar o acesso. A alternativa — tratar "sem segredo" como "sem exigencia"
+    — transformaria uma variavel esquecida num endpoint aberto que enfileira
+    trabalho para todos os vendedores. O modo de falha tem que ser o barato.
+
+    `compare_digest` em vez de `==` porque a comparacao ingenua vaza o
+    comprimento do prefixo correto pelo tempo de resposta.
+    """
+    esperado = os.environ.get(SEGREDO_DO_AGENDADOR)
+    if not esperado:
+        raise HTTPException(status_code=503, detail="sincronizacao agendada nao esta configurada")
+    if recebido is None or not secrets.compare_digest(recebido, esperado):
+        raise HTTPException(status_code=401, detail="segredo invalido")
+
+
+@router.post("/sync-todos")
+async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
+    """Enfileira sincronizacao para TODOS os vendedores conectados.
+
+    Chamado por um agendador externo, nao por usuario — dai o segredo no
+    cabecalho em vez do JWT que os outros endpoints exigem.
+
+    POR QUE ESTE ENDPOINT EXISTE, na ordem do que ele resolve de verdade:
+
+    1. A demonstracao publica para de estar fria. O Render hiberna apos 15 min
+       e o projeto do Supabase e pausado apos 7 dias de baixa atividade (plano
+       gratuito). Quem clica em "ver demonstracao" depois de um fim de semana
+       parado espera 25s, ou encontra o banco pausado. Uma visita por dia
+       mantem os dois acordados — e nao com ping cosmetico: escreve pedido e
+       visita de verdade.
+    2. O dado chega pronto. Hoje o painel renderiza o que esta no banco
+       enquanto o job roda, entao quem volta depois de dias ve o estado antigo
+       ate recarregar.
+    3. As visitas param de ter buraco. O ML devolve no maximo 150 dias; uma
+       ausencia maior que isso perde aquele pedaco para sempre.
+
+    NAO duplica logica de sincronizacao: enfileira um job e o worker faz o
+    resto, inclusive encadear as visitas depois dos pedidos.
+    """
+    _confere_segredo(x_sync_secret)
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # `ml_seller_id IS NOT NULL` ja exclui o seller de demonstracao, que
+        # nao tem conta do ML conectada. Nao filtrar por `is_demo` de
+        # proposito: o criterio que importa e "da pra sincronizar", e e esse.
+        sellers = await conn.fetch(
+            "SELECT id, last_synced_at FROM sellers WHERE ml_seller_id IS NOT NULL"
+        )
+
+    agora = datetime.now(UTC)
+    enfileirados = 0
+    pulados: dict[str, int] = {}
+
+    for seller in sellers:
+        ultimo = seller["last_synced_at"]
+        # Mesma janela de 6h do login. Um agendamento diario raramente cai
+        # dentro dela, mas quando cai e porque o vendedor acabou de usar o
+        # produto — e ai sincronizar de novo so gasta cota da API do ML.
+        if ultimo is not None and agora - ultimo < LIMIAR_DELTA:
+            pulados["recente"] = pulados.get("recente", 0) + 1
+            continue
+
+        kind = "delta" if ultimo is not None else "backfill"
+        if await queue.enqueue(pool, seller["id"], kind) is None:
+            pulados["ja-em-andamento"] = pulados.get("ja-em-andamento", 0) + 1
+        else:
+            enfileirados += 1
+
+    _log.info(
+        "[agendado] %d sellers conectados, %d enfileirados, pulados=%s",
+        len(sellers),
+        enfileirados,
+        pulados or "nenhum",
+    )
+    # So contagens, nunca os ids: o retorno vai para o log de um agendador
+    # externo, e id de job nao ajuda ninguem la.
+    return {"sellers": len(sellers), "enfileirados": enfileirados, "pulados": pulados}
 
 
 @router.get("/sync/status")
