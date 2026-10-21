@@ -60,10 +60,31 @@ não está quebrado.
 > colheita completa do vendedor real (985 itens) leva 3,3 min em série e **36
 > segundos** com concorrência 5.
 >
-> Consequência: o muro é bem mais baixo do que este documento afirmava, e a
-> concorrência (item B5) vale muito mais do que eu havia creditado. 300
-> vendedores cabem folgados em um dia. O que **não** muda é o item 2 (lease) —
-> paralelizar sem consertar o lease é que seria perigoso.
+> Consequência: o muro é mais baixo do que este documento afirmava, e a
+> concorrência (item B5) vale mais do que eu havia creditado. O que **não**
+> muda é o item 2 (lease) — paralelizar sem consertar o lease seria perigoso.
+
+> **SEGUNDA CORREÇÃO, no mesmo dia: laboratório não é produção.** Os números
+> acima saíram da minha máquina, com CPU inteira. A tabela `sync_jobs` de
+> produção conta outra história, em dois jobs reais de colheita completa:
+>
+> | job | itens | duração | taxa |
+> | --- | --- | --- | --- |
+> | 11 | 946 | 8 min 54 s | 1,77 itens/s |
+> | 14 | 985 | 8 min 47 s | 1,87 itens/s |
+>
+> **~535 ms por item em produção, contra 181 ms de latência da API.** Os ~354
+> ms de diferença são escrita no banco, renovação de lease e, sobretudo, os
+> **0,15 de CPU** da instância gratuita.
+>
+> E a implicação mais séria: os 25,8 req/s com concorrência 5 são um teto da
+> API, **não** algo alcançável na instância atual — paralelizar em 0,15 de CPU
+> não entrega 5×. Projeção honesta na infraestrutura de hoje: ~8,8 min por
+> vendedor, logo ~15 h a 100 vendedores e ~44 h a 300.
+>
+> Isto reforça o item B2 (worker em serviço próprio) e torna o tamanho da
+> instância parte do problema, não detalhe de custo. A regra que fica:
+> **medir throughput onde ele vai rodar, não onde é conveniente medir.**
 
 **O agravante que ninguém notou:** a lista de itens a colher é
 
