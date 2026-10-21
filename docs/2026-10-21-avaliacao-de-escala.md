@@ -49,11 +49,21 @@ não está quebrado.
 
 | cenário | 100 vendedores | 300 vendedores |
 | --- | --- | --- |
-| Onboarding (backfill de todos) | ~20 h de fila serial | ~60 h |
-| Sincronização diária (só visitas) | ~98.500 chamadas → **~8 h** | ~295.500 → **~25 h** |
+| Onboarding (backfill de todos), serial | ~20 h de fila | ~60 h |
+| Visitas por dia, **serial** | ~98.500 chamadas → ~5,5 h | ~295.500 → ~16 h |
+| Visitas por dia, **concorrência 5** | **~64 min** | **~3,2 h** |
 
-Com 300 vendedores, **a sincronização diária não cabe em um dia.** E o worker
-divide 0,1 de CPU com o atendimento do painel desses mesmos vendedores.
+> **CORREÇÃO de 2026-10-21, por medição.** A primeira versão deste documento
+> dizia 8 h e 25 h, projetando sobre 0,3 s por chamada **sem nunca ter medido
+> concorrência**. Medido contra a API real: 181 ms de latência mediana, 5,0
+> req/s em série e **25,8 req/s com concorrência 5, sem nenhum 429**. Uma
+> colheita completa do vendedor real (985 itens) leva 3,3 min em série e **36
+> segundos** com concorrência 5.
+>
+> Consequência: o muro é bem mais baixo do que este documento afirmava, e a
+> concorrência (item B5) vale muito mais do que eu havia creditado. 300
+> vendedores cabem folgados em um dia. O que **não** muda é o item 2 (lease) —
+> paralelizar sem consertar o lease é que seria perigoso.
 
 **O agravante que ninguém notou:** a lista de itens a colher é
 
@@ -119,17 +129,41 @@ Nada é apagado, nunca. E `orders` guarda o `raw_json` inteiro do Mercado Livre.
 
 ---
 
-## 5. Limite de taxa do Mercado Livre — o desconhecido
+## 5. Limite de taxa do Mercado Livre — MEDIDO em 2026-10-21
 
-O limite do ML é **por aplicação** (`client_id`), compartilhado entre todos os
-seus vendedores. A 300 vendedores seriam ~295.500 chamadas/dia só de visitas.
+A spec de visitas mandava, em negrito, "confirmar os dois limites com token
+real antes de implementar", e isso nunca tinha sido feito. Foi feito agora.
 
-A spec de visitas manda, em negrito, **"confirmar os dois limites com token
-real antes de implementar"**. Isso nunca foi feito. Então o teto real da
-operação é hoje um número que ninguém sabe.
+**A documentação é um beco sem saída:** tanto
+`developers.mercadolibre.com.ar/en_us/visits-resource` quanto o devsite de
+Global Selling respondem **403** a acesso automatizado. O limite só se descobre
+medindo.
 
-Este é o único item da lista que pode inviabilizar o produto, e é o mais barato
-de descobrir.
+**O que a API diz, perguntada diretamente:**
+
+| pergunta | resposta medida |
+| --- | --- |
+| Anuncia orçamento em cabeçalho? | **Não.** Nenhum `X-RateLimit-*`, `RateLimit-*` ou equivalente. |
+| Latência por chamada | 181 ms mediana, 250 ms p95 |
+| Taxa em série | 5,0 req/s |
+| Taxa com concorrência 5 | **25,8 req/s, sem nenhum 429** |
+| Teto real | **acima de 25,8 req/s** — não foi alcançado, e não insisti |
+
+**Não existe endpoint de visitas por item em lote.** Isto foi testado a fundo,
+porque seria a correção mais valiosa possível:
+
+- `/visits/items?ids=A,B,C` → 400, **"maximum amount of items to query is 1"**
+- `/items/visits?ids=…` → mesmo erro, mesmo com a data no formato certo
+- `/users/{id}/items_visits?date_from=&date_to=` → **200**, mas devolve só o
+  TOTAL da loja (`total_visits`, `visits_detail` por *company*), sem quebra por
+  item. Serve para um indicador de visitas da loja, não para o funil.
+
+O formato de data que esses endpoints aceitam é **só a data** (`2026-10-14`).
+`Z`, offset com e sem dois-pontos, e ISO sem fuso são todos recusados com
+"unknown date format".
+
+**Conclusão:** uma chamada por item é inevitável com a API atual. Mas a 25,8
+req/s isso deixa de ser o gargalo que este documento imaginava.
 
 ---
 
