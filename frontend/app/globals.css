@@ -73,3 +73,16 @@ body {
     display: none;
   }
 }
+
+/* Entrada de cada slide do tutorial (`components/analytics/tutorial-da-tela.tsx`).
+   Só roda sob `motion-safe:` — com movimento reduzido, a troca é instantânea. */
+@keyframes tutorial-entra {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
