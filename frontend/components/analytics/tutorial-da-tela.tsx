@@ -53,7 +53,6 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
     }
   }, [chave, temDados]);
 
-  const slide = slides[indice];
   const ultimo = indice === slides.length - 1;
 
   function irPara(novo: number) {
@@ -118,22 +117,40 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
             <IconeFechar />
           </button>
 
-          {/* A região viva fica fora do `key`: remontada a cada slide, ela
-              nasceria já com o texto, e leitor de tela não anuncia região
-              que nasce pronta — só a que muda. */}
           <div aria-live="polite">
             {slides.length > 1 && (
               <p className="pr-10 text-xs font-medium text-muted">
                 Passo {indice + 1} de {slides.length}
               </p>
             )}
-            <div key={indice} className="motion-safe:animate-[tutorial-entra_150ms_ease-out]">
-              <h2 id={idTitulo} className="mt-1 pr-10 text-lg font-semibold tracking-tight">
-                {slide.titulo}
-              </h2>
-              <p id={idTexto} className="mt-2 text-sm leading-relaxed text-muted">
-                {slide.texto}
-              </p>
+            {/* Todos os slides na mesma célula do grid, só o atual visível: a
+                célula fica com a altura do maior, e o modal não muda de tamanho
+                entre um e outro. Centralizado e com altura variável, ele
+                crescia para cima e para baixo, e o "Próximo" fugia do cursor
+                de quem clicava em sequência. */}
+            <div className="grid">
+              {slides.map((s, i) => {
+                const atual = i === indice;
+                return (
+                  <div
+                    key={s.titulo}
+                    aria-hidden={!atual}
+                    className={`col-start-1 row-start-1 ${
+                      atual ? "motion-safe:animate-[tutorial-entra_150ms_ease-out]" : "invisible"
+                    }`}
+                  >
+                    <h2
+                      id={atual ? idTitulo : undefined}
+                      className="mt-1 pr-10 text-lg font-semibold tracking-tight"
+                    >
+                      {s.titulo}
+                    </h2>
+                    <p id={atual ? idTexto : undefined} className="mt-2 text-sm leading-relaxed text-muted">
+                      {s.texto}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
