@@ -29,8 +29,16 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude Code local config
-.claude/
+# Claude Code: config local fica de fora, agentes entram.
+#
+# `.claude/*` em vez de `.claude/` porque o git NAO re-inclui arquivo dentro de
+# um diretorio excluido -- excluindo os filhos, o `!` abaixo funciona.
+#
+# Os agentes sao versionados de proposito: eles carregam as convencoes e as
+# armadilhas deste projeto, entao precisam viajar junto com o codigo. O
+# `launch.json` e o `settings.local.json` continuam locais.
+.claude/*
+!.claude/agents/
 
 # Working notes (implementation plans stay local)
 docs/plans/
