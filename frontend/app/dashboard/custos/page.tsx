@@ -1,7 +1,8 @@
-import { PeriodPicker } from "@/components/analytics/period-picker";
 import { TabelaCustos } from "@/components/analytics/tabela-custos";
-import { ApiError, getCustos, type CustoLinha } from "@/lib/api";
+import { mensagemDeFalhaAoCarregar, getCustos, type CustoLinha } from "@/lib/api";
 import { coberturaInformada } from "@/lib/cobertura";
+import { periodoPadrao } from "@/lib/periodo";
+import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
  * Tela de Custos — onde o vendedor informa quanto cada produto custa a ele.
@@ -17,14 +18,6 @@ import { coberturaInformada } from "@/lib/cobertura";
  * ora não existe.
  */
 
-function periodoPadrao() {
-  const hoje = new Date();
-  const noventaDiasAtras = new Date(hoje);
-  noventaDiasAtras.setDate(hoje.getDate() - 90);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
-}
-
 export default async function CustosPage({ searchParams }: PageProps<"/dashboard/custos">) {
   const params = await searchParams;
   const padrao = periodoPadrao();
@@ -37,10 +30,7 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
   try {
     linhas = await getCustos(de, ate);
   } catch (e) {
-    erro =
-      e instanceof ApiError && e.status === 401
-        ? "Sua sessão expirou. Entre de novo."
-        : "Não foi possível carregar os produtos. O backend está no ar?";
+    erro = mensagemDeFalhaAoCarregar(e, "os produtos");
   }
 
   const cobertura = coberturaInformada(linhas);
@@ -48,15 +38,12 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Custos</h1>
-          <p className="mt-1 text-sm text-muted">
-            Quanto cada produto custa a você. É o que falta para a margem ser a margem.
-          </p>
-        </div>
-        <PeriodPicker de={de} ate={ate} />
-      </div>
+      <CabecalhoDeTela
+        titulo="Custos"
+        subtitulo="Quanto cada produto custa a você. É o que falta para a margem ser a margem."
+        de={de}
+        ate={ate}
+      />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>

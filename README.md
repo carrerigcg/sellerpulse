@@ -100,7 +100,7 @@ Conta do Mercado Livre
 | **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind · Recharts |
 | **Auth** | Supabase Auth (JWT ES256) + OAuth 2.0 do Mercado Livre |
 | **Infra** | Render (Docker) · Vercel |
-| **Testes** | pytest · vitest · 666 testes · CI em 4 jobs (Linux + Windows) |
+| **Testes** | pytest · vitest · CI em 4 jobs (Linux + Windows) |
 
 ---
 
@@ -131,10 +131,16 @@ As migrations em `backend/migrations/` rodam em ordem numérica. A `0000` é um 
 
 ## Testes
 
+<!-- Sem contagem de testes neste arquivo, de proposito. O numero ja foi
+     corrigido para 666 e ficou errado no dia seguinte, porque o commit
+     seguinte acrescentou testes -- e as linhas desta secao chegaram a
+     descrever o mesmo diretorio com dois numeros diferentes. Para o
+     numero atual: `pytest --collect-only -q`. -->
+
 ```bash
-.venv/bin/python -m pytest tests                  # camada analítica pura (316)
-backend/.venv/bin/python -m pytest backend/tests  # API, fila, ingestão (248)
-cd frontend && npm run lint && npm run build
+.venv/bin/python -m pytest tests                  # camada analítica pura
+backend/.venv/bin/python -m pytest backend/tests  # API, fila, ingestão
+cd frontend && npm test && npm run lint && npm run build
 ```
 
 **Teste de mutação é padrão do projeto, não exceção.** Toda correção quebra o código de propósito primeiro, confirma que o teste falha, e só então desfaz. A razão é concreta: um erro que zerava a comissão do Mercado Livre sobreviveu meses porque os dados de teste tinham exatamente as mesmas premissas erradas do código — os testes provavam que o sistema concordava consigo mesmo, não que estava certo.
@@ -153,13 +159,13 @@ sellerpulse/
 │   ├── jobs/ worker/     # fila de sincronização com lease e retomada
 │   ├── routers/          # endpoints REST (autenticados + /demo público)
 │   ├── migrations/       # 12 migrations SQL versionadas
-│   └── tests/            # 317 testes
+│   └── tests/            # API, fila, ingestão e paridade
 ├── frontend/
 │   ├── app/              # landing, /demo público, /dashboard autenticado
 │   ├── components/       # gráficos, tabelas, seções da landing
 │   └── lib/              # clientes da API (um por contexto de auth)
 ├── src/                  # camada original (SQLite) — cliente do ML, ingestão e paridade
-├── tests/                # 275 testes da camada pura
+├── tests/                # testes da camada pura
 ├── templates/            # template Jinja2 do relatório em PDF
 └── docs/specs/           # design docs de cada sprint
 ```

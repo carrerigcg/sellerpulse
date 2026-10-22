@@ -4,13 +4,14 @@ import { CohortHeatmap } from "@/components/analytics/cohort-heatmap";
 import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { ParetoChart } from "@/components/analytics/pareto-chart";
 import { ExportButton } from "@/components/analytics/export-button";
-import { PeriodPicker } from "@/components/analytics/period-picker";
 import type { AbcLinha, CohortLinha } from "@/lib/api";
 import { COLUNAS_ABC } from "@/lib/colunas-export";
-import { getDemoAbcPareto, getDemoCohortProduto, periodoPadraoDaDemo } from "@/lib/demo";
+import { getDemoAbcPareto, getDemoCohortProduto } from "@/lib/demo";
 import { coberturaDosProdutos, produtosSemCusto } from "@/lib/cobertura";
 import { incluiDiasNaoConsolidados, temVisitaColhida } from "@/lib/visitas";
 import { DesempenhoAnuncios } from "@/components/analytics/desempenho-anuncios";
+import { periodoPadrao } from "@/lib/periodo";
+import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
  * Produtos da demonstração pública — mesmo conteúdo de `/dashboard/produtos`,
@@ -22,7 +23,7 @@ export default async function DemoProdutosPage({
   searchParams,
 }: PageProps<"/demo/produtos">) {
   const params = await searchParams;
-  const padrao = periodoPadraoDaDemo();
+  const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
@@ -41,15 +42,12 @@ export default async function DemoProdutosPage({
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Produtos</h1>
-          <p className="mt-1 text-sm text-muted">
-            Quais produtos sustentam o faturamento, e quais só ocupam espaço.
-          </p>
-        </div>
-        <PeriodPicker de={de} ate={ate} />
-      </div>
+      <CabecalhoDeTela
+        titulo="Produtos"
+        subtitulo="Quais produtos sustentam o faturamento, e quais só ocupam espaço."
+        de={de}
+        ate={ate}
+      />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>

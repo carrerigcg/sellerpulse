@@ -1,15 +1,8 @@
 import { GlossarioColunas } from "@/components/analytics/glossario-colunas";
 import { PainelExportacao } from "@/components/analytics/painel-exportacao";
-import { PeriodPicker } from "@/components/analytics/period-picker";
-import {
-  ApiError,
-  getAbcPareto,
-  getFluxoFinanceiro,
-  getRfmScores,
-  type AbcLinha,
-  type FluxoDia,
-  type RfmLinha,
-} from "@/lib/api";
+import { mensagemDeFalhaAoCarregar, getAbcPareto, getFluxoFinanceiro, getRfmScores, type AbcLinha, type FluxoDia, type RfmLinha } from "@/lib/api";
+import { periodoPadrao } from "@/lib/periodo";
+import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
  * Aba Exportar — as três tabelas em CSV, com tutorial e glossário.
@@ -22,15 +15,6 @@ import {
  * linhas antes do clique: um cartão que diz "38 linhas" é informação, um que
  * diz "baixar" e vem vazio é uma pegadinha.
  */
-
-// Mesma janela das outras telas: últimos 90 dias corridos.
-function periodoPadrao() {
-  const hoje = new Date();
-  const noventaDiasAtras = new Date(hoje);
-  noventaDiasAtras.setDate(hoje.getDate() - 90);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
-}
 
 export default async function ExportarPage({
   searchParams,
@@ -52,23 +36,17 @@ export default async function ExportarPage({
       getRfmScores(de, ate),
     ]);
   } catch (e) {
-    erro =
-      e instanceof ApiError && e.status === 401
-        ? "Sua sessão expirou. Entre de novo."
-        : "Não foi possível carregar os dados. O backend está no ar?";
+    erro = mensagemDeFalhaAoCarregar(e);
   }
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Exportar</h1>
-          <p className="mt-1 text-sm text-muted">
-            Leve as tabelas para a planilha, e entenda o que cada coluna quer dizer.
-          </p>
-        </div>
-        <PeriodPicker de={de} ate={ate} />
-      </div>
+      <CabecalhoDeTela
+        titulo="Exportar"
+        subtitulo="Leve as tabelas para a planilha, e entenda o que cada coluna quer dizer."
+        de={de}
+        ate={ate}
+      />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
