@@ -41,6 +41,22 @@ curl -s -o /dev/null -w "%{http_code}" <url-do-endpoint-novo>
 
 Um endpoint novo respondendo 404 é a prova mais barata de que não subiu.
 
+**E a Vercel faz o mesmo.** Em 2026-10-22, o merge do PR #20 também não gerou
+deploy de produção: o commit ficou com zero status da Vercel, e a lista de
+deploys parava no PR anterior. As cinco telas da demo respondiam 200 com o
+título certo — e eram o código ANTIGO. "200 com o conteúdo esperado" não
+distingue versão quando a mudança não altera o HTML.
+
+**Use um marcador que só o deploy novo tem.** Um arquivo que o commit apagou
+deve dar 404; um texto que o commit acrescentou deve aparecer. Cuidado com o
+cache: o arquivo apagado chegou a responder `200` com `X-Vercel-Cache: HIT` e
+`Age: 479`, servido do cache da versão anterior. Uma query string
+(`/arquivo.svg?v=1`) força a ida ao deploy que está servindo.
+
+Para redisparar: `create_deployment` com `deploymentId` do último deploy de
+produção bom e `withLatestCommit: true` — herda a configuração e pega o
+commit mais recente da branch. Confira o `githubCommitSha` da resposta.
+
 ### 2. Mutação que não casou
 O padrão deste projeto é quebrar o código de propósito e confirmar que o teste
 cai. Isso só vale se a mutação foi **mesmo aplicada**. Já aconteceu: o `ruff
