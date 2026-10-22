@@ -62,7 +62,7 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
             </h2>
             <p className="mt-0.5 text-xs text-muted">
               {cobertura.completa
-                ? "Todo o faturamento do período está coberto: a margem já desconta o custo dos produtos."
+                ? "Todos os produtos do período têm custo informado. A margem passa a descontá-lo nas vendas de hoje em diante."
                 : `Isso cobre ${cobertura.pct}% da receita do período. O que falta aparece como receita sem custo nas outras telas.`}
             </p>
           </section>

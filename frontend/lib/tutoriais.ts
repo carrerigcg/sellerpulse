@@ -66,7 +66,7 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
       {
         titulo: "Quando não dá para concluir",
         texto:
-          "Anúncio com poucas visitas aparece como “Poucas visitas para avaliar”, sem diagnóstico, para não virar alarme falso. E onde aparece “—”, o dado ainda não existe — não é zero.",
+          "Anúncio com poucas visitas aparece como “Poucas visitas para avaliar”, sem diagnóstico, para não virar alarme falso. E, em Desempenho dos anúncios, “—” quer dizer que falta dado para calcular — não é zero.",
       },
     ],
   },
@@ -101,7 +101,7 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
       {
         titulo: "O custo vale daqui para frente",
         texto:
-          "O que você digita vale a partir de hoje. Vendas que já aconteceram ficam com o custo que valia na época — ou sem custo, se não havia nenhum. Por isso a cobertura da margem sobe aos poucos, com as próximas vendas.",
+          "O que você digita vale a partir de hoje. Vendas que já aconteceram ficam com o custo que valia na época — ou sem custo, se não havia nenhum. Por isso o aviso de cobertura nas outras telas sobe aos poucos, com as próximas vendas.",
       },
       {
         titulo: "Por onde começar",
@@ -126,7 +126,8 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
     slides: [
       {
         titulo: "Leve os números para a planilha",
-        texto: "Cada tabela sai em CSV: uma de cada vez, ou todas juntas.",
+        texto:
+          "Cada tabela sai num arquivo CSV. Dá para baixar uma de cada vez ou todas de uma vez — e, mesmo assim, cada uma vem no seu próprio arquivo.",
       },
       {
         titulo: "Abre direto no Excel",
@@ -171,7 +172,6 @@ export function deveAbrirSozinho(estado: {
   return estado.armazenamentoDisponivel && estado.temDados && !estado.jaVisto;
 }
 
-/** `/demo` e as subrotas dela são demo; o resto (o dashboard) não. */
 export function contextoDaRota(pathname: string): Contexto {
   return pathname === "/demo" || pathname.startsWith("/demo/") ? "demo" : "dashboard";
 }

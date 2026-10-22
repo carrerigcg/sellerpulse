@@ -11,10 +11,13 @@ import {
 } from "./tutoriais";
 
 /**
- * O teste que carrega peso é o de `deveAbrirSozinho` com `temDados: false`.
- * Ele garante que o tutorial não cubra o atalho "Conectar uma conta do
- * Mercado Livre" de quem acabou de criar conta — a ação mais importante da
- * vida de um usuário novo no produto.
+ * O teste que carrega peso é o de `deveAbrirSozinho` com `temDados: false`:
+ * é a regra que impede o tutorial de cobrir o atalho "Conectar uma conta do
+ * Mercado Livre" de quem acabou de criar conta.
+ *
+ * Ele protege a regra, não a ligação. Se uma página passar o `temDados`
+ * errado, nada aqui cai — o front não testa componentes, e essa ligação é
+ * conferida no navegador (spec, seção 7).
  */
 
 const TELAS = Object.keys(TUTORIAIS) as ChaveDeTutorial[];
