@@ -92,10 +92,11 @@ export type RfmLinha = {
 
 /**
  * Linha do pivot de cohort: `mes_lancamento` fixo + uma chave por mês
- * corrente ("YYYY-MM"), dinâmica conforme a janela consultada. Onde o mês
- * corrente é anterior ao de lançamento (produto não existia ainda), o
- * backend manda `null` (era `NaN` no pandas) — diferente de um mês com
- * receita zero, que vem como `0`. Ver `cohort_produto` em
+ * corrente ("YYYY-MM"), dinâmica conforme a janela consultada. O backend
+ * manda `null` (era `NaN` no pandas) em dois casos que o pivot não
+ * distingue: mês corrente anterior ao de lançamento (produto não existia
+ * ainda) e mês em que o cohort não vendeu nada dentro da janela. Mês sem
+ * venda vem como `null`, não como `0`. Ver `cohort_produto` em
  * `backend/analytics/segmentation_pg.py`.
  */
 export type CohortLinha = {

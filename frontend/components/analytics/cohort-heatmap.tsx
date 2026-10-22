@@ -16,7 +16,12 @@ const brl = new Intl.NumberFormat("pt-BR", {
  * número onde existe alguma receita agregada, que pode legitimamente
  * arredondar pra 0,00 num item de preço muito baixo. Célula vazia e célula
  * de valor zero têm que parecer coisas diferentes, senão os dois casos se
- * confundem visualmente.
+ * confundem visualmente. E o texto da célula vazia (legenda e `title`) tem
+ * que nomear os dois motivos do `null`: dizer só "antes do lançamento"
+ * afirma, para um mês sem venda, algo que é falso. O "sem venda" também só
+ * vale dentro do período: o primeiro e o último mês da janela costumam ser
+ * parciais, e o próprio mês de lançamento aparece vazio quando o cohort
+ * vendeu nele só antes do início da janela.
  *
  * Compartilhado entre `/dashboard/produtos` e `/demo/produtos` desde o
  * Checkpoint 2 da Sprint 3.
@@ -91,7 +96,7 @@ export function CohortHeatmap({ linhas }: { linhas: CohortLinha[] }) {
         </span>
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-3 w-3 rounded-sm border border-dashed border-line" />
-          sem venda possível (antes do lançamento)
+          sem venda no mês, dentro do período (ou antes do lançamento)
         </span>
       </div>
     </div>
@@ -128,7 +133,7 @@ function CelulaCohort({ valor, maximo }: { valor: number | null; maximo: number 
     return (
       <div
         className="flex h-10 items-center justify-center rounded border border-dashed border-line text-xs text-muted"
-        title="Sem venda possível (mês anterior ao lançamento)"
+        title="Sem venda neste mês, dentro do período escolhido (ou mês anterior ao lançamento)"
       >
         —
       </div>
