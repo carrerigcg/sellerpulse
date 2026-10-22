@@ -40,6 +40,8 @@ export default async function DemoProdutosPage({
     erro = "Não foi possível carregar a demonstração agora. Tente de novo em instantes.";
   }
 
+  const temDados = !erro && abc.length > 0;
+
   return (
     <>
       <CabecalhoDeTela
@@ -48,12 +50,12 @@ export default async function DemoProdutosPage({
         de={de}
         ate={ate}
         tela="produtos"
-        temDados={!erro && abc.length > 0}
+        temDados={temDados}
       />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
-      ) : abc.length === 0 ? (
+      ) : !temDados ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
           Nenhum pedido nesta janela de demonstração. Tente outro período.
         </p>

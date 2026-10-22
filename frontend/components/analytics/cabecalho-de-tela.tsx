@@ -12,15 +12,17 @@ import { TutorialDaTela } from "./tutorial-da-tela";
  * até no subtítulo.
  *
  * É Server Component, e as props são dado puro de propósito — texto e um
- * booleano: o `PeriodPicker` e o `TutorialDaTela` são Client, e o que chega
- * até eles precisa atravessar a fronteira. Se um dia este componente virar
+ * booleano: o `TutorialDaTela` é Client, e o que chega até ele precisa
+ * atravessar a fronteira. Se um dia este componente virar
  * `"use client"` ou receber função como prop, o erro só aparece em execução —
  * as rotas são dinâmicas e o `build` não as renderiza.
  *
  * O tutorial mora aqui, e não no layout, para ficar fora da vitrine e de
  * `/dashboard/conectar` por construção: só estas dez páginas usam este
  * cabeçalho. `temDados` vem da página porque só ela sabe se a tela está vazia
- * ou com erro — e o tutorial não abre sozinho sobre nenhuma das duas.
+ * ou com erro — e o tutorial não abre sozinho sobre nenhuma das duas. As
+ * páginas usam o mesmo `temDados` no próprio ramo de vazio: escrito duas
+ * vezes, mudar a regra de vazio deixaria o tutorial para trás.
  */
 export function CabecalhoDeTela({
   titulo,
