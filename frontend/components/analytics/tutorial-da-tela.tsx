@@ -23,6 +23,11 @@ import {
  *
  * As duas props são dado puro — texto e booleano — porque quem renderiza isto
  * é o `CabecalhoDeTela`, que é Server Component.
+ *
+ * Armadilha latente: se o `next.config` um dia ligar `cacheComponents`, a
+ * rota anterior passa a ser escondida com `<Activity>` em vez de desmontada,
+ * e um modal aberto na hora do "voltar" fica preso sobre a página inerte.
+ * Ver a seção "Dialog" de `node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md`.
  */
 export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temDados: boolean }) {
   const contexto = contextoDaRota(usePathname());
@@ -34,6 +39,7 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
   const dialogo = useRef<HTMLDialogElement>(null);
   const primario = useRef<HTMLButtonElement>(null);
   const voltar = useRef<HTMLButtonElement>(null);
+  const pressionouNoFundo = useRef(false);
   const idTitulo = useId();
   const idTexto = useId();
 
@@ -81,9 +87,23 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
   }
 
   // Com o `<dialog>` em `p-0` e o conteúdo num `div` interno que o preenche,
-  // um clique cujo alvo é o próprio diálogo só pode ter caído no fundo.
+  // o alvo é o próprio diálogo quando o ponteiro está no fundo. Mas o `click`
+  // vai para o ancestral comum de onde o botão desceu e de onde subiu: quem
+  // seleciona o texto e arrasta até o fundo, ou aperta "Próximo", desiste e
+  // solta fora, também chega aqui com alvo no diálogo. Só fecha se as duas
+  // pontas foram no fundo.
   function aoClicar(e: MouseEvent<HTMLDialogElement>) {
-    if (e.target === e.currentTarget) e.currentTarget.close();
+    if (pressionouNoFundo.current && e.target === e.currentTarget) e.currentTarget.close();
+  }
+
+  // O segundo clique de um duplo clique cairia no slide seguinte — ou no
+  // "Entendi", fechando antes de a pessoa ver o último. O botão fica parado
+  // sob o cursor de propósito (ver o grid dos slides), então acontece. Pelo
+  // teclado o `detail` é 0, e nada muda.
+  function aoClicarNoPrincipal(e: MouseEvent<HTMLButtonElement>) {
+    if (e.detail > 1) return;
+    if (ultimo) dialogo.current?.close();
+    else irPara(indice + 1);
   }
 
   return (
@@ -104,6 +124,9 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
         aria-describedby={idTexto}
         onClose={aoFechar}
         onKeyDown={aoTeclar}
+        onPointerDown={(e) => {
+          pressionouNoFundo.current = e.target === e.currentTarget;
+        }}
         onClick={aoClicar}
         className="m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-line bg-bg p-0 text-ink shadow-xl backdrop:bg-ink/40 backdrop:backdrop-blur-sm"
       >
@@ -133,7 +156,7 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
                 const atual = i === indice;
                 return (
                   <div
-                    key={s.titulo}
+                    key={i}
                     aria-hidden={!atual}
                     className={`col-start-1 row-start-1 ${
                       atual ? "motion-safe:animate-[tutorial-entra_150ms_ease-out]" : "invisible"
@@ -159,11 +182,11 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
               // Decorativo: o "Passo 2 de 3" acima já diz o mesmo em texto. A
               // largura marca o atual, para não depender só de cor.
               <div className="flex gap-1.5" aria-hidden>
-                {slides.map((s, i) => (
+                {slides.map((_, i) => (
                   <span
-                    key={s.titulo}
+                    key={i}
                     className={`h-1.5 rounded-full motion-safe:transition-all ${
-                      i === indice ? "w-4 bg-ink" : "w-1.5 bg-line"
+                      i === indice ? "w-4 bg-ink" : "w-1.5 bg-muted/50"
                     }`}
                   />
                 ))}
@@ -183,7 +206,7 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
               <button
                 ref={primario}
                 type="button"
-                onClick={() => (ultimo ? dialogo.current?.close() : irPara(indice + 1))}
+                onClick={aoClicarNoPrincipal}
                 className="min-h-11 rounded-lg bg-accent px-5 text-sm font-medium text-white transition hover:bg-accent-hover"
               >
                 {ultimo ? "Entendi" : "Próximo"}
@@ -197,10 +220,13 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
 }
 
 /**
- * `showModal` num diálogo já aberto lança `InvalidStateError`, e o StrictMode
- * do desenvolvimento roda o efeito duas vezes. O foco vai à mão para o botão
- * principal: o `autoFocus` do React age na montagem, quando o diálogo ainda
- * está fechado, e sem isto o navegador focaria o ✕, que vem antes no DOM.
+ * A guarda é para o StrictMode do desenvolvimento, que roda o efeito duas
+ * vezes. O padrão atual ignora `showModal` num diálogo que já é modal, mas
+ * versões anteriores lançavam `InvalidStateError` — a guarda não depende disso.
+ *
+ * O foco vai à mão para o botão principal: o `autoFocus` do React age na
+ * montagem, quando o diálogo ainda está fechado, e sem isto o navegador
+ * focaria o ✕, que vem antes no DOM.
  */
 function abrir(dialogo: HTMLDialogElement | null, primario: HTMLButtonElement | null) {
   if (!dialogo || dialogo.open) return;
