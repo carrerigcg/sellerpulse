@@ -43,6 +43,8 @@ export default async function DemoCustosPage({ searchParams }: PageProps<"/demo/
         subtitulo="Quanto cada produto custa ao vendedor. É o que falta para a margem ser a margem."
         de={de}
         ate={ate}
+        tela="custos"
+        temDados={!erro && linhas.length > 0}
       />
 
       {erro ? (

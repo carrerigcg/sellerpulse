@@ -44,6 +44,8 @@ export default async function ClientesPage({
         subtitulo="Quem compra de novo, quem está sumindo, e quanto isso vale."
         de={de}
         ate={ate}
+        tela="clientes"
+        temDados={!erro && rfm.length > 0}
       />
 
       {erro ? (

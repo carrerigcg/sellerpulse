@@ -58,6 +58,8 @@ export default async function ExecutivePage({
         subtitulo="Receita, custos do Mercado Livre e margem de contribuição do período."
         de={de}
         ate={ate}
+        tela="executive"
+        temDados={!erro && fluxo.length > 0}
       />
 
       {erro ? (

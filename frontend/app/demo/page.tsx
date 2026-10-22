@@ -48,6 +48,8 @@ export default async function DemoExecutivePage({
         subtitulo="Receita, custos do Mercado Livre e margem de contribuição — dados de demonstração."
         de={de}
         ate={ate}
+        tela="executive"
+        temDados={!erro && fluxo.length > 0}
       />
 
       {erro ? (

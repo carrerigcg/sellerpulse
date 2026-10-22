@@ -47,6 +47,8 @@ export default async function DemoProdutosPage({
         subtitulo="Quais produtos sustentam o faturamento, e quais só ocupam espaço."
         de={de}
         ate={ate}
+        tela="produtos"
+        temDados={!erro && abc.length > 0}
       />
 
       {erro ? (
