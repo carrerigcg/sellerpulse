@@ -1,3 +1,5 @@
+import { formatarVariacao } from "@/lib/variacao";
+
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -45,8 +47,7 @@ export function KpiCard({
             bom ? "bg-positive/10 text-positive" : "bg-negative/10 text-negative"
           }`}
         >
-          {pct >= 0 ? "+" : ""}
-          {pct.toFixed(1)}% vs. período anterior
+          {formatarVariacao(pct)} vs. período anterior
         </span>
       )}
     </div>
