@@ -5,8 +5,7 @@
   "customizations": {
     "codespaces": {
       "openFiles": [
-        "README.md",
-        "src/dashboard.py"
+        "README.md"
       ]
     },
     "vscode": {
@@ -22,12 +21,12 @@
     "server": "cd frontend && npm run dev"
   },
   "portsAttributes": {
-    "8501": {
-      "label": "Application",
+    "3000": {
+      "label": "Frontend (Next.js)",
       "onAutoForward": "openPreview"
     }
   },
   "forwardPorts": [
-    8501
+    3000
   ]
 }
