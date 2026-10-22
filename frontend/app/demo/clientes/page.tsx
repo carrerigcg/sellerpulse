@@ -1,12 +1,13 @@
 import { BuyersTable } from "@/components/analytics/buyers-table";
 import { ExportButton } from "@/components/analytics/export-button";
-import { PeriodPicker } from "@/components/analytics/period-picker";
 import { RfmChart } from "@/components/analytics/rfm-chart";
 import { RfmLegend } from "@/components/analytics/rfm-legend";
 import { SegmentBand } from "@/components/analytics/segment-band";
 import type { RfmLinha } from "@/lib/api";
 import { COLUNAS_RFM } from "@/lib/colunas-export";
-import { getDemoRfmScores, periodoPadraoDaDemo } from "@/lib/demo";
+import { getDemoRfmScores } from "@/lib/demo";
+import { periodoPadrao } from "@/lib/periodo";
+import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
  * Clientes da demonstração pública — mesmo conteúdo de `/dashboard/clientes`,
@@ -18,7 +19,7 @@ export default async function DemoClientesPage({
   searchParams,
 }: PageProps<"/demo/clientes">) {
   const params = await searchParams;
-  const padrao = periodoPadraoDaDemo();
+  const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
@@ -33,15 +34,12 @@ export default async function DemoClientesPage({
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
-          <p className="mt-1 text-sm text-muted">
-            Quem compra de novo, quem está sumindo, e quanto isso vale.
-          </p>
-        </div>
-        <PeriodPicker de={de} ate={ate} />
-      </div>
+      <CabecalhoDeTela
+        titulo="Clientes"
+        subtitulo="Quem compra de novo, quem está sumindo, e quanto isso vale."
+        de={de}
+        ate={ate}
+      />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>

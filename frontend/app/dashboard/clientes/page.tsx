@@ -1,13 +1,13 @@
-import Link from "next/link";
-
 import { BuyersTable } from "@/components/analytics/buyers-table";
 import { ExportButton } from "@/components/analytics/export-button";
-import { PeriodPicker } from "@/components/analytics/period-picker";
 import { RfmChart } from "@/components/analytics/rfm-chart";
 import { RfmLegend } from "@/components/analytics/rfm-legend";
 import { SegmentBand } from "@/components/analytics/segment-band";
-import { ApiError, getRfmScores, type RfmLinha } from "@/lib/api";
+import { mensagemDeFalhaAoCarregar, getRfmScores, type RfmLinha } from "@/lib/api";
 import { COLUNAS_RFM } from "@/lib/colunas-export";
+import { periodoPadrao } from "@/lib/periodo";
+import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
+import { SemPedidosNoPeriodo } from "@/components/analytics/sem-pedidos-no-periodo";
 
 /**
  * Clientes — dispersão e segmentação RFM.
@@ -19,15 +19,6 @@ import { COLUNAS_RFM } from "@/lib/colunas-export";
  * O gráfico, a faixa de segmentos e a tabela vivem em `components/analytics/`
  * — a mesma versão é usada por `/demo/clientes` (Checkpoint 2 da Sprint 3).
  */
-
-// Mesmo padrão de janela do Executive: últimos 90 dias corridos.
-function periodoPadrao() {
-  const hoje = new Date();
-  const noventaDiasAtras = new Date(hoje);
-  noventaDiasAtras.setDate(hoje.getDate() - 90);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { de: fmt(noventaDiasAtras), ate: fmt(hoje) };
-}
 
 export default async function ClientesPage({
   searchParams,
@@ -43,39 +34,24 @@ export default async function ClientesPage({
   try {
     rfm = await getRfmScores(de, ate);
   } catch (e) {
-    erro =
-      e instanceof ApiError && e.status === 401
-        ? "Sua sessão expirou. Entre de novo."
-        : "Não foi possível carregar os dados. O backend está no ar?";
+    erro = mensagemDeFalhaAoCarregar(e);
   }
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
-          <p className="mt-1 text-sm text-muted">
-            Quem compra de novo, quem está sumindo, e quanto isso vale.
-          </p>
-        </div>
-        <PeriodPicker de={de} ate={ate} />
-      </div>
+      <CabecalhoDeTela
+        titulo="Clientes"
+        subtitulo="Quem compra de novo, quem está sumindo, e quanto isso vale."
+        de={de}
+        ate={ate}
+      />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
           {erro}
         </p>
       ) : rfm.length === 0 ? (
-        <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Nenhum comprador com pedido pago neste período.{" "}
-          <Link
-            href="/dashboard/conectar"
-            className="text-accent underline hover:text-accent-hover"
-          >
-            Conectar uma conta do Mercado Livre
-          </Link>
-          .
-        </p>
+        <SemPedidosNoPeriodo mensagem="Nenhum comprador com pedido pago neste período." />
       ) : (
         <>
           <SegmentBand rfm={rfm} />

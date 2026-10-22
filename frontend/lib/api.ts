@@ -112,6 +112,20 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * O que a tela diz quando a carga falha.
+ *
+ * Cinco telas repetiam este ternário, e uma já tinha divergido: Custos dizia
+ * "os produtos". Divergência entre cópias era exatamente o risco previsto, e
+ * ele se realizou. `oQue` deixa a variação de Custos explícita na chamada, em
+ * vez de escondida numa cópia que ninguém compara com as outras.
+ */
+export function mensagemDeFalhaAoCarregar(e: unknown, oQue = "os dados"): string {
+  return e instanceof ApiError && e.status === 401
+    ? "Sua sessão expirou. Entre de novo."
+    : `Não foi possível carregar ${oQue}. O backend está no ar?`;
+}
+
 async function buscar<T>(caminho: string, params: Record<string, string>): Promise<T> {
   const supabase = await createClient();
   const {

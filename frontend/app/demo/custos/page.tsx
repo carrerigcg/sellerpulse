@@ -1,8 +1,9 @@
-import { PeriodPicker } from "@/components/analytics/period-picker";
 import { TabelaCustos } from "@/components/analytics/tabela-custos";
 import type { CustoLinha } from "@/lib/api";
 import { coberturaInformada, produtosSemCusto } from "@/lib/cobertura";
-import { getDemoCustos, periodoPadraoDaDemo } from "@/lib/demo";
+import { getDemoCustos } from "@/lib/demo";
+import { periodoPadrao } from "@/lib/periodo";
+import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
  * Custos da demonstração pública — somente leitura.
@@ -19,7 +20,7 @@ import { getDemoCustos, periodoPadraoDaDemo } from "@/lib/demo";
 
 export default async function DemoCustosPage({ searchParams }: PageProps<"/demo/custos">) {
   const params = await searchParams;
-  const padrao = periodoPadraoDaDemo();
+  const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
@@ -37,15 +38,12 @@ export default async function DemoCustosPage({ searchParams }: PageProps<"/demo/
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Custos</h1>
-          <p className="mt-1 text-sm text-muted">
-            Quanto cada produto custa ao vendedor. É o que falta para a margem ser a margem.
-          </p>
-        </div>
-        <PeriodPicker de={de} ate={ate} />
-      </div>
+      <CabecalhoDeTela
+        titulo="Custos"
+        subtitulo="Quanto cada produto custa ao vendedor. É o que falta para a margem ser a margem."
+        de={de}
+        ate={ate}
+      />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>

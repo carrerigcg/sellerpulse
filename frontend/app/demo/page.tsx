@@ -3,11 +3,12 @@ import { totalizarFluxo } from "@/components/analytics/executive-totals";
 import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
-import { PeriodPicker } from "@/components/analytics/period-picker";
 import { janelaAnterior, type FluxoDia } from "@/lib/api";
 import { COLUNAS_FLUXO } from "@/lib/colunas-export";
-import { getDemoFluxoFinanceiro, periodoPadraoDaDemo } from "@/lib/demo";
+import { getDemoFluxoFinanceiro } from "@/lib/demo";
 import { coberturaDoFluxo } from "@/lib/cobertura";
+import { periodoPadrao } from "@/lib/periodo";
+import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
  * Executive da demonstração pública — mesmo conteúdo de `/dashboard`, dados
@@ -19,7 +20,7 @@ export default async function DemoExecutivePage({
   searchParams,
 }: PageProps<"/demo">) {
   const params = await searchParams;
-  const padrao = periodoPadraoDaDemo();
+  const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
@@ -42,16 +43,12 @@ export default async function DemoExecutivePage({
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Executive</h1>
-          <p className="mt-1 text-sm text-muted">
-            Receita, custos do Mercado Livre e margem de contribuição — dados de
-            demonstração.
-          </p>
-        </div>
-        <PeriodPicker de={de} ate={ate} />
-      </div>
+      <CabecalhoDeTela
+        titulo="Executive"
+        subtitulo="Receita, custos do Mercado Livre e margem de contribuição — dados de demonstração."
+        de={de}
+        ate={ate}
+      />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
