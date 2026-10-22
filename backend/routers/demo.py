@@ -3,7 +3,7 @@
 
 Esta e a UNICA porta do sistema sem autenticacao. Ela existe porque a demo e
 canal de aquisicao: quem esta avaliando o produto ve o sistema funcionando com
-dado real de verdade, sem criar conta. Tres travas, todas por construcao:
+dado real de verdade, sem criar conta. Quatro travas, todas por construcao:
 
 1. So GET. Nenhum verbo de escrita registrado.
 2. O seller_id vem de variavel de ambiente no servidor. NUNCA de parametro —
@@ -33,8 +33,11 @@ from backend.routers._common import validate_n, validate_window
 
 router = APIRouter(prefix="/demo", tags=["demo"])
 
-# 5 minutos: a base de demo e estatica, mas um TTL curto evita que uma
-# correcao no dado semeado demore pra aparecer.
+# 5 minutos. A base de demo NAO e estatica: quando `DEMO_REFRESH_IN_PROCESS=1`,
+# o boot regenera o seller de demonstracao se a venda mais nova tiver mais de
+# `DIAS_PARA_VENCER` dias (ver `backend/demo_refresh.py`) -- e o Render hiberna o
+# tempo todo, entao isso acontece toda semana. Um TTL curto faz a demo
+# regenerada aparecer logo, sem segurar dado de uma geracao que ja foi apagada.
 _CACHE = "public, max-age=300"
 
 
