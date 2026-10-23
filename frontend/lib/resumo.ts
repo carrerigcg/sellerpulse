@@ -6,11 +6,17 @@
  * falha de número inventado: ao mudar uma, mude a spec junto.
  *
  * Sem React de propósito, como `lib/tutoriais.ts`: o front não testa
- * componentes, então a regra e o texto moram aqui, onde o vitest alcança.
+ * componentes, então a regra e o texto moram aqui, onde o vitest alcança —
+ * inclusive a montagem que as duas páginas fazem com o resultado das buscas.
  * Imports relativos porque o vitest do projeto roda sem config e não resolve
  * o alias `@/` (medido).
  */
-import type { Cobertura } from "./cobertura";
+// `totalizarFluxo` é a conta dos cartões do Financeiro. Importá-la daqui, em
+// vez de repetir a soma, é o que garante que a sobra do Resumo e a margem do
+// cartão sejam o mesmo número.
+import { totalizarFluxo } from "../components/analytics/executive-totals";
+import type { FluxoDia } from "./api";
+import { coberturaDoFluxo, type Cobertura } from "./cobertura";
 import { calculaReferencia, diagnostica, type Diagnostico, type LinhaDeFunil } from "./diagnostico";
 
 const brl = new Intl.NumberFormat("pt-BR", {
@@ -22,11 +28,14 @@ const brl = new Intl.NumberFormat("pt-BR", {
 /** Valor absoluto em reais: o sentido vai na frase ("a mais", "caíram"), não no sinal. */
 const reais = (valor: number) => brl.format(Math.abs(valor));
 
-/** O formato de `totalizarFluxo` (`components/analytics/executive-totals.ts`). */
-export type Totais = { receita: number; custo: number; custoProdutos: number; margem: number };
+/**
+ * Arredonda para longe do zero no meio, como o `Intl` arredonda ao formatar.
+ * `Math.round(-1000.5)` dá −1000 e o cartão do Financeiro mostra −R$ 1.001: a
+ * sobra do Resumo deixaria de bater com ele justo quando falta dinheiro.
+ */
+const arredonda = (valor: number) => Math.sign(valor) * Math.round(Math.abs(valor));
 
-export const EXPLICACAO_DA_SOBRA =
-  "É o que fica depois de pagar o Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas ainda saem daí.";
+export type Totais = ReturnType<typeof totalizarFluxo>;
 
 export type Veredito = {
   sobra: string;
@@ -35,6 +44,8 @@ export type Veredito = {
   direcao: "mais" | "menos" | "igual" | "sem-comparacao";
   explicacao: string;
   maiorPeso: string | null;
+  /** A comparação mistura coberturas de custo que puxam no mesmo sentido do custo. */
+  avisoComparacao: string | null;
   avisoCobertura: string | null;
 };
 
@@ -46,13 +57,13 @@ export function montaVeredito(entrada: {
   coberturaAnterior: Cobertura | null;
 }): Veredito {
   const { atual, anterior, coberturaAtual, coberturaAnterior } = entrada;
-  const sobra = Math.round(atual.margem);
+  const sobra = arredonda(atual.margem);
   const comum = {
     sobra:
       sobra >= 0
         ? `Sobraram ${reais(sobra)} das suas vendas.`
         : `As vendas não cobriram os custos: faltaram ${reais(sobra)}.`,
-    explicacao: EXPLICACAO_DA_SOBRA,
+    explicacao: explicacao(sobra, coberturaAtual),
     avisoCobertura: avisoDeCobertura(coberturaAtual),
   };
 
@@ -62,51 +73,77 @@ export function montaVeredito(entrada: {
       comparacao: "Não houve vendas nos 30 dias anteriores para comparar.",
       direcao: "sem-comparacao",
       maiorPeso: null,
+      avisoComparacao: null,
     };
   }
 
   // Comparada já arredondada: "o mesmo" quer dizer o mesmo no número que a
   // tela mostra, e não uma diferença de centavos que ninguém vê.
-  const diferenca = sobra - Math.round(anterior.margem);
+  const sobraAnterior = arredonda(anterior.margem);
+  const diferenca = sobra - sobraAnterior;
   if (diferenca === 0) {
     return {
       ...comum,
       comparacao: "O mesmo que nos 30 dias anteriores.",
       direcao: "igual",
       maiorPeso: null,
+      avisoComparacao: null,
     };
   }
 
+  // Com algum mês no negativo, "a mais" pegaria carona no "faltaram" de cima
+  // e se leria ao contrário ("faltaram R$ 600 a mais" para uma falta que
+  // diminuiu). Nesse caso a frase ganha sujeito próprio.
+  const comparacao =
+    sobra < 0 || sobraAnterior < 0
+      ? `O resultado foi ${reais(diferenca)} ${diferenca > 0 ? "melhor" : "pior"} que nos 30 dias anteriores.`
+      : `${reais(diferenca)} a ${diferenca > 0 ? "mais" : "menos"} do que sobrou nos 30 dias anteriores.`;
+
   return {
     ...comum,
-    comparacao: `${reais(diferenca)} a ${diferenca > 0 ? "mais" : "menos"} que nos 30 dias anteriores.`,
+    comparacao,
     direcao: diferenca > 0 ? "mais" : "menos",
-    maiorPeso: oQueMaisPesou(atual, anterior, diferenca, coberturaAtual, coberturaAnterior),
+    maiorPeso: oQueMaisPesou(atual, anterior, diferenca),
+    avisoComparacao: avisoDeComparacao(atual, anterior, coberturaAtual, coberturaAnterior),
   };
+}
+
+/**
+ * O que a sobra já descontou — e o que não. Com cobertura zero, dizer "depois
+ * de pagar os produtos" seria afirmar um desconto que não aconteceu, na frase
+ * que vem antes do aviso que o desmente.
+ */
+function explicacao(sobra: number, cobertura: Cobertura): string {
+  const semCustoDeProduto = cobertura.vazia && !cobertura.semReceita;
+  if (sobra < 0) {
+    return semCustoDeProduto
+      ? "Na conta entram o Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas vêm depois."
+      : "Na conta entram o Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas vêm depois.";
+  }
+  return semCustoDeProduto
+    ? "É o que fica depois de pagar o Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas também saem daí."
+    : "É o que fica depois de pagar o Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas ainda saem daí.";
 }
 
 /**
  * A parte da conta que mais mexeu na sobra, no sentido da mudança.
  *
- * As três fecham a diferença: `margem_contribuicao` é receita − comissão −
- * frete − custo dos produtos (`lib/api.ts`). Só concorre quem empurrou para o
- * mesmo lado — se a sobra caiu, vendas que subiram não "pesaram" para a queda.
+ * Antes do arredondamento as três fecham a diferença: `margem_contribuicao` é
+ * receita − comissão − frete − custo dos produtos (`lib/api.ts`). Depois dele
+ * a soma pode se afastar da diferença em um ou dois reais — e, numa diferença
+ * de R$ 1, nenhuma parte pode ter andado no mesmo sentido. Daí o `null`.
  *
- * Valores arredondados antes da conta, para a frase fechar na tela:
- * "caíram R$ 10.000 — de R$ 128.000 para R$ 118.000".
+ * Só concorre quem empurrou para o mesmo lado: se a sobra caiu, vendas que
+ * subiram não são o motivo da queda.
  */
-function oQueMaisPesou(
-  atual: Totais,
-  anterior: Totais,
-  diferenca: number,
-  coberturaAtual: Cobertura,
-  coberturaAnterior: Cobertura | null,
-): string | null {
-  const r = Math.round;
+function oQueMaisPesou(atual: Totais, anterior: Totais, diferenca: number): string | null {
   const partes = [
-    { parte: "vendas", efeito: r(atual.receita) - r(anterior.receita) },
-    { parte: "mercado-livre", efeito: r(anterior.custo) - r(atual.custo) },
-    { parte: "produtos", efeito: r(anterior.custoProdutos) - r(atual.custoProdutos) },
+    { parte: "vendas", efeito: arredonda(atual.receita) - arredonda(anterior.receita) },
+    { parte: "mercado-livre", efeito: arredonda(anterior.custo) - arredonda(atual.custo) },
+    {
+      parte: "produtos",
+      efeito: arredonda(anterior.custoProdutos) - arredonda(atual.custoProdutos),
+    },
   ] as const;
 
   const maior = partes
@@ -115,27 +152,47 @@ function oQueMaisPesou(
   if (!maior) return null;
 
   if (maior.parte === "vendas") {
-    return `O que mais pesou: as vendas ${maior.efeito > 0 ? "subiram" : "caíram"} ${reais(maior.efeito)} — de ${reais(anterior.receita)} para ${reais(atual.receita)}.`;
+    return `Principal motivo: as vendas ${maior.efeito > 0 ? "subiram" : "caíram"} ${reais(maior.efeito)} — de ${reais(anterior.receita)} para ${reais(atual.receita)}.`;
   }
   if (maior.parte === "mercado-livre") {
-    return `O que mais pesou: o que o Mercado Livre e o frete levaram ${maior.efeito < 0 ? "subiu" : "caiu"} ${reais(maior.efeito)}.`;
+    return `Principal motivo: as tarifas do Mercado Livre e o frete ${maior.efeito < 0 ? "subiram" : "caíram"} ${reais(maior.efeito)}.`;
   }
-  // Quem preenche custos hoje faz as vendas novas passarem a descontar o
-  // produto: o "custo dos produtos" sobe sem a loja ter piorado. Com
-  // coberturas diferentes, culpar o custo seria tirar conclusão de uma
-  // comparação desigual — então a frase diz isso em vez de culpar.
-  if (coberturaAnterior && coberturaAnterior.pct !== coberturaAtual.pct) {
-    return `A comparação mistura meses diferentes: neste, ${coberturaAtual.pct}% das vendas têm custo informado; no anterior, ${coberturaAnterior.pct}%.`;
-  }
-  return `O que mais pesou: o custo dos produtos ${maior.efeito < 0 ? "subiu" : "caiu"} ${reais(maior.efeito)}.`;
+  return `Principal motivo: o custo dos produtos ${maior.efeito < 0 ? "subiu" : "caiu"} ${reais(maior.efeito)}.`;
 }
 
+/**
+ * Avisa quando parte da diferença vem de a conta ter ficado mais (ou menos)
+ * completa, e não da loja.
+ *
+ * Só dispara quando a cobertura mudou NO MESMO SENTIDO do custo dos produtos:
+ * mais vendas com custo informado fazem o custo subir sem a loja ter piorado.
+ * Se a cobertura caiu e o custo subiu mesmo assim, a alta é real — e calar
+ * sobre ela seria esconder uma piora. Independe de qual parte é o "principal
+ * motivo": a cobertura distorce a comparação inteira, não só aquela linha.
+ */
+function avisoDeComparacao(
+  atual: Totais,
+  anterior: Totais,
+  coberturaAtual: Cobertura,
+  coberturaAnterior: Cobertura | null,
+): string | null {
+  if (!coberturaAnterior || coberturaAnterior.pct === coberturaAtual.pct) return null;
+  const sentidoDaCobertura = Math.sign(coberturaAtual.fracao - coberturaAnterior.fracao);
+  const sentidoDoCusto = Math.sign(arredonda(atual.custoProdutos) - arredonda(anterior.custoProdutos));
+  if (sentidoDoCusto === 0 || sentidoDaCobertura !== sentidoDoCusto) return null;
+  return `Parte da diferença vem do custo informado: neste período, ${coberturaAtual.pct}% do valor vendido tinha custo; no anterior, ${coberturaAnterior.pct}%.`;
+}
+
+/**
+ * No passado ("saiu sem custo") de propósito: o custo vale da data em que foi
+ * informado em diante, então quem acabou de preencher tudo continua vendo este
+ * aviso por até 30 dias. No presente, ele desmentiria o que a pessoa acabou de
+ * fazer, e ela concluiria que o sistema não salvou.
+ */
 function avisoDeCobertura(c: Cobertura): string | null {
   if (c.semReceita || c.completa) return null;
-  if (c.vazia) {
-    return "Nenhuma venda deste mês tem custo informado — a sobra acima não desconta o custo dos produtos.";
-  }
-  return `${100 - c.pct}% das vendas deste mês estão sem custo informado — a sobra real é menor.`;
+  if (c.vazia) return "Nenhuma venda deste período saiu com custo informado.";
+  return `${100 - c.pct}% do valor vendido neste período saiu sem custo informado — a sobra verdadeira é menor que essa.`;
 }
 
 export type ChaveDaTarefa =
@@ -159,7 +216,12 @@ export type LinksDoResumo = {
   periodoClientes: { de: string; ate: string };
 };
 
+/** O que o Resumo usa de cada comprador (`RfmLinha`, em `lib/api.ts`). */
+export type LinhaDeCliente = { segmento: string; monetary: number; recency_dias: number };
+
 export const NADA_PEDINDO_ATENCAO = "Nada pedindo atenção agora.";
+export const NADA_E_ANUNCIOS_SEM_AVALIACAO =
+  "Nada pedindo atenção nos custos e nos clientes. Os anúncios ainda não têm visitas suficientes para avaliar.";
 export const RESUMO_INCOMPLETO = "Parte do resumo não carregou agora. Tente de novo em instantes.";
 
 function plural(n: number, um: string, varios: string): string {
@@ -180,6 +242,14 @@ export function hrefDoFinanceiro(links: LinksDoResumo): string {
   return link(`${links.base}/financeiro`, links.periodo);
 }
 
+export type ResultadoDasTarefas = {
+  tarefas: Tarefa[];
+  /** Alguma fonte falhou ao carregar. */
+  incompleto: boolean;
+  /** A régua da loja é confiável — sem ela, "nenhum anúncio" não quer dizer "nenhum problema". */
+  anunciosAvaliados: boolean;
+};
+
 /**
  * Os cartões de "O que fazer agora", em ordem fixa e só os que se aplicam.
  *
@@ -189,9 +259,9 @@ export function hrefDoFinanceiro(links: LinksDoResumo): string {
 export function montaTarefas(entrada: {
   custos: readonly { custo_unitario: number | null }[] | null;
   abc: readonly LinhaDeFunil[] | null;
-  rfm: readonly { segmento: string; monetary: number }[] | null;
+  rfm: readonly LinhaDeCliente[] | null;
   links: LinksDoResumo;
-}): { tarefas: Tarefa[]; incompleto: boolean } {
+}): ResultadoDasTarefas {
   const { custos, abc, rfm, links } = entrada;
   const tarefas: Tarefa[] = [];
   const contagem = abc ? contaDiagnosticos(abc) : null;
@@ -199,28 +269,30 @@ export function montaTarefas(entrada: {
   // Pelo custo vazio HOJE, que é a conta da tela de Custos — o número do
   // cartão tem que bater com o que ele vê ao clicar. Contar pela venda
   // passada (`produtosSemCusto`) daria outro número: custo informado hoje
-  // não volta para trás.
+  // não volta para trás, e o apoio diz isso para o efeito não parecer sumido.
   if (custos) {
     const n = custos.filter((l) => l.custo_unitario === null).length;
     if (n > 0) {
       tarefas.push({
         chave: "custos",
         frase: `${n} ${plural(n, "produto", "produtos")} que você vendeu ${plural(n, "está", "estão")} sem custo informado`,
-        apoio: "Sem ele, a sobra lá em cima aparece maior do que a real.",
+        apoio: "Com o custo informado, as próximas vendas já descontam o produto.",
         botao: links.base === "/demo" ? "Ver custos" : "Informar custos",
         href: link(`${links.base}/custos`, links.periodo),
       });
     }
   }
 
-  const rejeitados = contagem?.get("visto-e-rejeitado") ?? 0;
+  // "Média da loja" e não "mediana": é a palavra que a própria seção usa
+  // ("É visto acima da média"), e é a que esse vendedor conhece.
+  const rejeitados = contagem?.diagnosticos.get("visto-e-rejeitado") ?? 0;
   if (rejeitados > 0) {
     const n = rejeitados;
     tarefas.push({
       chave: "visto-e-rejeitado",
-      frase: `${n} ${plural(n, "anúncio recebe", "anúncios recebem")} visitas, mas ${plural(n, "vende", "vendem")} pouco`,
+      frase: `${n} ${plural(n, "anúncio recebe", "anúncios recebem")} mais visitas que a média da sua loja, mas ${plural(n, "vende", "vendem")} menos`,
       apoio: "Muita gente entra e não compra — vale revisar preço, foto, título ou frete.",
-      botao: "Ver quais anúncios",
+      botao: "Ver os que vendem menos",
       href: link(
         `${links.base}/produtos`,
         links.periodo,
@@ -233,15 +305,21 @@ export function montaTarefas(entrada: {
   // 90 dias, não 30: o segmento é calculado DENTRO da janela — a recência
   // conta do fim do período e as notas são quintis entre os compradores dela
   // (`backend/analytics/segmentation_pg.py`, `rfm_scores`). Em 30 dias, "Em
-  // risco" passaria a significar "comprou há 25 dias". A frase diz a janela.
+  // risco" passaria a significar "comprou há 25 dias".
+  //
+  // "Já compraram bem" e não "compravam bem": a regra do segmento é recência
+  // baixa E (frequência OU valor altos), então nem todos compraram muitas
+  // vezes. O que vale para todos é o número de dias sem comprar — e é ele que
+  // diz "sumindo" sem precisar da palavra.
   if (rfm) {
     const emRisco = rfm.filter((c) => c.segmento === "At Risk");
     const n = emRisco.length;
     if (n > 0) {
       const total = emRisco.reduce((acc, c) => acc + c.monetary, 0);
+      const dias = Math.min(...emRisco.map((c) => c.recency_dias));
       tarefas.push({
         chave: "clientes-em-risco",
-        frase: `${n} ${plural(n, "cliente que comprava bem está sumindo", "clientes que compravam bem estão sumindo")}`,
+        frase: `${n} ${plural(n, "cliente que já comprou", "clientes que já compraram")} bem com você não ${plural(n, "compra", "compram")} há ${dias} dias ou mais`,
         apoio: `Nos últimos 3 meses, ${plural(n, "gastou", "gastaram")} ${brl.format(total)} com você.`,
         botao: "Ver quais clientes",
         href: link(`${links.base}/clientes`, links.periodoClientes),
@@ -249,14 +327,14 @@ export function montaTarefas(entrada: {
     }
   }
 
-  const poucoVistos = contagem?.get("converte-falta-ser-visto") ?? 0;
+  const poucoVistos = contagem?.diagnosticos.get("converte-falta-ser-visto") ?? 0;
   if (poucoVistos > 0) {
     const n = poucoVistos;
     tarefas.push({
       chave: "converte-falta-ser-visto",
-      frase: `${n} ${plural(n, "anúncio vende", "anúncios vendem")} bem quando ${plural(n, "é visto", "são vistos")}, mas pouca gente chega até ${plural(n, "ele", "eles")}`,
+      frase: `${n} ${plural(n, "anúncio vende", "anúncios vendem")} mais que a média da sua loja quando ${plural(n, "é visto", "são vistos")}, mas ${plural(n, "recebe", "recebem")} poucas visitas`,
       apoio: `Vale dar mais visibilidade a ${plural(n, "ele", "eles")}.`,
-      botao: "Ver quais anúncios",
+      botao: "Ver os pouco vistos",
       href: link(
         `${links.base}/produtos`,
         links.periodo,
@@ -266,26 +344,86 @@ export function montaTarefas(entrada: {
     });
   }
 
-  return { tarefas, incompleto: custos === null || abc === null || rfm === null };
+  return {
+    tarefas,
+    incompleto: custos === null || abc === null || rfm === null,
+    anunciosAvaliados: contagem?.confiavel ?? false,
+  };
 }
 
 /** A mesma regra da seção Desempenho dos anúncios, para o número bater com o filtro de lá. */
-function contaDiagnosticos(abc: readonly LinhaDeFunil[]): Map<Diagnostico, number> {
+function contaDiagnosticos(abc: readonly LinhaDeFunil[]): {
+  diagnosticos: Map<Diagnostico, number>;
+  confiavel: boolean;
+} {
   const referencia = calculaReferencia(abc);
-  const contagem = new Map<Diagnostico, number>();
+  const diagnosticos = new Map<Diagnostico, number>();
   for (const linha of abc) {
     const d = diagnostica(linha, referencia);
-    contagem.set(d, (contagem.get(d) ?? 0) + 1);
+    diagnosticos.set(d, (diagnosticos.get(d) ?? 0) + 1);
   }
-  return contagem;
+  return { diagnosticos, confiavel: referencia.confiavel };
 }
 
-export function rodapeDasTarefas(resultado: { tarefas: Tarefa[]; incompleto: boolean }): string | null {
+export function rodapeDasTarefas(resultado: ResultadoDasTarefas): string | null {
   if (resultado.incompleto) return RESUMO_INCOMPLETO;
-  return resultado.tarefas.length === 0 ? NADA_PEDINDO_ATENCAO : null;
+  if (resultado.tarefas.length > 0) return null;
+  return resultado.anunciosAvaliados ? NADA_PEDINDO_ATENCAO : NADA_E_ANUNCIOS_SEM_AVALIACAO;
 }
 
 /** Valor de um `Promise.allSettled`, ou `null` se aquela busca falhou. */
-export function valorOuNulo<T>(resultado: PromiseSettledResult<T>): T | null {
+function valorOuNulo<T>(resultado: PromiseSettledResult<T>): T | null {
   return resultado.status === "fulfilled" ? resultado.value : null;
+}
+
+/**
+ * Tudo o que as páginas do Resumo fazem com o resultado das buscas, num lugar
+ * só e testável: a página só busca (com os getters do contexto) e escreve a
+ * mensagem de erro.
+ *
+ * Os dois fluxos são obrigatórios — sem o anterior, a frase de comparação
+ * mentiria por omissão. Fluxo anterior que volta VAZIO (sem erro) é outra
+ * coisa: não houve venda para comparar, e a frase diz isso.
+ */
+export function montaResumo(entrada: {
+  fluxo: PromiseSettledResult<FluxoDia[]>;
+  anterior: PromiseSettledResult<FluxoDia[]>;
+  abc: PromiseSettledResult<readonly LinhaDeFunil[]>;
+  custos: PromiseSettledResult<readonly { custo_unitario: number | null }[]>;
+  rfm: PromiseSettledResult<readonly LinhaDeCliente[]>;
+  links: LinksDoResumo;
+}): {
+  /** `motivo` é o erro da busca, para a página escrever a mensagem do contexto. */
+  erroNoFluxo: { motivo: unknown } | null;
+  semVendas: boolean;
+  veredito: Veredito;
+  tarefas: Tarefa[];
+  rodape: string | null;
+  hrefFinanceiro: string;
+} {
+  const falha = [entrada.fluxo, entrada.anterior].find(
+    (r): r is PromiseRejectedResult => r.status === "rejected",
+  );
+  const dias = valorOuNulo(entrada.fluxo) ?? [];
+  const diasAnteriores = valorOuNulo(entrada.anterior) ?? [];
+  const resultado = montaTarefas({
+    custos: valorOuNulo(entrada.custos),
+    abc: valorOuNulo(entrada.abc),
+    rfm: valorOuNulo(entrada.rfm),
+    links: entrada.links,
+  });
+
+  return {
+    erroNoFluxo: falha ? { motivo: falha.reason } : null,
+    semVendas: dias.length === 0,
+    veredito: montaVeredito({
+      atual: totalizarFluxo(dias),
+      anterior: diasAnteriores.length > 0 ? totalizarFluxo(diasAnteriores) : null,
+      coberturaAtual: coberturaDoFluxo(dias),
+      coberturaAnterior: diasAnteriores.length > 0 ? coberturaDoFluxo(diasAnteriores) : null,
+    }),
+    tarefas: resultado.tarefas,
+    rodape: rodapeDasTarefas(resultado),
+    hrefFinanceiro: hrefDoFinanceiro(entrada.links),
+  };
 }

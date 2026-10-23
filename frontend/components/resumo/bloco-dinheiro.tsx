@@ -33,6 +33,9 @@ export function BlocoDinheiro({
       <p className={`mt-1 text-xl font-bold ${corDaComparacao}`}>{veredito.comparacao}</p>
       <p className="mt-4 leading-relaxed text-muted">{veredito.explicacao}</p>
       {veredito.maiorPeso && <p className="mt-3 leading-relaxed">{veredito.maiorPeso}</p>}
+      {veredito.avisoComparacao && (
+        <p className="mt-2 leading-relaxed text-muted">{veredito.avisoComparacao}</p>
+      )}
       {veredito.avisoCobertura && (
         <p className="mt-4 rounded-lg bg-highlight-soft px-4 py-3 leading-relaxed text-ink">
           {veredito.avisoCobertura}

@@ -25,7 +25,8 @@ export function ResumoDaLoja({
   hrefFinanceiro,
 }: {
   legenda: string;
-  erro: string | null;
+  /** Nó, e não texto: a sessão expirada leva um link para entrar de novo. */
+  erro: ReactNode | null;
   semVendas: boolean;
   vazio: ReactNode;
   veredito: Veredito;
@@ -39,7 +40,12 @@ export function ResumoDaLoja({
       <p className="mt-1 text-muted">{legenda}</p>
 
       {erro ? (
-        <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-negative">{erro}</p>
+        // Texto em `ink`, com a cor na borda e no fundo: o vermelho de
+        // `negative` sobre `negative/10` fica perto de 4,1:1 em 16px, abaixo
+        // do mínimo para texto normal.
+        <p className="mt-8 rounded-lg border border-negative/40 bg-negative/10 px-4 py-3 text-ink">
+          {erro}
+        </p>
       ) : semVendas ? (
         vazio
       ) : (

@@ -117,7 +117,14 @@ export default async function ProdutosPage({
               sobre receita e precisa continuar ordenada por ela (a classe
               A/B/C e o acumulado SAEM dessa ordem). Esta e sobre o funil e
               pode ser ordenada por qualquer coluna sem quebrar nada. */}
-          <DesempenhoAnuncios abc={abc} filtroInicial={filtroInicial} />
+          {/* `key` pelo filtro: o Next reaproveita o componente quando só a query
+              muda (a sidebar leva de volta a /produtos sem `?diagnostico=`), e o
+              `useState(filtroInicial)` ficaria preso ao filtro de antes. */}
+          <DesempenhoAnuncios
+            key={filtroInicial ?? "todos"}
+            abc={abc}
+            filtroInicial={filtroInicial}
+          />
 
           {/* Aviso dos 48h aqui, junto do que ele descreve. */}
           {temVisitaColhida(abc) && incluiDiasNaoConsolidados(ate) && (

@@ -270,6 +270,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={ativo}
       className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition ${
         ativo
           ? "border-accent bg-accent-soft font-medium text-accent-hover"

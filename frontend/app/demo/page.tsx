@@ -1,9 +1,7 @@
 import { connection } from "next/server";
 
-import { totalizarFluxo } from "@/components/analytics/executive-totals";
 import { ResumoDaLoja } from "@/components/resumo/resumo-da-loja";
 import { janelaAnterior } from "@/lib/api";
-import { coberturaDoFluxo } from "@/lib/cobertura";
 import {
   getDemoAbcPareto,
   getDemoCustos,
@@ -11,23 +9,16 @@ import {
   getDemoRfmScores,
 } from "@/lib/demo";
 import { periodoDoResumo, periodoPadrao } from "@/lib/periodo";
-import {
-  hrefDoFinanceiro,
-  montaTarefas,
-  montaVeredito,
-  rodapeDasTarefas,
-  valorOuNulo,
-  type LinksDoResumo,
-} from "@/lib/resumo";
+import { montaResumo } from "@/lib/resumo";
 
 /**
  * Resumo da demonstração pública — o mesmo do dashboard, com os getters da
  * demo. É a primeira tela de quem clica "Ver demonstração" na vitrine.
  *
  * `connection()` antes de tudo: esta página não lê `searchParams` nem cookie,
- * e os fetches da demo têm cache de uma hora (`lib/demo.ts`). Sem isto o Next
- * pode pré-renderizá-la no build, com "os últimos 30 dias" congelados no dia
- * do deploy.
+ * e os fetches da demo têm cache de uma hora (`lib/demo.ts`). Medido: sem
+ * isto o build a torna estática com revalidação de 1h, e "os últimos 30 dias"
+ * ficam atrasados até a próxima revalidação — na virada do dia, no dia errado.
  */
 export default async function DemoResumoPage() {
   await connection();
@@ -44,39 +35,32 @@ export default async function DemoResumoPage() {
     getDemoRfmScores(periodoClientes.de, periodoClientes.ate),
   ]);
 
-  const erro = [fluxo, anterior].some((r) => r.status === "rejected")
-    ? "Não foi possível carregar a demonstração agora. Tente de novo em instantes."
-    : null;
-
-  const dias = valorOuNulo(fluxo) ?? [];
-  const diasAnteriores = valorOuNulo(anterior) ?? [];
-  const links: LinksDoResumo = { base: "/demo", periodo, periodoClientes };
-  const resultado = montaTarefas({
-    custos: valorOuNulo(custos),
-    abc: valorOuNulo(abc),
-    rfm: valorOuNulo(rfm),
-    links,
+  const resumo = montaResumo({
+    fluxo,
+    anterior,
+    abc,
+    custos,
+    rfm,
+    links: { base: "/demo", periodo, periodoClientes },
   });
 
   return (
     <ResumoDaLoja
       legenda={periodo.legenda}
-      erro={erro}
-      semVendas={dias.length === 0}
+      erro={
+        resumo.erroNoFluxo &&
+        "Não foi possível carregar a demonstração agora. Tente de novo em instantes."
+      }
+      semVendas={resumo.semVendas}
       vazio={
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-muted">
           Nenhuma venda nos últimos 30 dias da demonstração.
         </p>
       }
-      veredito={montaVeredito({
-        atual: totalizarFluxo(dias),
-        anterior: diasAnteriores.length > 0 ? totalizarFluxo(diasAnteriores) : null,
-        coberturaAtual: coberturaDoFluxo(dias),
-        coberturaAnterior: diasAnteriores.length > 0 ? coberturaDoFluxo(diasAnteriores) : null,
-      })}
-      tarefas={resultado.tarefas}
-      rodape={rodapeDasTarefas(resultado)}
-      hrefFinanceiro={hrefDoFinanceiro(links)}
+      veredito={resumo.veredito}
+      tarefas={resumo.tarefas}
+      rodape={resumo.rodape}
+      hrefFinanceiro={resumo.hrefFinanceiro}
     />
   );
 }
