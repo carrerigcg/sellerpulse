@@ -6,6 +6,7 @@ import {
   IconeCustos,
   IconeExecutive,
   IconeExportar,
+  IconeInicio,
   IconeProdutos,
 } from "./icones";
 
@@ -29,10 +30,15 @@ export type GrupoDeNavegacao = {
 };
 
 export const GRUPOS_DASHBOARD: GrupoDeNavegacao[] = [
+  // O Resumo num grupo próprio, sem título: não é uma "análise", é a entrada.
+  {
+    titulo: null,
+    itens: [{ href: "/dashboard", rotulo: "Resumo", Icone: IconeInicio, exata: true }],
+  },
   {
     titulo: "Análises",
     itens: [
-      { href: "/dashboard", rotulo: "Executive", Icone: IconeExecutive, exata: true },
+      { href: "/dashboard/financeiro", rotulo: "Financeiro", Icone: IconeExecutive },
       { href: "/dashboard/produtos", rotulo: "Produtos", Icone: IconeProdutos },
       { href: "/dashboard/clientes", rotulo: "Clientes", Icone: IconeClientes },
       { href: "/dashboard/exportar", rotulo: "Exportar", Icone: IconeExportar },
@@ -51,7 +57,8 @@ export const GRUPOS_DEMO: GrupoDeNavegacao[] = [
   {
     titulo: null,
     itens: [
-      { href: "/demo", rotulo: "Executive", Icone: IconeExecutive, exata: true },
+      { href: "/demo", rotulo: "Resumo", Icone: IconeInicio, exata: true },
+      { href: "/demo/financeiro", rotulo: "Financeiro", Icone: IconeExecutive },
       { href: "/demo/produtos", rotulo: "Produtos", Icone: IconeProdutos },
       { href: "/demo/clientes", rotulo: "Clientes", Icone: IconeClientes },
       { href: "/demo/custos", rotulo: "Custos", Icone: IconeCustos },

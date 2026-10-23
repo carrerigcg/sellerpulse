@@ -79,8 +79,8 @@ const CAMINHOS_DO_CHROME = [
  * componente precisa ler a dimensao real depois de gerar.
  */
 const ALVOS = [
-  { arquivo: "demo-executive.png", rota: "/demo", largura: 1440, altura: 900 },
-  { arquivo: "demo-executive-mobile.png", rota: "/demo", largura: 602, altura: 1100 },
+  { arquivo: "demo-executive.png", rota: "/demo/financeiro", largura: 1440, altura: 900 },
+  { arquivo: "demo-executive-mobile.png", rota: "/demo/financeiro", largura: 602, altura: 1100 },
   { arquivo: "demo-produtos.png", rota: "/demo/produtos", largura: 1440, altura: 900 },
   { arquivo: "demo-produtos-mobile.png", rota: "/demo/produtos", largura: 602, altura: 1100 },
   { arquivo: "demo-clientes.png", rota: "/demo/clientes", largura: 1440, altura: 900 },
