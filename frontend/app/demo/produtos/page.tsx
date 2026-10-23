@@ -53,6 +53,7 @@ export default async function DemoProdutosPage({
         ate={ate}
         tela="produtos"
         temDados={temDados}
+        chegouFiltrado={filtroInicial !== null}
       />
 
       {erro ? (

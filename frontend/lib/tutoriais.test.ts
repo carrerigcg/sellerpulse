@@ -89,7 +89,12 @@ describe("chaveDeArmazenamento", () => {
 });
 
 describe("deveAbrirSozinho", () => {
-  const base = { jaVisto: false, temDados: true, armazenamentoDisponivel: true };
+  const base = {
+    jaVisto: false,
+    temDados: true,
+    armazenamentoDisponivel: true,
+    chegouFiltrado: false,
+  };
 
   it("abre na primeira visita a uma tela com dado", () => {
     expect(deveAbrirSozinho(base)).toBe(true);
@@ -105,6 +110,10 @@ describe("deveAbrirSozinho", () => {
 
   it("não abre sem armazenamento — senão abriria em toda visita", () => {
     expect(deveAbrirSozinho({ ...base, armazenamentoDisponivel: false })).toBe(false);
+  });
+
+  it("não abre por cima de quem chegou por um atalho que já filtra a tela", () => {
+    expect(deveAbrirSozinho({ ...base, chegouFiltrado: true })).toBe(false);
   });
 });
 

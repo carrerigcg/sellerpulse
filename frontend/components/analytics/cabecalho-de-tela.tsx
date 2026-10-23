@@ -31,6 +31,7 @@ export function CabecalhoDeTela({
   ate,
   tela,
   temDados,
+  chegouFiltrado = false,
 }: {
   titulo: string;
   subtitulo: string;
@@ -38,6 +39,8 @@ export function CabecalhoDeTela({
   ate: string;
   tela: ChaveDeTutorial;
   temDados: boolean;
+  /** Veio por um atalho que já filtra a tela — ver `deveAbrirSozinho`. */
+  chegouFiltrado?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -46,7 +49,7 @@ export function CabecalhoDeTela({
         <p className="mt-1 text-sm text-muted">{subtitulo}</p>
         {/* `-ml-2` desfaz o `px-2` do botão: o ícone alinha com o texto de cima. */}
         <div className="-ml-2 mt-1">
-          <TutorialDaTela tela={tela} temDados={temDados} />
+          <TutorialDaTela tela={tela} temDados={temDados} chegouFiltrado={chegouFiltrado} />
         </div>
       </div>
       <PeriodPicker de={de} ate={ate} />

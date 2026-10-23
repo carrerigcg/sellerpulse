@@ -195,11 +195,7 @@ function avisoDeCobertura(c: Cobertura): string | null {
   return `${100 - c.pct}% do valor vendido neste período saiu sem custo informado — a sobra verdadeira é menor que essa.`;
 }
 
-export type ChaveDaTarefa =
-  | "custos"
-  | "visto-e-rejeitado"
-  | "clientes-em-risco"
-  | "converte-falta-ser-visto";
+export type ChaveDaTarefa = "custos" | "visto-e-rejeitado" | "clientes-em-risco";
 
 export type Tarefa = {
   chave: ChaveDaTarefa;
@@ -327,22 +323,11 @@ export function montaTarefas(entrada: {
     }
   }
 
-  const poucoVistos = contagem?.diagnosticos.get("converte-falta-ser-visto") ?? 0;
-  if (poucoVistos > 0) {
-    const n = poucoVistos;
-    tarefas.push({
-      chave: "converte-falta-ser-visto",
-      frase: `${n} ${plural(n, "anúncio vende", "anúncios vendem")} mais que a média da sua loja quando ${plural(n, "é visto", "são vistos")}, mas ${plural(n, "recebe", "recebem")} poucas visitas`,
-      apoio: `Vale dar mais visibilidade a ${plural(n, "ele", "eles")}.`,
-      botao: "Ver os pouco vistos",
-      href: link(
-        `${links.base}/produtos`,
-        links.periodo,
-        { diagnostico: "converte-falta-ser-visto" },
-        "#desempenho-anuncios",
-      ),
-    });
-  }
+  // Sem cartão de "converte, falta ser visto", de propósito (decisão do dono,
+  // 2026-10-23): com o corte na mediana nos dois eixos, ele sai quase sempre
+  // junto do de rejeitados e com o mesmo número, em qualquer loja — metade da
+  // lista viraria efeito do método. O diagnóstico continua na seção de
+  // Produtos, onde a comparação com a loja é o assunto.
 
   return {
     tarefas,

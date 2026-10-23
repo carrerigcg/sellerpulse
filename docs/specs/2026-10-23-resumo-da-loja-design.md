@@ -1,7 +1,7 @@
 # SellerPulse — Resumo da loja
 
 Data: 2026-10-23
-Estado: implementada em `feat/resumo-da-loja`, revisada por `revisor-de-interface` e `revisor-de-codigo`. Três decisões pendentes do dono (seção 9).
+Estado: implementada em `feat/resumo-da-loja`, revisada por `revisor-de-interface` e `revisor-de-codigo`. As três decisões da revisão foram tomadas (seção 9).
 
 ## 1. Por quê
 
@@ -138,8 +138,9 @@ Ordem fixa, só os cartões que se aplicam:
    (frequência **ou** valor altos), então a frase diz "já compraram bem" —
    não "compravam bem", que afirmaria frequência — e o fato que vale para
    todos: há quantos dias, no mínimo, não compram.
-4. **Anúncios que convertem e não são vistos.** Mesma regra do item 2,
-   diagnóstico `converte-falta-ser-visto`.
+
+**Sem cartão de "converte, falta ser visto"** — decidido pelo dono na
+revisão (seção 9). O diagnóstico continua na seção de Produtos.
 
 **Rodapé.**
 - Uma fonte falhou: os cartões das fontes que carregaram aparecem, e a tela
@@ -152,8 +153,11 @@ Ordem fixa, só os cartões que se aplicam:
 
 Os botões das tarefas são secundários (contorno), não laranja: nenhuma
 tarefa é mais importante que as outras, e a direção visual é um só botão de
-ação primária por tela. Os dois de anúncio têm nomes diferentes — levam a
-filtros diferentes.
+ação primária por tela.
+
+Quem chega a Produtos pelo cartão de anúncios não vê o tutorial abrir sozinho
+por cima da seção que veio ver (`chegouFiltrado` em `deveAbrirSozinho`), e
+nada é marcado como visto: o tutorial abre na próxima visita direta.
 
 ### Estados
 
@@ -228,7 +232,6 @@ Link ao fim do bloco: "Ver o financeiro completo" → `{base}/financeiro?de&ate`
 | custos | {n} produto(s) que você vendeu {está\|estão} sem custo informado | Com o custo informado, as próximas vendas já descontam o produto. | "Informar custos" (demo: "Ver custos") → `{base}/custos?de&ate` |
 | vistos e rejeitados | {n} {anúncio recebe\|anúncios recebem} mais visitas que a média da sua loja, mas {vende\|vendem} menos | Muita gente entra e não compra — vale revisar preço, foto, título ou frete. | "Ver os que vendem menos" → `{base}/produtos?de&ate&diagnostico=visto-e-rejeitado#desempenho-anuncios` |
 | clientes | {n} {cliente que já comprou\|clientes que já compraram} bem com você não {compra\|compram} há {d} dias ou mais | Nos últimos 3 meses, {gastou\|gastaram} {R$ x} com você. | "Ver quais clientes" → `{base}/clientes?de&ate` (janela de 90 dias) |
-| convertem, pouco vistos | {n} {anúncio vende\|anúncios vendem} mais que a média da sua loja quando {é visto\|são vistos}, mas {recebe\|recebem} poucas visitas | Vale dar mais visibilidade a {ele\|eles}. | "Ver os pouco vistos" → `…&diagnostico=converte-falta-ser-visto#desempenho-anuncios` |
 | nenhuma, anúncios avaliados | Nada pedindo atenção agora. | — | — |
 | nenhuma, anúncios sem régua | Nada pedindo atenção nos custos e nos clientes. Os anúncios ainda não têm visitas suficientes para avaliar. | — | — |
 | incompleto | Parte do resumo não carregou agora. Tente de novo em instantes. | — | — |
@@ -342,7 +345,8 @@ erro) é `anterior: null` — "não houve vendas para comparar".
 - explicação com cobertura zero; aviso de cobertura parcial, nenhum,
   completo;
 - tarefas: ordem fixa, cartão com zero some, anúncios somem sem referência
-  confiável (e ficam "não avaliados"), plural e singular, botões distintos;
+  confiável (e ficam "não avaliados"), plural e singular, e o cartão
+  "pouco vistos" não aparece mesmo com anúncio nesse diagnóstico;
 - rodapé: `incompleto` nunca vira "nada pedindo atenção", nem anúncio sem
   régua;
 - `montaResumo`: fluxo atual ou anterior com erro derruba, anterior vazio
@@ -379,9 +383,9 @@ confirma produção nas duas plataformas.
 
 - Contraste: tokens atuais, já medidos (`globals.css`).
 - Diferença para menos em texto **e** cor, nunca só cor.
-- Botões com nome do destino, não "Ver mais" — e distintos entre si ("Ver os
-  que vendem menos", "Ver os pouco vistos"): uma lista de links com o mesmo
-  nome para destinos diferentes não diz nada a quem usa leitor de tela.
+- Botões com nome do destino, não "Ver mais" ("Ver os que vendem menos",
+  "Ver quais clientes"): uma lista de links com o mesmo nome para destinos
+  diferentes não diz nada a quem usa leitor de tela.
 - Chip de filtro com `aria-pressed`.
 - Uma só `h1`; os blocos são `section` com título.
 
@@ -403,20 +407,20 @@ anterior pode estar completo e o atual, parcial. O status `historico_completo`
 existe, mas o Resumo não o consulta. O problema é anterior (o Financeiro tem
 o mesmo), só que agora vira frase.
 
-**Decisões pendentes do dono**, levantadas na revisão:
+**Decisões da revisão**, tomadas pelo dono em 2026-10-23 (seguiu as
+recomendações):
 
-1. **Os dois cartões de anúncio saem quase sempre juntos e com o mesmo
+1. **Os dois cartões de anúncio saíam quase sempre juntos e com o mesmo
    número.** Com o corte na mediana nos dois eixos, rejeitados − pouco
    vistos ≈ (acima da mediana de visitas) − (acima da mediana de conversão)
-   ≈ 0. Medido: demo 11 e 11; loja real 36 e 33. Para qualquer loja com
-   régua confiável, metade da lista é efeito do método — e "nada pedindo
-   atenção" fica quase inalcançável. Opções: manter; tirar o 4º cartão
-   ("pouco vistos"), cuja ação é a mais vaga; ou trocar a regra do cartão
-   por algo que dependa da loja e não do corte.
-2. **O tutorial de Produtos abre por cima da seção filtrada** na primeira
-   vez que a pessoa chega pelo cartão. Opções: manter; não abrir sozinho
-   quando há `?diagnostico=` (sem marcar como visto); abrir já no passo que
-   explica o diagnóstico.
-3. **"Ver quais clientes" leva à lista inteira** (191 compradores na demo,
-   ordenados por valor), com os 31 em risco espalhados. Um filtro por
-   segmento na tela de Clientes resolveria — está fora de escopo (seção 8).
+   ≈ 0. Medido: demo 11 e 11; loja real 36 e 33. **Decidido: tirar o cartão
+   "pouco vistos"**, cuja ação era a mais vaga. O de rejeitados ainda
+   aparece para quase toda loja com régua confiável — a comparação é com a
+   própria loja, por desenho — e por isso a frase diz "mais que a média da
+   sua loja", não "vendem pouco".
+2. **O tutorial de Produtos abria por cima da seção filtrada.** **Decidido:
+   não abrir sozinho quando a pessoa chega filtrada**, sem marcar como visto
+   (`chegouFiltrado`, spec do tutorial, seção 3).
+3. **"Ver quais clientes" leva à lista inteira**, com os em risco
+   espalhados. **Decidido: fica como está neste projeto**; o filtro por
+   segmento na tela de Clientes é o próximo passo, separado (seção 8).

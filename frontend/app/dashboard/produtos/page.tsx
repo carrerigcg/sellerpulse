@@ -58,6 +58,7 @@ export default async function ProdutosPage({
         ate={ate}
         tela="produtos"
         temDados={temDados}
+        chegouFiltrado={filtroInicial !== null}
       />
 
       {erro ? (

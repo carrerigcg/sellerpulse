@@ -8,7 +8,6 @@ const ICONE: Record<ChaveDaTarefa, ComponentType<{ className?: string }>> = {
   custos: IconeCustos,
   "visto-e-rejeitado": IconeProdutos,
   "clientes-em-risco": IconeClientes,
-  "converte-falta-ser-visto": IconeProdutos,
 };
 
 /**

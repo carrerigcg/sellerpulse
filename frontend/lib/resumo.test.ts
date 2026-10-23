@@ -294,10 +294,13 @@ describe("montaTarefas", () => {
     expect(tarefas[0].href).toBe("/demo/custos?de=2026-09-23&ate=2026-10-23");
   });
 
-  it("anúncios pela mesma regra da seção Desempenho dos anúncios, com botões distintos", () => {
+  it("anúncios pela mesma regra da seção Desempenho dos anúncios — só os que vendem menos", () => {
+    // A LOJA tem um "converte, falta ser visto", e ele NÃO vira cartão: pelo
+    // corte na mediana, esse cartão sairia junto do de rejeitados em
+    // qualquer loja (decisão do dono, spec seção 9).
     const { tarefas, anunciosAvaliados } = montaTarefas({ ...SEM_PENDENCIA, abc: LOJA, links: LINKS });
     expect(anunciosAvaliados).toBe(true);
-    expect(tarefas.map((x) => x.chave)).toEqual(["visto-e-rejeitado", "converte-falta-ser-visto"]);
+    expect(tarefas.map((x) => x.chave)).toEqual(["visto-e-rejeitado"]);
     expect(tarefas[0].frase).toBe(
       "2 anúncios recebem mais visitas que a média da sua loja, mas vendem menos",
     );
@@ -305,11 +308,6 @@ describe("montaTarefas", () => {
     expect(tarefas[0].href).toBe(
       "/dashboard/produtos?de=2026-09-23&ate=2026-10-23&diagnostico=visto-e-rejeitado#desempenho-anuncios",
     );
-    expect(tarefas[1].frase).toBe(
-      "1 anúncio vende mais que a média da sua loja quando é visto, mas recebe poucas visitas",
-    );
-    expect(tarefas[1].apoio).toBe("Vale dar mais visibilidade a ele.");
-    expect(tarefas[1].botao).toBe("Ver os pouco vistos");
   });
 
   it("sem referência confiável, nenhum cartão de anúncio — e anúncios não avaliados", () => {
@@ -346,19 +344,14 @@ describe("montaTarefas", () => {
     expect(t(tarefas[0].apoio)).toBe("Nos últimos 3 meses, gastou R$ 100 com você.");
   });
 
-  it("ordem fixa: custos, rejeitados, clientes, pouco vistos", () => {
+  it("ordem fixa: custos, rejeitados, clientes", () => {
     const { tarefas } = montaTarefas({
       custos: [{ custo_unitario: null }],
       abc: LOJA,
       rfm: [{ segmento: "At Risk", monetary: 100, recency_dias: 40 }],
       links: LINKS,
     });
-    expect(tarefas.map((x) => x.chave)).toEqual([
-      "custos",
-      "visto-e-rejeitado",
-      "clientes-em-risco",
-      "converte-falta-ser-visto",
-    ]);
+    expect(tarefas.map((x) => x.chave)).toEqual(["custos", "visto-e-rejeitado", "clientes-em-risco"]);
   });
 });
 

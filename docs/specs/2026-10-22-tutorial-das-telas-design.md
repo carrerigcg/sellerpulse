@@ -65,11 +65,16 @@ Custos e Exportar — em `/dashboard` e em `/demo`. O tutorial é montado pelo
 `CabecalhoDeTela`, que só essas dez páginas usam; a vitrine e
 `/dashboard/conectar` ficam de fora por construção, não por condição.
 
-**Quando abre sozinho.** As três condições juntas:
+**Quando abre sozinho.** As quatro condições juntas:
 
 1. a pessoa nunca fechou este tutorial, nesta versão, neste contexto;
 2. a tela tem dado para mostrar (nem vazia, nem com erro);
-3. o `localStorage` está disponível.
+3. o `localStorage` está disponível;
+4. a pessoa não chegou por um atalho que já filtra a tela (`chegouFiltrado`).
+   Acrescentada com o Resumo da loja (2026-10-23): o cartão de anúncios abre
+   Produtos rolado e filtrado, e um modal por cima esconderia exatamente o
+   que ela veio ver. Como não abre, não marca como visto — abre na próxima
+   visita direta.
 
 Se o `localStorage` falhar (aba anônima, armazenamento bloqueado), **não abre
 sozinho**: sem como lembrar, abriria em toda visita. O botão "?" funciona.
