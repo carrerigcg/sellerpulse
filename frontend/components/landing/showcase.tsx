@@ -3,7 +3,7 @@ import Link from "next/link";
 import { BrowserFrame } from "./browser-frame";
 
 /**
- * Seção 3 — as três análises, com prints reais de `/demo`, `/demo/produtos`
+ * Seção 3 — as três análises, com prints reais de `/demo/financeiro`, `/demo/produtos`
  * e `/demo/clientes`, capturados da própria demonstração por
  * `scripts/captura-prints.mjs`. Nenhum número aqui é fabricado.
  *
@@ -24,11 +24,11 @@ import { BrowserFrame } from "./browser-frame";
 
 const TELAS = [
   {
-    titulo: "Executive",
+    titulo: "Financeiro",
     pergunta: "Quanto sobrou de verdade este mês, depois da comissão do Mercado Livre?",
     desktop: { src: "/landing/demo-executive.png", width: 1440, height: 900 },
     mobile: { src: "/landing/demo-executive-mobile.png", width: 602, height: 1100 },
-    href: "/demo",
+    href: "/demo/financeiro",
   },
   {
     titulo: "Produtos",

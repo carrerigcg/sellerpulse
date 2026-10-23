@@ -14,6 +14,19 @@ type Props = { className?: string };
 
 const base = "h-5 w-5 shrink-0";
 
+/** Casa: a porta de entrada — o Resumo. */
+export function IconeInicio({ className = "" }: Props) {
+  return (
+    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V20h14V9.5" />
+      <path d="M10 20v-5h4v5" />
+    </svg>
+  );
+}
+
 export function IconeExecutive({ className = "" }: Props) {
   return (
     <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"

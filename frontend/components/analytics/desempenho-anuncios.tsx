@@ -32,10 +32,17 @@ type Campo = "titulo" | "visitas" | "unidades" | "conversao" | "diagnostico";
  * chegam como props do Server Component da página: dado puro atravessa a
  * fronteira RSC, função não — restrição documentada em `lib/csv.ts`.
  */
-export function DesempenhoAnuncios({ abc }: { abc: AbcLinha[] }) {
+export function DesempenhoAnuncios({
+  abc,
+  filtroInicial = null,
+}: {
+  abc: AbcLinha[];
+  /** Vem do cartão do Resumo: a pessoa chega vendo os anúncios de que a frase falava. */
+  filtroInicial?: Diagnostico | null;
+}) {
   const [campo, setCampo] = useState<Campo>("visitas");
   const [descendente, setDescendente] = useState(true);
-  const [filtro, setFiltro] = useState<Diagnostico | null>(null);
+  const [filtro, setFiltro] = useState<Diagnostico | null>(filtroInicial);
 
   const { referencia, comDiagnostico, contagens } = useMemo(() => {
     const referencia = calculaReferencia(abc);
@@ -263,6 +270,7 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={ativo}
       className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition ${
         ativo
           ? "border-accent bg-accent-soft font-medium text-accent-hover"

@@ -155,7 +155,7 @@ export function chaveDeArmazenamento(
 }
 
 /**
- * As três condições para abrir sem a pessoa pedir.
+ * As condições para abrir sem a pessoa pedir.
  *
  * `temDados`: tela vazia ou com erro não abre. Um usuário recém-cadastrado
  * cai no dashboard sem pedido e com o atalho para conectar a conta — um modal
@@ -163,13 +163,21 @@ export function chaveDeArmazenamento(
  *
  * `armazenamentoDisponivel`: sem como lembrar que já viu, abriria em toda
  * visita. Melhor não abrir sozinho; o botão continua funcionando.
+ *
+ * `chegouFiltrado`: a pessoa veio por um atalho que já mostra o que ela quer
+ * ver — o cartão do Resumo abre Produtos rolado e filtrado. Um modal por cima
+ * esconderia exatamente isso. Como não abre, também não marca como visto: o
+ * tutorial abre na próxima visita direta à tela.
  */
 export function deveAbrirSozinho(estado: {
   jaVisto: boolean;
   temDados: boolean;
   armazenamentoDisponivel: boolean;
+  chegouFiltrado: boolean;
 }): boolean {
-  return estado.armazenamentoDisponivel && estado.temDados && !estado.jaVisto;
+  return (
+    estado.armazenamentoDisponivel && estado.temDados && !estado.jaVisto && !estado.chegouFiltrado
+  );
 }
 
 export function contextoDaRota(pathname: string): Contexto {

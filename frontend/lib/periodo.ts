@@ -68,10 +68,39 @@ export function hojeNoFusoDoVendedor(agora: Date = new Date()): string {
  */
 export function periodoPadrao(agora: Date = new Date()): { de: string; ate: string } {
   const ate = hojeNoFusoDoVendedor(agora);
-  const [ano, mes, dia] = ate.split("-").map(Number);
-  // A subtração é sobre a DATA de calendário, em UTC puro: o resultado é um
-  // dia, não um instante, então nenhum fuso nem horário de verão consegue
-  // empurrar o início um dia para o lado.
-  const inicio = new Date(Date.UTC(ano, mes - 1, dia - DIAS_DO_PERIODO_PADRAO));
-  return { de: inicio.toISOString().slice(0, 10), ate };
+  return { de: diasAntes(ate, DIAS_DO_PERIODO_PADRAO), ate };
+}
+
+export const DIAS_DO_RESUMO = 30;
+
+/**
+ * Janela do Resumo: os últimos 30 dias, com o mesmo `ate` exclusivo do resto
+ * do projeto — e a legenda que a tela mostra, com as DUAS pontas incluídas.
+ *
+ * O Resumo não tem seletor, então não tem onde explicar o "Até" exclusivo.
+ * Escrever "de 23/09 a 23/10" para uma janela que termina em 22/10 repetiria,
+ * na tela feita para quem não lê gráfico, a confusão que o seletor documenta.
+ */
+export function periodoDoResumo(
+  agora: Date = new Date(),
+): { de: string; ate: string; legenda: string } {
+  const ate = hojeNoFusoDoVendedor(agora);
+  const de = diasAntes(ate, DIAS_DO_RESUMO);
+  return { de, ate, legenda: `de ${ddmm(de)} a ${ddmm(diasAntes(ate, 1))}` };
+}
+
+/**
+ * `dias` antes de `data` (`YYYY-MM-DD`). A subtração é sobre a DATA de
+ * calendário, em UTC puro: o resultado é um dia, não um instante, então
+ * nenhum fuso nem horário de verão consegue empurrar o início um dia para o
+ * lado.
+ */
+function diasAntes(data: string, dias: number): string {
+  const [ano, mes, dia] = data.split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1, dia - dias)).toISOString().slice(0, 10);
+}
+
+function ddmm(data: string): string {
+  const [, mes, dia] = data.split("-");
+  return `${dia}/${mes}`;
 }

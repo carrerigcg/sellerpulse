@@ -9,6 +9,7 @@ import { COLUNAS_ABC } from "@/lib/colunas-export";
 import { coberturaDosProdutos, produtosSemCusto } from "@/lib/cobertura";
 import { incluiDiasNaoConsolidados, temVisitaColhida } from "@/lib/visitas";
 import { DesempenhoAnuncios } from "@/components/analytics/desempenho-anuncios";
+import { diagnosticoDaUrl } from "@/lib/diagnostico";
 import { periodoPadrao } from "@/lib/periodo";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 import { SemPedidosNoPeriodo } from "@/components/analytics/sem-pedidos-no-periodo";
@@ -34,6 +35,7 @@ export default async function ProdutosPage({
   const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
+  const filtroInicial = diagnosticoDaUrl(params.diagnostico);
 
   let abc: AbcLinha[] = [];
   let cohort: CohortLinha[] = [];
@@ -56,6 +58,7 @@ export default async function ProdutosPage({
         ate={ate}
         tela="produtos"
         temDados={temDados}
+        chegouFiltrado={filtroInicial !== null}
       />
 
       {erro ? (
@@ -115,7 +118,14 @@ export default async function ProdutosPage({
               sobre receita e precisa continuar ordenada por ela (a classe
               A/B/C e o acumulado SAEM dessa ordem). Esta e sobre o funil e
               pode ser ordenada por qualquer coluna sem quebrar nada. */}
-          <DesempenhoAnuncios abc={abc} />
+          {/* `key` pelo filtro: o Next reaproveita o componente quando só a query
+              muda (a sidebar leva de volta a /produtos sem `?diagnostico=`), e o
+              `useState(filtroInicial)` ficaria preso ao filtro de antes. */}
+          <DesempenhoAnuncios
+            key={filtroInicial ?? "todos"}
+            abc={abc}
+            filtroInicial={filtroInicial}
+          />
 
           {/* Aviso dos 48h aqui, junto do que ele descreve. */}
           {temVisitaColhida(abc) && incluiDiasNaoConsolidados(ate) && (

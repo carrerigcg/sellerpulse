@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hojeNoFusoDoVendedor, periodoPadrao } from "./periodo";
+import { hojeNoFusoDoVendedor, periodoDoResumo, periodoPadrao } from "./periodo";
 
 /**
  * O teste que carrega peso aqui é o das 22h. As seis cópias antigas usavam
@@ -48,5 +48,30 @@ describe("periodoPadrao", () => {
       de: "2025-10-17",
       ate: "2026-01-15",
     });
+  });
+});
+
+describe("periodoDoResumo", () => {
+  it("30 dias terminando hoje, com a legenda incluindo as duas pontas", () => {
+    // `ate` é exclusivo como no resto do projeto; a legenda diz o último dia
+    // que entra de fato, porque o Resumo não tem seletor para explicar isso.
+    expect(periodoDoResumo(new Date("2026-10-23T13:00:00Z"))).toEqual({
+      de: "2026-09-23",
+      ate: "2026-10-23",
+      legenda: "de 23/09 a 22/10",
+    });
+  });
+
+  it("atravessa a virada do ano", () => {
+    expect(periodoDoResumo(new Date("2026-01-10T13:00:00Z"))).toEqual({
+      de: "2025-12-11",
+      ate: "2026-01-10",
+      legenda: "de 11/12 a 09/01",
+    });
+  });
+
+  it("às 22h em São Paulo, ainda é o dia de São Paulo", () => {
+    // 01:00 UTC do dia 24 = 22:00 do dia 23 em São Paulo.
+    expect(periodoDoResumo(new Date("2026-10-24T01:00:00Z")).ate).toBe("2026-10-23");
   });
 });

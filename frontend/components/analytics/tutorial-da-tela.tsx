@@ -29,7 +29,15 @@ import {
  * e um modal aberto na hora do "voltar" fica preso sobre a página inerte.
  * Ver a seção "Dialog" de `node_modules/next/dist/docs/01-app/02-guides/preserving-ui-state.md`.
  */
-export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temDados: boolean }) {
+export function TutorialDaTela({
+  tela,
+  temDados,
+  chegouFiltrado = false,
+}: {
+  tela: ChaveDeTutorial;
+  temDados: boolean;
+  chegouFiltrado?: boolean;
+}) {
   const contexto = contextoDaRota(usePathname());
   const tutorial = TUTORIAIS[tela];
   const slides = slidesDoContexto(tutorial, contexto);
@@ -54,10 +62,10 @@ export function TutorialDaTela({ tela, temDados }: { tela: ChaveDeTutorial; temD
     } catch {
       armazenamentoDisponivel = false;
     }
-    if (deveAbrirSozinho({ jaVisto, temDados, armazenamentoDisponivel })) {
+    if (deveAbrirSozinho({ jaVisto, temDados, armazenamentoDisponivel, chegouFiltrado })) {
       abrir(dialogo.current, primario.current);
     }
-  }, [chave, temDados]);
+  }, [chave, temDados, chegouFiltrado]);
 
   const ultimo = indice === slides.length - 1;
 

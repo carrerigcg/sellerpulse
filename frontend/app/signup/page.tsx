@@ -159,7 +159,7 @@ function traduzErroDeCadastro(mensagem: string): string {
 function PainelSignup() {
   const analises = [
     {
-      titulo: "Executive",
+      titulo: "Financeiro",
       texto:
         "Receita, comissão do Mercado Livre e margem de contribuição por dia, com variação sobre o período anterior.",
     },
