@@ -10,7 +10,11 @@
   --sp-text: #0f172a;
   --sp-muted: #64748b;
 
-  /* laranja = ação (botão, link, estado ativo). Contraste >= 4.5:1 em branco. */
+  /* laranja = ação (botão, link, estado ativo).
+     Contraste com branco, medido: accent 3,56:1, accent-hover 5,18:1. Texto
+     normal pede 4,5:1, então o accent só passa em texto grande (>= 18,66px em
+     negrito) — e os botões principais usam texto branco de 14px sobre ele.
+     Trocar o token é decisão visual em aberto (spec do tutorial, seção 9). */
   --sp-accent: #ea580c;
   --sp-accent-hover: #c2410c;
   --sp-accent-soft: #fff7ed;
