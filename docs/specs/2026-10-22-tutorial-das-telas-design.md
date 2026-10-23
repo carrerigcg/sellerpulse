@@ -1,7 +1,7 @@
 # SellerPulse — Tutorial das telas
 
 Data: 2026-10-22
-Estado: mergeada em `a8d0764` (#21), revisada por `revisor-de-interface` e `revisor-de-codigo`. A premissa da 2.3 continua a confirmar.
+Estado: mergeada em `a8d0764` (#21), revisada por `revisor-de-interface` e `revisor-de-codigo`. Premissa da 2.3 confirmada.
 
 ## 1. Por quê
 
@@ -32,12 +32,12 @@ na frente da pessoa naquele momento.
 do dono do produto: a vitrine já mostra o que a aplicação entrega, e o pop-up
 lá é desnecessário.
 
-> **Premissa a confirmar na revisão:** a frase foi "esse pop-up vem só na tela
-> da demo e quando logado". Li como **abrir sozinho também na demo**, o que
-> substitui a minha recomendação original (na demo, só pelo botão "?", para
-> não pôr um modal na primeira impressão de quem está avaliando). Se a
-> intenção era manter a demo só pelo botão, a mudança é uma única condição em
-> `deveAbrirSozinho`.
+> **Premissa confirmada pelo dono em 2026-10-23:** a frase foi "esse pop-up vem
+> só na tela da demo e quando logado", e a li como **abrir sozinho também na
+> demo**, o que substitui a recomendação original (na demo, só pelo botão "?",
+> para não pôr um modal na primeira impressão de quem está avaliando). Com o
+> tutorial em produção — 13 slides somando as cinco telas da demo — a resposta
+> foi manter: "assim está perfeito". Não reabrir sem dado novo.
 
 **2.4 — "Já vi" fica no `localStorage` do navegador.** Sem migration, sem
 RLS, sem PR de backend. O custo aceito: não acompanha a pessoa entre
@@ -280,8 +280,10 @@ valer". O vendedor não escolhe data: o custo vale de hoje em diante.
 
 - Texto branco no botão laranja (`--sp-accent`, `#ea580c`) dá 3,56:1, abaixo
   dos 4,5:1 que texto de 14px pede — e o comentário de `globals.css` afirma
-  "≥ 4.5:1". Vale para todo botão principal do produto; trocar o token é
-  decisão visual do dono. **Em aberto.**
+  "≥ 4.5:1". Vale para todo botão principal do produto. Corrigido em
+  2026-10-23, por decisão do dono: o accent passou a `#c2410c` (5,18:1). O
+  herói, de fundo escuro, ganhou um token próprio com o tom antigo, porque lá
+  o novo cairia para 2,18:1.
 - A legenda do cohort dizia "sem venda possível (antes do lançamento)", mas a
   mesma célula tracejada marca mês posterior ao lançamento sem venda.
   Corrigido à parte, em `62a8ce6`.
