@@ -36,6 +36,8 @@ export default async function DemoCustosPage({ searchParams }: PageProps<"/demo/
   const cobertura = coberturaInformada(linhas);
   const comCusto = linhas.filter((l) => l.custo_unitario !== null).length;
 
+  const temDados = !erro && linhas.length > 0;
+
   return (
     <>
       <CabecalhoDeTela
@@ -43,11 +45,13 @@ export default async function DemoCustosPage({ searchParams }: PageProps<"/demo/
         subtitulo="Quanto cada produto custa ao vendedor. É o que falta para a margem ser a margem."
         de={de}
         ate={ate}
+        tela="custos"
+        temDados={temDados}
       />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
-      ) : linhas.length === 0 ? (
+      ) : !temDados ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
           Nenhum produto vendido neste período.
         </p>

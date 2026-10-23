@@ -32,6 +32,8 @@ export default async function DemoClientesPage({
     erro = "Não foi possível carregar a demonstração agora. Tente de novo em instantes.";
   }
 
+  const temDados = !erro && rfm.length > 0;
+
   return (
     <>
       <CabecalhoDeTela
@@ -39,11 +41,13 @@ export default async function DemoClientesPage({
         subtitulo="Quem compra de novo, quem está sumindo, e quanto isso vale."
         de={de}
         ate={ate}
+        tela="clientes"
+        temDados={temDados}
       />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
-      ) : rfm.length === 0 ? (
+      ) : !temDados ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
           Nenhum comprador nesta janela de demonstração. Tente outro período.
         </p>

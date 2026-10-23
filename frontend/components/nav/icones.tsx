@@ -1,9 +1,10 @@
 /**
  * Ícones da navegação, escritos à mão em vez de uma biblioteca.
  *
- * São seis. Uma dependência de ícones custa mais que isso em bundle e em
- * superfície de atualização, e o projeto já recusou um plugin de scrollbar
- * pelo mesmo motivo. Se um dia forem trinta, reavalia.
+ * São um punhado — e sem número aqui, porque a contagem já envelheceu uma vez.
+ * Uma dependência de ícones custa mais que isso em bundle e em superfície de
+ * atualização, e o projeto já recusou um plugin de scrollbar pelo mesmo
+ * motivo. Se um dia forem trinta, reavalia.
  *
  * `currentColor` em tudo: a cor vem da classe do link (ativo/inativo), então
  * o ícone não precisa saber nada sobre tema.
@@ -83,6 +84,18 @@ export function IconeFechar({ className = "" }: Props) {
     <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
       <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
+/** Interrogação num círculo. Usado no botão que reabre o tutorial da tela. */
+export function IconeAjuda({ className = "" }: Props) {
+  return (
+    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.5a2.5 2.5 0 0 1 4.9.7c0 1.7-2.4 2.3-2.4 3.8M12 17h.01" />
     </svg>
   );
 }

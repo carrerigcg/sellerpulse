@@ -46,6 +46,8 @@ export default async function DemoExportarPage({
         subtitulo="Leve as tabelas para a planilha, e entenda o que cada coluna quer dizer."
         de={de}
         ate={ate}
+        tela="exportar"
+        temDados={!erro && fluxo.length + abc.length + rfm.length > 0}
       />
 
       {erro ? (

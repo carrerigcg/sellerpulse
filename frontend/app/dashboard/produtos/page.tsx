@@ -45,6 +45,8 @@ export default async function ProdutosPage({
     erro = mensagemDeFalhaAoCarregar(e);
   }
 
+  const temDados = !erro && abc.length > 0;
+
   return (
     <>
       <CabecalhoDeTela
@@ -52,13 +54,15 @@ export default async function ProdutosPage({
         subtitulo="Quais produtos sustentam o faturamento, e quais só ocupam espaço."
         de={de}
         ate={ate}
+        tela="produtos"
+        temDados={temDados}
       />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
           {erro}
         </p>
-      ) : abc.length === 0 ? (
+      ) : !temDados ? (
         <SemPedidosNoPeriodo mensagem="Nenhum pedido pago neste período." />
       ) : (
         <>

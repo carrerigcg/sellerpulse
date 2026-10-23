@@ -1,7 +1,7 @@
 # SellerPulse — Tutorial das telas
 
 Data: 2026-10-22
-Estado: aguardando revisão do dono do produto.
+Estado: implementada em `feat/tutorial-das-telas`, revisada por `revisor-de-interface` e `revisor-de-codigo`. A premissa da 2.3 continua a confirmar.
 
 ## 1. Por quê
 
@@ -130,7 +130,7 @@ que antecederam esta feature.
 | --- | --- | --- | --- |
 | 1 | Classes A, B e C | Os produtos são ordenados por receita. A classe A soma os primeiros 80% do faturamento do período, a B vai até 95%, e a C é o restante. | `_classify` em `backend/analytics/segmentation_pg.py` |
 | 2 | Quem é visto e não vende | Em Desempenho dos anúncios, cada anúncio é comparado com a mediana da própria loja. "Visto e rejeitado" pede ajuste no anúncio — preço, foto, título ou frete. "Converte, falta ser visto" pede visibilidade. | `APARENCIA` em `lib/diagnostico.ts` |
-| 3 | Quando não dá para concluir | Anúncio com poucas visitas aparece como "Poucas visitas para avaliar", sem diagnóstico, para não virar alarme falso. E onde aparece "—", o dado ainda não existe — não é zero. | `lib/diagnostico.ts`; `CLAUDE.md` |
+| 3 | Quando não dá para concluir | Anúncio com poucas visitas aparece como "Poucas visitas para avaliar", sem diagnóstico, para não virar alarme falso. E, em Desempenho dos anúncios, "—" quer dizer que falta dado para calcular — não é zero. | `lib/diagnostico.ts`; `desempenho-anuncios.tsx` (visita não colhida, conversão sem visita, mediana sem amostra). Restrito a esta seção de propósito: no cohort da mesma tela, "—" também marca mês sem venda, que é zero (`cohort-heatmap.tsx`) |
 
 
 ### Clientes
@@ -146,7 +146,7 @@ que antecederam esta feature.
 | # | título | texto | fonte |
 | --- | --- | --- | --- |
 | 1 | Por que informar o custo | O Mercado Livre não sabe quanto o produto custa para você. Sem esse número, a margem de contribuição fica maior do que a real. | docstring de `app/dashboard/custos/page.tsx` |
-| 2 | O custo vale daqui para frente | O que você digita vale a partir de hoje. Vendas que já aconteceram ficam com o custo que valia na época — ou sem custo, se não havia nenhum. Por isso a cobertura da margem sobe aos poucos, com as próximas vendas. | docstring de Custos; `LEFT JOIN LATERAL` em `backend/analytics/metrics_pg.py` |
+| 2 | O custo vale daqui para frente | O que você digita vale a partir de hoje. Vendas que já aconteceram ficam com o custo que valia na época — ou sem custo, se não havia nenhum. Por isso o aviso de cobertura nas outras telas sobe aos poucos, com as próximas vendas. | docstring de Custos; `LEFT JOIN LATERAL` em `backend/analytics/metrics_pg.py`. "Nas outras telas" porque o resumo da própria tela de Custos mede outra coisa: o catálogo preenchido hoje (`coberturaInformada`) |
 | 3 | Por onde começar | Comece pelos produtos que mais faturam: são eles que mais mexem na margem. | — (orientação, não afirmação sobre o produto) |
 
 ### Custos — demo
@@ -160,7 +160,7 @@ que antecederam esta feature.
 
 | # | título | texto | fonte |
 | --- | --- | --- | --- |
-| 1 | Leve os números para a planilha | Cada tabela sai em CSV: uma de cada vez, ou todas juntas. | `painel-exportacao.tsx` |
+| 1 | Leve os números para a planilha | Cada tabela sai num arquivo CSV. Dá para baixar uma de cada vez ou todas de uma vez — e, mesmo assim, cada uma vem no seu próprio arquivo. | `painel-exportacao.tsx` ("São N arquivos separados, um por tabela") |
 | 2 | Abre direto no Excel | O arquivo já vem no formato do Excel em português: ponto e vírgula entre colunas, vírgula nos decimais e acentos preservados. Nesta tela há um glossário explicando cada coluna. | `lib/csv.ts`; `glossario-colunas.tsx` |
 
 ## 5. Arquitetura
@@ -268,6 +268,21 @@ vê a margem dos últimos 90 dias igual, com a cobertura baixa. O slide 2 de
 Custos explica; a correção de verdade seria permitir uma vigência retroativa,
 que a docstring de Custos chama de "outra tela, e por ora não existe".
 
+A própria tela de Custos piorava isso: com o catálogo todo preenchido, dizia
+"a margem já desconta o custo dos produtos" — falso para as vendas passadas.
+Corrigido nesta branch, porque o tutorial punha as duas frases lado a lado.
+
 **A vitrine afirma algo que o produto não faz.** A seção "Da análise à ação"
 diz que o vendedor informa o custo "com a data em que aquele custo passou a
 valer". O vendedor não escolhe data: o custo vale de hoje em diante.
+
+**Da revisão, já existiam antes desta branch** (registrados, não corrigidos):
+
+- Texto branco no botão laranja (`--sp-accent`, `#ea580c`) dá 3,56:1, abaixo
+  dos 4,5:1 que texto de 14px pede — e o comentário de `globals.css` afirma
+  "≥ 4.5:1". Vale para todo botão principal do produto; trocar o token é
+  decisão visual do dono.
+- A legenda do cohort diz "sem venda possível (antes do lançamento)", mas a
+  mesma célula tracejada marca mês posterior ao lançamento sem venda.
+- Os cartões do Executive mostram a variação com ponto ("+1.1%"), por
+  `toFixed(1)` em `kpi-card.tsx`; o resto da tela usa vírgula.

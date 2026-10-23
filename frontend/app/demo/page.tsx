@@ -41,6 +41,8 @@ export default async function DemoExecutivePage({
   const atual = totalizarFluxo(fluxo);
   const passado = totalizarFluxo(anterior);
 
+  const temDados = !erro && fluxo.length > 0;
+
   return (
     <>
       <CabecalhoDeTela
@@ -48,11 +50,13 @@ export default async function DemoExecutivePage({
         subtitulo="Receita, custos do Mercado Livre e margem de contribuição — dados de demonstração."
         de={de}
         ate={ate}
+        tela="executive"
+        temDados={temDados}
       />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
-      ) : fluxo.length === 0 ? (
+      ) : !temDados ? (
         <p className="mt-8 rounded-lg border border-line bg-surface px-4 py-3 text-sm text-muted">
           Nenhum pedido nesta janela de demonstração. Tente outro período.
         </p>

@@ -37,6 +37,8 @@ export default async function ClientesPage({
     erro = mensagemDeFalhaAoCarregar(e);
   }
 
+  const temDados = !erro && rfm.length > 0;
+
   return (
     <>
       <CabecalhoDeTela
@@ -44,13 +46,15 @@ export default async function ClientesPage({
         subtitulo="Quem compra de novo, quem está sumindo, e quanto isso vale."
         de={de}
         ate={ate}
+        tela="clientes"
+        temDados={temDados}
       />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
           {erro}
         </p>
-      ) : rfm.length === 0 ? (
+      ) : !temDados ? (
         <SemPedidosNoPeriodo mensagem="Nenhum comprador com pedido pago neste período." />
       ) : (
         <>

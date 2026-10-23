@@ -49,6 +49,8 @@ export default async function ExecutivePage({
   const atual = totalizarFluxo(fluxo);
   const passado = totalizarFluxo(anterior);
 
+  const temDados = !erro && fluxo.length > 0;
+
   return (
     <>
       <DisparaDelta />
@@ -58,13 +60,15 @@ export default async function ExecutivePage({
         subtitulo="Receita, custos do Mercado Livre e margem de contribuição do período."
         de={de}
         ate={ate}
+        tela="executive"
+        temDados={temDados}
       />
 
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
           {erro}
         </p>
-      ) : fluxo.length === 0 ? (
+      ) : !temDados ? (
         <SemPedidosNoPeriodo mensagem="Nenhum pedido pago neste período." />
       ) : (
         <>
