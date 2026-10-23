@@ -50,7 +50,7 @@ export function Hero() {
 
           <h1 className="mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
             Todo vendedor tem os números. Poucos têm as{" "}
-            <span className="text-accent">respostas</span>.
+            <span className="text-accent-on-dark">respostas</span>.
           </h1>
 
           {/* A H1 nomeia QUATRO capacidades no subtítulo, nunca uma. A versão

@@ -11,13 +11,18 @@
   --sp-muted: #64748b;
 
   /* laranja = ação (botão, link, estado ativo).
-     Contraste com branco, medido: accent 3,56:1, accent-hover 5,18:1. Texto
-     normal pede 4,5:1, então o accent só passa em texto grande (>= 18,66px em
-     negrito) — e os botões principais usam texto branco de 14px sobre ele.
-     Trocar o token é decisão visual em aberto (spec do tutorial, seção 9). */
-  --sp-accent: #ea580c;
-  --sp-accent-hover: #c2410c;
+     Contraste com branco, medido: accent 5,18:1, accent-hover 7,31:1 — os dois
+     acima dos 4,5:1 de texto normal, inclusive o texto branco de 14px dos
+     botões. Até 2026-10-23 o accent era #ea580c, com 3,56:1, que não passava. */
+  --sp-accent: #c2410c;
+  --sp-accent-hover: #9a3412;
   --sp-accent-soft: #fff7ed;
+
+  /* laranja para texto SOBRE ESCURO — hoje, só o painel do herói. Contraste
+     é relativo: o accent, que passa no branco, lá cai para 2,18:1 no quadro
+     mais claro do vídeo. Este é o accent antigo e fecha 3,17:1, acima dos 3:1
+     de texto grande. Nunca sobre branco, onde dá 3,56:1. */
+  --sp-accent-on-dark: #ea580c;
 
   /* amarelo = SÓ preenchimento/realce. Nunca texto pequeno nem traço fino:
      amarelo sobre branco não atinge contraste legível. */
@@ -39,6 +44,7 @@
   --color-accent: var(--sp-accent);
   --color-accent-hover: var(--sp-accent-hover);
   --color-accent-soft: var(--sp-accent-soft);
+  --color-accent-on-dark: var(--sp-accent-on-dark);
   --color-highlight: var(--sp-highlight);
   --color-highlight-soft: var(--sp-highlight-soft);
   --color-positive: var(--sp-positive);

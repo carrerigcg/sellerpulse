@@ -140,7 +140,9 @@ function CelulaCohort({ valor, maximo }: { valor: number | null; maximo: number 
     );
   }
 
-  const intensidade = Math.max(6, Math.min(100, Math.round((valor / maximo) * 100)));
+  // Escala até 80%, e não 100%: é o tom do "mais receita" da legenda, e acima
+  // de ~83% o texto escuro da célula cai abaixo de 4,5:1 sobre o laranja.
+  const intensidade = Math.max(6, Math.round((valor / maximo) * 80));
   return (
     <div
       className="tabular flex h-10 items-center justify-center rounded text-xs font-medium"
