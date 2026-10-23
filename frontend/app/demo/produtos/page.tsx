@@ -10,6 +10,7 @@ import { getDemoAbcPareto, getDemoCohortProduto } from "@/lib/demo";
 import { coberturaDosProdutos, produtosSemCusto } from "@/lib/cobertura";
 import { incluiDiasNaoConsolidados, temVisitaColhida } from "@/lib/visitas";
 import { DesempenhoAnuncios } from "@/components/analytics/desempenho-anuncios";
+import { diagnosticoDaUrl } from "@/lib/diagnostico";
 import { periodoPadrao } from "@/lib/periodo";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
@@ -26,6 +27,7 @@ export default async function DemoProdutosPage({
   const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
+  const filtroInicial = diagnosticoDaUrl(params.diagnostico);
 
   let abc: AbcLinha[] = [];
   let cohort: CohortLinha[] = [];
@@ -115,7 +117,7 @@ export default async function DemoProdutosPage({
               sobre receita e precisa continuar ordenada por ela (a classe
               A/B/C e o acumulado SAEM dessa ordem). Esta e sobre o funil e
               pode ser ordenada por qualquer coluna sem quebrar nada. */}
-          <DesempenhoAnuncios abc={abc} />
+          <DesempenhoAnuncios abc={abc} filtroInicial={filtroInicial} />
 
           {/* Aviso dos 48h aqui, junto do que ele descreve. */}
           {temVisitaColhida(abc) && incluiDiasNaoConsolidados(ate) && (

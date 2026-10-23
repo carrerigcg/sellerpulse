@@ -5,6 +5,7 @@ import {
   VENDAS_ESPERADAS_MINIMAS,
   calculaReferencia,
   diagnostica,
+  diagnosticoDaUrl,
   type LinhaDeFunil,
 } from "./diagnostico";
 
@@ -186,5 +187,17 @@ describe("a cauda precisa ser alcançável", () => {
     // Trava direta no valor: com 1, a fronteira iguala a mediana e a cauda
     // some. Qualquer volta para 1 quebra aqui.
     expect(VENDAS_ESPERADAS_MINIMAS).toBeGreaterThan(1);
+  });
+});
+
+describe("diagnosticoDaUrl", () => {
+  it("aceita um diagnóstico conhecido", () => {
+    expect(diagnosticoDaUrl("visto-e-rejeitado")).toBe("visto-e-rejeitado");
+  });
+
+  it("ignora o resto — a URL é digitável", () => {
+    expect(diagnosticoDaUrl("qualquer-coisa")).toBeNull();
+    expect(diagnosticoDaUrl(undefined)).toBeNull();
+    expect(diagnosticoDaUrl(["visto-e-rejeitado"])).toBeNull();
   });
 });

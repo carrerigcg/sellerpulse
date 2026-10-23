@@ -227,3 +227,11 @@ export const ORDEM_DOS_FILTROS: Diagnostico[] = [
   "sem-visita",
   "sem-referencia",
 ];
+
+/**
+ * O `?diagnostico=` da URL, validado. Vem dos cartões do Resumo, que abrem
+ * Produtos já filtrado — mas a URL é digitável, então só passa o que existe.
+ */
+export function diagnosticoDaUrl(valor: unknown): Diagnostico | null {
+  return ORDEM_DOS_FILTROS.find((d) => d === valor) ?? null;
+}
