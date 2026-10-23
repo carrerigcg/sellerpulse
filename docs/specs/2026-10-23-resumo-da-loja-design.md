@@ -1,7 +1,7 @@
 # SellerPulse — Resumo da loja
 
 Data: 2026-10-23
-Estado: aguardando revisão do dono do produto.
+Estado: implementada em `feat/resumo-da-loja`, revisada por `revisor-de-interface` e `revisor-de-codigo`. Três decisões pendentes do dono (seção 9).
 
 ## 1. Por quê
 
@@ -247,32 +247,45 @@ testáveis no vitest, no padrão de `lib/tutoriais.ts`:
 
 ```ts
 montaVeredito(entrada: {
-  atual: TotaisDoFluxo;            // de totalizarFluxo
-  anterior: TotaisDoFluxo | null;  // null = sem vendas no período anterior
+  atual: Totais;                   // ReturnType<typeof totalizarFluxo>
+  anterior: Totais | null;         // null = sem vendas no período anterior
   coberturaAtual: Cobertura;       // coberturaDoFluxo
   coberturaAnterior: Cobertura | null;
 }): Veredito;
 
 montaTarefas(entrada: {
-  custos: CustoLinha[] | null;     // null = a busca falhou
-  abc: AbcLinha[] | null;
-  rfm: RfmLinha[] | null;
-  links: LinksDoResumo;            // já com base e período
-}): { tarefas: Tarefa[]; incompleto: boolean };
+  custos: { custo_unitario }[] | null;   // null = a busca falhou
+  abc: LinhaDeFunil[] | null;
+  rfm: { segmento, monetary, recency_dias }[] | null;
+  links: LinksDoResumo;                  // já com base e período
+}): { tarefas: Tarefa[]; incompleto: boolean; anunciosAvaliados: boolean };
+
+montaResumo(entrada: {
+  fluxo, anterior, abc, custos, rfm: PromiseSettledResult<…>;
+  links: LinksDoResumo;
+}): { erroNoFluxo, semVendas, veredito, tarefas, rodape, hrefFinanceiro };
 ```
 
 `Veredito` e `Tarefa` carregam as frases prontas — o texto mora aqui para o
-vitest cobrir a regra e o plural, não só a conta.
+vitest cobrir a regra e o plural, não só a conta. `montaResumo` é tudo o que
+as páginas faziam com o resultado das buscas: as regras "fluxo com erro
+derruba" e "anterior vazio não compara" ficavam fora do alcance do vitest, e
+as duas páginas repetiam a montagem. `Totais` sai do próprio
+`totalizarFluxo`, importado por caminho relativo — é a conta dos cartões do
+Financeiro, e repeti-la seria o jeito de a sobra e a margem divergirem.
 
 **`periodoDoResumo()` em `frontend/lib/periodo.ts`**, ao lado de
 `periodoPadrao`: `{ de, ate, legenda }` com a legenda já inclusiva.
 
-**`frontend/components/resumo/`** — `bloco-dinheiro.tsx` e
-`lista-de-tarefas.tsx`, Server Components sem interação.
+**`frontend/components/resumo/`** — `bloco-dinheiro.tsx`,
+`lista-de-tarefas.tsx` e `resumo-da-loja.tsx` (cabeçalho, estados e os dois
+blocos), Server Components sem interação.
 
 **Páginas.** `app/dashboard/page.tsx` e `app/demo/page.tsx` viram o Resumo.
 Cada uma busca com os próprios getters, em paralelo e com
-`Promise.allSettled`:
+`Promise.allSettled`, entrega tudo a `montaResumo` e escreve só o que depende
+do contexto — a mensagem de erro e o estado vazio. A da demo chama
+`connection()` antes de tudo (seção 6):
 
 | busca | janela |
 | --- | --- |
@@ -298,11 +311,18 @@ erro) é `anterior: null` — "não houve vendas para comparar".
 - `components/nav/itens.ts`: "Resumo" primeiro, com ícone novo em
   `icones.tsx`; "Executive" vira "Financeiro" em `/financeiro`.
 - `DesempenhoAnuncios` ganha a prop `filtroInicial?: Diagnostico`. As
-  páginas de Produtos leem `?diagnostico=` e validam contra
-  `ORDEM_DOS_FILTROS` antes de repassar — texto puro, atravessa a fronteira
-  RSC.
+  páginas de Produtos leem `?diagnostico=`, validam com `diagnosticoDaUrl`
+  (`lib/diagnostico.ts`) e passam também `key={filtroInicial ?? "todos"}`: o
+  Next reaproveita o componente quando só a query muda, e o filtro ficaria
+  preso ao voltar a `/produtos` pela barra lateral. Os chips ganham
+  `aria-pressed` — quem chega pelo cartão precisa saber que a lista está
+  filtrada.
 - `scripts/captura-prints.mjs`: o print do Executive passa a vir de
   `/demo/financeiro`. Os prints não são regerados agora.
+- Vitrine (`showcase.tsx`) e cadastro (`signup/page.tsx`): o cartão
+  "Executive" vira "Financeiro", e o "Ver tela completa" da vitrine passa a
+  levar a `/demo/financeiro` — em `/demo` ele abriria o Resumo ao lado do
+  print do Financeiro.
 - O tutorial do Financeiro continua com `tela="executive"` e a mesma chave
   de "já vi". O Resumo não usa `CabecalhoDeTela`, então não tem tutorial nem
   seletor — não precisa explicar a si mesmo.
@@ -312,24 +332,38 @@ erro) é `anterior: null` — "não houve vendas para comparar".
 **Testes (vitest), em `lib/resumo.test.ts`:**
 
 - sobra positiva, negativa e zero; diferença a mais, a menos, igual; sem
-  anterior;
-- "o que mais pesou" escolhe a parte certa nos três casos, inclusive quando
-  duas partes se movem em sentidos opostos;
-- proteção da cobertura: custo como maior peso com coberturas diferentes
-  não culpa o custo;
-- aviso de cobertura parcial, nenhum, completo (sem aviso);
+  anterior; meses negativos (melhor e pior); arredondamento de falta no meio
+  do real;
+- principal motivo: a parte certa nos três casos, inclusive com partes em
+  sentidos opostos, e nenhum quando a diferença é de arredondamento;
+- aviso de comparação: dispara com cobertura e custo no mesmo sentido, cala
+  quando a alta de custo é real, e aparece mesmo quando o motivo é outra
+  parte;
+- explicação com cobertura zero; aviso de cobertura parcial, nenhum,
+  completo;
 - tarefas: ordem fixa, cartão com zero some, anúncios somem sem referência
-  confiável, plural e singular;
-- `incompleto` nunca produz "Nada pedindo atenção agora";
-- links levam base, período e filtro;
-- `periodoDoResumo`: 30 dias, legenda inclusiva.
+  confiável (e ficam "não avaliados"), plural e singular, botões distintos;
+- rodapé: `incompleto` nunca vira "nada pedindo atenção", nem anúncio sem
+  régua;
+- `montaResumo`: fluxo atual ou anterior com erro derruba, anterior vazio
+  não compara, sem venda vira estado vazio;
+- links levam base, período e filtro; `periodoDoResumo`: 30 dias, legenda
+  inclusiva.
 
-**Mutação**, nas três regras que carregam peso — quebrar de propósito,
-confirmar que o teste cai, restaurar, com o `diff` antes de rodar:
+**Mutação** — quebrar de propósito, confirmar com `diff` que a troca entrou,
+ver o teste certo cair, restaurar. Sete regras, todas derrubaram o teste
+delas:
 
-1. a proteção da cobertura;
-2. `incompleto` contra "nada pedindo atenção";
-3. a contagem de custo pelo que falta **hoje**.
+1. o aviso de comparação ignorando a direção;
+2. a explicação ignorando cobertura zero;
+3. a comparação sem sujeito próprio com mês negativo;
+4. o arredondamento com `Math.round`;
+5. o rodapé ignorando anúncios não avaliados;
+6. `incompleto` virando "nada pedindo atenção";
+7. a contagem de custo contando todos os produtos.
+
+**Build:** medido que, sem `connection()`, `/demo` sai `○` com revalidação
+de 1h — com ele, `ƒ`.
 
 **Navegador, em `/demo` com o banco de teste semeado:** cada tarefa clicada
 abre a tela com o **mesmo número** do cartão (Custos, Produtos já filtrado e
@@ -345,7 +379,10 @@ confirma produção nas duas plataformas.
 
 - Contraste: tokens atuais, já medidos (`globals.css`).
 - Diferença para menos em texto **e** cor, nunca só cor.
-- Botões com nome do destino ("Ver quais anúncios"), não "Ver mais".
+- Botões com nome do destino, não "Ver mais" — e distintos entre si ("Ver os
+  que vendem menos", "Ver os pouco vistos"): uma lista de links com o mesmo
+  nome para destinos diferentes não diz nada a quem usa leitor de tela.
+- Chip de filtro com `aria-pressed`.
 - Uma só `h1`; os blocos são `section` com título.
 
 ## 8. Fora de escopo
@@ -359,3 +396,27 @@ regerar os prints da vitrine.
 **Segmentos dependem da janela.** O RFM é relativo ao período consultado
 (seção 3). Uma tela que mostre segmentos num recorte curto mostra
 segmentos enganosos — vale para qualquer uso futuro, não só o Resumo.
+
+**Importação em andamento pode virar um "caiu" falso.** A importação
+inicial vai do mais antigo para o mais novo, então durante ela o período
+anterior pode estar completo e o atual, parcial. O status `historico_completo`
+existe, mas o Resumo não o consulta. O problema é anterior (o Financeiro tem
+o mesmo), só que agora vira frase.
+
+**Decisões pendentes do dono**, levantadas na revisão:
+
+1. **Os dois cartões de anúncio saem quase sempre juntos e com o mesmo
+   número.** Com o corte na mediana nos dois eixos, rejeitados − pouco
+   vistos ≈ (acima da mediana de visitas) − (acima da mediana de conversão)
+   ≈ 0. Medido: demo 11 e 11; loja real 36 e 33. Para qualquer loja com
+   régua confiável, metade da lista é efeito do método — e "nada pedindo
+   atenção" fica quase inalcançável. Opções: manter; tirar o 4º cartão
+   ("pouco vistos"), cuja ação é a mais vaga; ou trocar a regra do cartão
+   por algo que dependa da loja e não do corte.
+2. **O tutorial de Produtos abre por cima da seção filtrada** na primeira
+   vez que a pessoa chega pelo cartão. Opções: manter; não abrir sozinho
+   quando há `?diagnostico=` (sem marcar como visto); abrir já no passo que
+   explica o diagnóstico.
+3. **"Ver quais clientes" leva à lista inteira** (191 compradores na demo,
+   ordenados por valor), com os 31 em risco espalhados. Um filtro por
+   segmento na tela de Clientes resolveria — está fora de escopo (seção 8).
