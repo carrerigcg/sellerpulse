@@ -18,6 +18,7 @@ import { totalizarFluxo } from "../components/analytics/executive-totals";
 import type { FluxoDia } from "./api";
 import { coberturaDoFluxo, type Cobertura } from "./cobertura";
 import { calculaReferencia, diagnostica, type Diagnostico, type LinhaDeFunil } from "./diagnostico";
+import { parametroDoSegmento } from "./segmento-da-url";
 
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -318,7 +319,12 @@ export function montaTarefas(entrada: {
         frase: `${n} ${plural(n, "cliente que já comprou", "clientes que já compraram")} bem com você não ${plural(n, "compra", "compram")} há ${dias} dias ou mais`,
         apoio: `Nos últimos 3 meses, ${plural(n, "gastou", "gastaram")} ${brl.format(total)} com você.`,
         botao: "Ver quais clientes",
-        href: link(`${links.base}/clientes`, links.periodoClientes),
+        href: link(
+          `${links.base}/clientes`,
+          links.periodoClientes,
+          { segmento: parametroDoSegmento("At Risk") },
+          "#compradores",
+        ),
       });
     }
   }

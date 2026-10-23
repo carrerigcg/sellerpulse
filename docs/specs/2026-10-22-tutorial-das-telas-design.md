@@ -71,9 +71,9 @@ Custos e Exportar — em `/dashboard` e em `/demo`. O tutorial é montado pelo
 2. a tela tem dado para mostrar (nem vazia, nem com erro);
 3. o `localStorage` está disponível;
 4. a pessoa não chegou por um atalho que já filtra a tela (`chegouFiltrado`).
-   Acrescentada com o Resumo da loja (2026-10-23): o cartão de anúncios abre
-   Produtos rolado e filtrado, e um modal por cima esconderia exatamente o
-   que ela veio ver. Como não abre, não marca como visto — abre na próxima
+   Acrescentada com o Resumo da loja (2026-10-23): os cartões de anúncios e
+   de clientes abrem Produtos e Clientes rolados e filtrados, e um modal por
+   cima esconderia exatamente o que a pessoa veio ver. Como não abre, não marca como visto — abre na próxima
    visita direta.
 
 Se o `localStorage` falhar (aba anônima, armazenamento bloqueado), **não abre

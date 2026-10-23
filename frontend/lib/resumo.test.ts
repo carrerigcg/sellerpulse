@@ -14,6 +14,7 @@ import {
   type LinksDoResumo,
   type Totais,
 } from "./resumo";
+import { segmentoDaUrl } from "./segmento-da-url";
 
 /**
  * O que carrega peso aqui é o aviso de comparação. Quem preenche custos hoje
@@ -331,7 +332,21 @@ describe("montaTarefas", () => {
       "2 clientes que já compraram bem com você não compram há 52 dias ou mais",
     );
     expect(t(tarefas[0].apoio)).toBe("Nos últimos 3 meses, gastaram R$ 3.000 com você.");
-    expect(tarefas[0].href).toBe("/dashboard/clientes?de=2026-07-25&ate=2026-10-23");
+    expect(tarefas[0].href).toBe(
+      "/dashboard/clientes?de=2026-07-25&ate=2026-10-23&segmento=em-risco#compradores",
+    );
+  });
+
+  it("clientes: a tela de Clientes reconhece o segmento do link", () => {
+    // O link e o filtro moram em arquivos diferentes; se discordarem, a
+    // pessoa chega na lista inteira sem nenhum erro aparecer.
+    const { tarefas } = montaTarefas({
+      ...SEM_PENDENCIA,
+      rfm: [{ segmento: "At Risk", monetary: 100, recency_dias: 61 }],
+      links: LINKS,
+    });
+    const parametro = new URL(tarefas[0].href, "https://x").searchParams.get("segmento");
+    expect(segmentoDaUrl(parametro)).toBe("At Risk");
   });
 
   it("clientes no singular", () => {

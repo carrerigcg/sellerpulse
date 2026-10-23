@@ -165,9 +165,9 @@ export function chaveDeArmazenamento(
  * visita. Melhor não abrir sozinho; o botão continua funcionando.
  *
  * `chegouFiltrado`: a pessoa veio por um atalho que já mostra o que ela quer
- * ver — o cartão do Resumo abre Produtos rolado e filtrado. Um modal por cima
- * esconderia exatamente isso. Como não abre, também não marca como visto: o
- * tutorial abre na próxima visita direta à tela.
+ * ver — os cartões do Resumo abrem Produtos e Clientes rolados e filtrados.
+ * Um modal por cima esconderia exatamente isso. Como não abre, também não
+ * marca como visto: o tutorial abre na próxima visita direta à tela.
  */
 export function deveAbrirSozinho(estado: {
   jaVisto: boolean;

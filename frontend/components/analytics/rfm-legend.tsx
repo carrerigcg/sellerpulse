@@ -1,4 +1,4 @@
-import { SEGMENTOS } from "./segmentos";
+import { SEGMENTOS, estiloDoMarcador } from "./segmentos";
 
 /** Legenda de cores do gráfico de dispersão RFM. */
 export function RfmLegend() {
@@ -6,13 +6,7 @@ export function RfmLegend() {
     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
       {SEGMENTOS.map((def) => (
         <span key={def.chave} className="flex items-center gap-1.5">
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-full"
-            style={{
-              backgroundColor: def.contornoGrafico ? "transparent" : def.corGrafico,
-              border: def.contornoGrafico ? `1.5px solid ${def.contornoGrafico}` : undefined,
-            }}
-          />
+          <span className="inline-block h-2.5 w-2.5 rounded-full" style={estiloDoMarcador(def)} />
           {def.rotulo}
         </span>
       ))}

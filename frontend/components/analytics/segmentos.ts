@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { SegmentoRfm } from "@/lib/api";
 
 /**
@@ -30,6 +32,12 @@ import type { SegmentoRfm } from "@/lib/api";
  */
 export type DefinicaoSegmento = {
   chave: SegmentoRfm;
+  /**
+   * Valor de `?segmento=` em Clientes (`lib/segmento-da-url.ts`). Em português
+   * e sem espaço, como o `?diagnostico=` de Produtos: a chave em inglês
+   * chegaria como "At+Risk" ou "At%20Risk" conforme quem montasse o link.
+   */
+  parametro: string;
   rotulo: string;
   descricao: string;
   /** Cor de preenchimento do ponto no gráfico de dispersão. */
@@ -43,6 +51,7 @@ export type DefinicaoSegmento = {
 export const SEGMENTOS: DefinicaoSegmento[] = [
   {
     chave: "Champions",
+    parametro: "campeoes",
     rotulo: "Campeões",
     descricao:
       "Compram com frequência, gastam bem e compraram recentemente — a base mais valiosa.",
@@ -51,6 +60,7 @@ export const SEGMENTOS: DefinicaoSegmento[] = [
   },
   {
     chave: "Loyal",
+    parametro: "fieis",
     rotulo: "Fiéis",
     descricao: "Compram com frequência e gastam bem, mesmo sem ter comprado há pouco tempo.",
     corGrafico: "var(--sp-accent)",
@@ -58,6 +68,7 @@ export const SEGMENTOS: DefinicaoSegmento[] = [
   },
   {
     chave: "At Risk",
+    parametro: "em-risco",
     rotulo: "Em risco",
     descricao: "Já foram bons compradores e estão sumindo — a hora de tentar reengajar é agora.",
     corGrafico: "var(--sp-negative)",
@@ -65,6 +76,7 @@ export const SEGMENTOS: DefinicaoSegmento[] = [
   },
   {
     chave: "New",
+    parametro: "novos",
     rotulo: "Novos",
     descricao: "Compraram recentemente, ainda não deu tempo de repetir a compra.",
     corGrafico: "var(--sp-highlight)",
@@ -72,6 +84,7 @@ export const SEGMENTOS: DefinicaoSegmento[] = [
   },
   {
     chave: "Hibernating",
+    parametro: "hibernando",
     rotulo: "Hibernando",
     descricao: "Pouca recência, frequência e valor juntos — provavelmente já foram embora.",
     corGrafico: "var(--sp-muted)",
@@ -79,6 +92,7 @@ export const SEGMENTOS: DefinicaoSegmento[] = [
   },
   {
     chave: "Others",
+    parametro: "outros",
     rotulo: "Outros",
     descricao: "Não se encaixam claramente em nenhum dos padrões acima.",
     corGrafico: "var(--sp-bg)",
@@ -86,6 +100,14 @@ export const SEGMENTOS: DefinicaoSegmento[] = [
     badge: "border border-line text-muted",
   },
 ];
+
+/** O marcador do segmento fora do gráfico (legenda e chips), com "Outros" vazado. */
+export function estiloDoMarcador(def: DefinicaoSegmento): CSSProperties {
+  return {
+    backgroundColor: def.contornoGrafico ? "transparent" : def.corGrafico,
+    border: def.contornoGrafico ? `1.5px solid ${def.contornoGrafico}` : undefined,
+  };
+}
 
 export function definicaoSegmento(chave: string): DefinicaoSegmento {
   return SEGMENTOS.find((s) => s.chave === chave) ?? SEGMENTOS[SEGMENTOS.length - 1];

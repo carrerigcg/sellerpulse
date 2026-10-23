@@ -137,7 +137,8 @@ Ordem fixa, só os cartões que se aplicam:
    significar "comprou há 25 dias". A regra é recência baixa **e**
    (frequência **ou** valor altos), então a frase diz "já compraram bem" —
    não "compravam bem", que afirmaria frequência — e o fato que vale para
-   todos: há quantos dias, no mínimo, não compram.
+   todos: há quantos dias, no mínimo, não compram. O link abre Clientes já
+   filtrado nesse segmento e rolado até a tabela.
 
 **Sem cartão de "converte, falta ser visto"** — decidido pelo dono na
 revisão (seção 9). O diagnóstico continua na seção de Produtos.
@@ -155,9 +156,10 @@ Os botões das tarefas são secundários (contorno), não laranja: nenhuma
 tarefa é mais importante que as outras, e a direção visual é um só botão de
 ação primária por tela.
 
-Quem chega a Produtos pelo cartão de anúncios não vê o tutorial abrir sozinho
-por cima da seção que veio ver (`chegouFiltrado` em `deveAbrirSozinho`), e
-nada é marcado como visto: o tutorial abre na próxima visita direta.
+Quem chega a Produtos ou a Clientes por um cartão não vê o tutorial abrir
+sozinho por cima da lista que veio ver (`chegouFiltrado` em
+`deveAbrirSozinho`), e nada é marcado como visto: o tutorial abre na próxima
+visita direta.
 
 ### Estados
 
@@ -231,7 +233,7 @@ Link ao fim do bloco: "Ver o financeiro completo" → `{base}/financeiro?de&ate`
 | --- | --- | --- | --- |
 | custos | {n} produto(s) que você vendeu {está\|estão} sem custo informado | Com o custo informado, as próximas vendas já descontam o produto. | "Informar custos" (demo: "Ver custos") → `{base}/custos?de&ate` |
 | vistos e rejeitados | {n} {anúncio recebe\|anúncios recebem} mais visitas que a média da sua loja, mas {vende\|vendem} menos | Muita gente entra e não compra — vale revisar preço, foto, título ou frete. | "Ver os que vendem menos" → `{base}/produtos?de&ate&diagnostico=visto-e-rejeitado#desempenho-anuncios` |
-| clientes | {n} {cliente que já comprou\|clientes que já compraram} bem com você não {compra\|compram} há {d} dias ou mais | Nos últimos 3 meses, {gastou\|gastaram} {R$ x} com você. | "Ver quais clientes" → `{base}/clientes?de&ate` (janela de 90 dias) |
+| clientes | {n} {cliente que já comprou\|clientes que já compraram} bem com você não {compra\|compram} há {d} dias ou mais | Nos últimos 3 meses, {gastou\|gastaram} {R$ x} com você. | "Ver quais clientes" → `{base}/clientes?de&ate&segmento=em-risco#compradores` (janela de 90 dias) |
 | nenhuma, anúncios avaliados | Nada pedindo atenção agora. | — | — |
 | nenhuma, anúncios sem régua | Nada pedindo atenção nos custos e nos clientes. Os anúncios ainda não têm visitas suficientes para avaliar. | — | — |
 | incompleto | Parte do resumo não carregou agora. Tente de novo em instantes. | — | — |
@@ -320,6 +322,15 @@ erro) é `anterior: null` — "não houve vendas para comparar".
   preso ao voltar a `/produtos` pela barra lateral. Os chips ganham
   `aria-pressed` — quem chega pelo cartão precisa saber que a lista está
   filtrada.
+- `BuyersTable` ganha chips de segmento e a prop `filtroInicial?:
+  SegmentoRfm`, no mesmo desenho. As páginas de Clientes leem `?segmento=`,
+  validam com `segmentoDaUrl` (`lib/segmento-da-url.ts`) e passam `key` pelo
+  filtro, pelo mesmo motivo. O valor da URL é o `parametro` de cada segmento
+  em `segmentos.ts` (`em-risco`, não `At Risk`): em português e sem espaço,
+  como o `?diagnostico=`. O link do Resumo sai de `parametroDoSegmento`, e um
+  teste confere que a página reconhece o que o link manda. O segmento ativo
+  aparece mesmo com zero clientes, para a lista vazia ter explicação. O chip
+  é um componente só (`chip-de-filtro.tsx`) nas duas telas.
 - `scripts/captura-prints.mjs`: o print do Executive passa a vir de
   `/demo/financeiro`. Os prints não são regerados agora.
 - Vitrine (`showcase.tsx`) e cadastro (`signup/page.tsx`): o cartão
@@ -352,7 +363,11 @@ erro) é `anterior: null` — "não houve vendas para comparar".
 - `montaResumo`: fluxo atual ou anterior com erro derruba, anterior vazio
   não compara, sem venda vira estado vazio;
 - links levam base, período e filtro; `periodoDoResumo`: 30 dias, legenda
-  inclusiva.
+  inclusiva;
+- `segmentoDaUrl` (em `lib/segmento-da-url.test.ts`): só aceita o parâmetro
+  em português, os parâmetros não precisam de escape, e o `?segmento=` do
+  cartão de clientes é o que a página reconhece. Duas mutações derrubam os
+  testes certos: validar pela chave em inglês e pôr espaço no parâmetro.
 
 **Mutação** — quebrar de propósito, confirmar com `diff` que a troca entrou,
 ver o teste certo cair, restaurar. Sete regras, todas derrubaram o teste
@@ -392,8 +407,7 @@ confirma produção nas duas plataformas.
 ## 8. Fora de escopo
 
 A linguagem das outras telas (projeto B), letra maior nelas (projeto C), IA
-para reescrever as frases, filtro por segmento na tela de Clientes, e
-regerar os prints da vitrine.
+para reescrever as frases e regerar os prints da vitrine.
 
 ## 9. Achados no caminho
 
@@ -421,6 +435,8 @@ recomendações):
 2. **O tutorial de Produtos abria por cima da seção filtrada.** **Decidido:
    não abrir sozinho quando a pessoa chega filtrada**, sem marcar como visto
    (`chegouFiltrado`, spec do tutorial, seção 3).
-3. **"Ver quais clientes" leva à lista inteira**, com os em risco
-   espalhados. **Decidido: fica como está neste projeto**; o filtro por
-   segmento na tela de Clientes é o próximo passo, separado (seção 8).
+3. **"Ver quais clientes" levava à lista inteira**, ordenada por valor e com
+   os em risco espalhados no meio. Ficou fora do PR e **foi feito logo
+   depois do merge**, direto na `main`: o link leva
+   `?segmento=em-risco#compradores`, a tabela abre filtrada nesse segmento e
+   o tutorial de Clientes não abre por cima dela (seção 5).

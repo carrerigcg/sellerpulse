@@ -12,6 +12,7 @@ import {
 } from "@/lib/diagnostico";
 
 import { AnuncioRemovidoPill, anuncioFoiRemovido } from "./anuncio-removido";
+import { ChipDeFiltro } from "./chip-de-filtro";
 
 const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 const pct = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
@@ -143,14 +144,14 @@ export function DesempenhoAnuncios({
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Chip ativo={filtro === null} onClick={() => setFiltro(null)}>
+        <ChipDeFiltro ativo={filtro === null} onClick={() => setFiltro(null)}>
           Todos · {comDiagnostico.length}
-        </Chip>
+        </ChipDeFiltro>
         {ORDEM_DOS_FILTROS.filter((d) => (contagens.get(d) ?? 0) > 0).map((d) => (
-          <Chip key={d} ativo={filtro === d} onClick={() => setFiltro(filtro === d ? null : d)}>
+          <ChipDeFiltro key={d} ativo={filtro === d} onClick={() => setFiltro(filtro === d ? null : d)}>
             <span className={`h-1.5 w-1.5 rounded-full ${APARENCIA[d].cor}`} aria-hidden />
             {APARENCIA[d].rotulo} · {contagens.get(d)}
-          </Chip>
+          </ChipDeFiltro>
         ))}
       </div>
 
@@ -254,31 +255,6 @@ function Resumo({
       <p className="tabular mt-0.5 text-lg font-semibold">{valor}</p>
       {detalhe && <p className="tabular text-xs text-muted">{detalhe}</p>}
     </div>
-  );
-}
-
-function Chip({
-  ativo,
-  onClick,
-  children,
-}: {
-  ativo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition ${
-        ativo
-          ? "border-accent bg-accent-soft font-medium text-accent-hover"
-          : "border-line text-muted hover:bg-surface hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 

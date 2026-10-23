@@ -7,6 +7,7 @@ import type { RfmLinha } from "@/lib/api";
 import { COLUNAS_RFM } from "@/lib/colunas-export";
 import { getDemoRfmScores } from "@/lib/demo";
 import { periodoPadrao } from "@/lib/periodo";
+import { segmentoDaUrl } from "@/lib/segmento-da-url";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
@@ -22,6 +23,7 @@ export default async function DemoClientesPage({
   const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
+  const filtroInicial = segmentoDaUrl(params.segmento);
 
   let rfm: RfmLinha[] = [];
   let erro: string | null = null;
@@ -43,6 +45,7 @@ export default async function DemoClientesPage({
         ate={ate}
         tela="clientes"
         temDados={temDados}
+        chegouFiltrado={filtroInicial !== null}
       />
 
       {erro ? (
@@ -65,7 +68,8 @@ export default async function DemoClientesPage({
             <RfmLegend />
           </section>
 
-          <section className="mt-6 rounded-xl border border-line p-5">
+          {/* `id` é o destino do cartão do Resumo (`lib/resumo.ts`). */}
+          <section id="compradores" className="mt-6 rounded-xl border border-line p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold">Compradores</h2>
@@ -83,7 +87,11 @@ export default async function DemoClientesPage({
                 ate={ate}
               />
             </div>
-            <BuyersTable dados={rfm} />
+            {/* `key` pelo filtro: o Next reaproveita o componente quando só a
+                query muda (a sidebar leva de volta a /clientes sem
+                `?segmento=`), e o `useState(filtroInicial)` ficaria preso ao
+                filtro de antes. */}
+            <BuyersTable key={filtroInicial ?? "todos"} dados={rfm} filtroInicial={filtroInicial} />
           </section>
         </>
       )}
