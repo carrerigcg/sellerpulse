@@ -1,7 +1,7 @@
 # SellerPulse — Tutorial das telas
 
 Data: 2026-10-22
-Estado: implementada em `feat/tutorial-das-telas`, revisada por `revisor-de-interface` e `revisor-de-codigo`. A premissa da 2.3 continua a confirmar.
+Estado: mergeada em `a8d0764` (#21), revisada por `revisor-de-interface` e `revisor-de-codigo`. A premissa da 2.3 continua a confirmar.
 
 ## 1. Por quê
 
@@ -276,13 +276,14 @@ Corrigido nesta branch, porque o tutorial punha as duas frases lado a lado.
 diz que o vendedor informa o custo "com a data em que aquele custo passou a
 valer". O vendedor não escolhe data: o custo vale de hoje em diante.
 
-**Da revisão, já existiam antes desta branch** (registrados, não corrigidos):
+**Da revisão, já existiam antes desta branch:**
 
 - Texto branco no botão laranja (`--sp-accent`, `#ea580c`) dá 3,56:1, abaixo
   dos 4,5:1 que texto de 14px pede — e o comentário de `globals.css` afirma
   "≥ 4.5:1". Vale para todo botão principal do produto; trocar o token é
-  decisão visual do dono.
-- A legenda do cohort diz "sem venda possível (antes do lançamento)", mas a
+  decisão visual do dono. **Em aberto.**
+- A legenda do cohort dizia "sem venda possível (antes do lançamento)", mas a
   mesma célula tracejada marca mês posterior ao lançamento sem venda.
-- Os cartões do Executive mostram a variação com ponto ("+1.1%"), por
-  `toFixed(1)` em `kpi-card.tsx`; o resto da tela usa vírgula.
+  Corrigido à parte, em `62a8ce6`.
+- Os cartões do Executive mostravam a variação com ponto ("+1.1%"), por
+  `toFixed(1)` em `kpi-card.tsx`. Corrigido à parte, em `7c200dc`.
