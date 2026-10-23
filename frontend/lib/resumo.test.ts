@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import { calculaCobertura } from "./cobertura";
-import { EXPLICACAO_DA_SOBRA, montaVeredito, type Totais } from "./resumo";
+import {
+  EXPLICACAO_DA_SOBRA,
+  NADA_PEDINDO_ATENCAO,
+  RESUMO_INCOMPLETO,
+  hrefDoFinanceiro,
+  montaTarefas,
+  montaVeredito,
+  rodapeDasTarefas,
+  type LinksDoResumo,
+  type Totais,
+} from "./resumo";
 
 /**
  * O que carrega peso aqui é a proteção da cobertura. Quem preenche custos
@@ -137,5 +147,127 @@ describe("montaVeredito — aviso de cobertura", () => {
 
   it("completa: sem aviso", () => {
     expect(montaVeredito({ ...base, coberturaAtual: COMPLETA }).avisoCobertura).toBeNull();
+  });
+});
+
+const LINKS: LinksDoResumo = {
+  base: "/dashboard",
+  periodo: { de: "2026-09-23", ate: "2026-10-23" },
+  periodoClientes: { de: "2026-07-25", ate: "2026-10-23" },
+};
+
+/** Linha de funil com a conversão calculada como o backend entrega. */
+function anuncio(visitas: number, unidades: number) {
+  return { visitas, unidades, conversao: (100 * unidades) / visitas };
+}
+
+/**
+ * Cinco anúncios com amostra suficiente: mediana de conversão 6%, de visitas
+ * 100. Dois "vistos e rejeitados" (200 visitas, 2% e 3%), um "converte, falta
+ * ser visto" (50 visitas, 10%) e dois campeões.
+ */
+const LOJA = [anuncio(200, 4), anuncio(200, 6), anuncio(50, 5), anuncio(100, 8), anuncio(100, 6)];
+
+const SEM_PENDENCIA = { custos: [{ custo_unitario: 10 }], abc: [], rfm: [] };
+
+describe("montaTarefas", () => {
+  it("produtos sem custo, pelo que falta hoje", () => {
+    const { tarefas } = montaTarefas({
+      ...SEM_PENDENCIA,
+      custos: [{ custo_unitario: 10 }, { custo_unitario: null }, { custo_unitario: null }],
+      links: LINKS,
+    });
+    expect(tarefas).toEqual([
+      {
+        chave: "custos",
+        frase: "2 produtos que você vendeu estão sem custo informado",
+        apoio: "Sem ele, a sobra lá em cima aparece maior do que a real.",
+        botao: "Informar custos",
+        href: "/dashboard/custos?de=2026-09-23&ate=2026-10-23",
+      },
+    ]);
+  });
+
+  it("singular, e na demo o botão é 'Ver custos' (lá a tabela é só leitura)", () => {
+    const { tarefas } = montaTarefas({
+      ...SEM_PENDENCIA,
+      custos: [{ custo_unitario: null }],
+      links: { ...LINKS, base: "/demo" },
+    });
+    expect(tarefas[0].frase).toBe("1 produto que você vendeu está sem custo informado");
+    expect(tarefas[0].botao).toBe("Ver custos");
+    expect(tarefas[0].href).toBe("/demo/custos?de=2026-09-23&ate=2026-10-23");
+  });
+
+  it("anúncios pela mesma regra da seção Desempenho dos anúncios", () => {
+    const { tarefas } = montaTarefas({ ...SEM_PENDENCIA, abc: LOJA, links: LINKS });
+    expect(tarefas.map((x) => x.chave)).toEqual(["visto-e-rejeitado", "converte-falta-ser-visto"]);
+    expect(tarefas[0].frase).toBe("2 anúncios recebem visitas, mas vendem pouco");
+    expect(tarefas[0].href).toBe(
+      "/dashboard/produtos?de=2026-09-23&ate=2026-10-23&diagnostico=visto-e-rejeitado#desempenho-anuncios",
+    );
+    expect(tarefas[1].frase).toBe("1 anúncio vende bem quando é visto, mas pouca gente chega até ele");
+    expect(tarefas[1].apoio).toBe("Vale dar mais visibilidade a ele.");
+  });
+
+  it("sem referência confiável, nenhum cartão de anúncio", () => {
+    const { tarefas } = montaTarefas({ ...SEM_PENDENCIA, abc: LOJA.slice(0, 3), links: LINKS });
+    expect(tarefas).toEqual([]);
+  });
+
+  it("clientes em risco, com o valor e a janela de 3 meses", () => {
+    const { tarefas } = montaTarefas({
+      ...SEM_PENDENCIA,
+      rfm: [
+        { segmento: "At Risk", monetary: 1_000.4 },
+        { segmento: "At Risk", monetary: 2_000 },
+        { segmento: "Champions", monetary: 5_000 },
+      ],
+      links: LINKS,
+    });
+    expect(tarefas).toHaveLength(1);
+    expect(tarefas[0].frase).toBe("2 clientes que compravam bem estão sumindo");
+    expect(t(tarefas[0].apoio)).toBe("Nos últimos 3 meses, gastaram R$ 3.000 com você.");
+    expect(tarefas[0].href).toBe("/dashboard/clientes?de=2026-07-25&ate=2026-10-23");
+  });
+
+  it("ordem fixa: custos, rejeitados, clientes, pouco vistos", () => {
+    const { tarefas } = montaTarefas({
+      custos: [{ custo_unitario: null }],
+      abc: LOJA,
+      rfm: [{ segmento: "At Risk", monetary: 100 }],
+      links: LINKS,
+    });
+    expect(tarefas.map((x) => x.chave)).toEqual([
+      "custos",
+      "visto-e-rejeitado",
+      "clientes-em-risco",
+      "converte-falta-ser-visto",
+    ]);
+  });
+});
+
+describe("rodapeDasTarefas", () => {
+  it("nada pendente e tudo carregado: 'nada pedindo atenção'", () => {
+    expect(rodapeDasTarefas(montaTarefas({ ...SEM_PENDENCIA, links: LINKS }))).toBe(
+      NADA_PEDINDO_ATENCAO,
+    );
+  });
+
+  it("fonte que falhou NUNCA vira 'nada pedindo atenção'", () => {
+    const resultado = montaTarefas({ custos: [], abc: null, rfm: [], links: LINKS });
+    expect(resultado.incompleto).toBe(true);
+    expect(rodapeDasTarefas(resultado)).toBe(RESUMO_INCOMPLETO);
+  });
+
+  it("com tarefas e tudo carregado: sem rodapé", () => {
+    const resultado = montaTarefas({ ...SEM_PENDENCIA, custos: [{ custo_unitario: null }], links: LINKS });
+    expect(rodapeDasTarefas(resultado)).toBeNull();
+  });
+});
+
+describe("hrefDoFinanceiro", () => {
+  it("leva o período do Resumo", () => {
+    expect(hrefDoFinanceiro(LINKS)).toBe("/dashboard/financeiro?de=2026-09-23&ate=2026-10-23");
   });
 });
