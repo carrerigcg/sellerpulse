@@ -55,3 +55,9 @@ docs/plans/
 .agents/
 skills-lock.json
 video/
+
+# Posts do LinkedIn: material de divulgacao, nao produto. Sao rascunhos que
+# viram publicacao no mesmo dia e nao tem leitor depois disso -- versionar so
+# encheria o historico do repo com texto de marketing. Mesmo tratamento de
+# `docs/plans/`.
+linkedin/
