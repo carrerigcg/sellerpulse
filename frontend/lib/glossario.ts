@@ -121,8 +121,9 @@ export const GLOSSARIO_RFM: Glossario<RfmLinha> = {
     "janela é exclusivo, quem comprou no último dia incluído aparece com 1, " +
     "não com 0.",
   frequency:
-    "Quantos pedidos pagos esse comprador fez no período. Conta pedidos, não " +
-    "produtos: um pedido com cinco itens conta 1.",
+    "Quantas compras pagas esse comprador fez no período. Conta compras, não " +
+    "produtos nem pedidos: um carrinho com cinco produtos, que o Mercado Livre " +
+    "divide em vários pedidos, conta 1.",
   monetary: "Quanto esse comprador gastou no período, somando os pedidos pagos.",
   r_score:
     "A recência convertida em nota de 1 a 5, onde 5 é quem comprou mais " +
