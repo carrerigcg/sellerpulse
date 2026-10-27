@@ -43,7 +43,7 @@ const DECISOES = [
   {
     dor: "“Não sei quanto sobra de verdade.”",
     resposta:
-      "Você informa quanto te custa cada produto, uma vez, com a data em que aquele custo passou a valer. A partir daí a margem deixa de ser receita menos comissão e passa a ser o que sobra mesmo, no bolso.",
+      "Você informa quanto te custa cada produto, uma vez. A partir daí, cada venda nova desconta esse custo, e a margem deixa de ser receita menos comissão e passa a ser o que sobra de cada venda depois de pagar o produto.",
     ressalva:
       "E a tela mostra quanto da sua receita já tem custo informado, para você saber o quanto confiar na conta antes de decidir em cima dela.",
   },

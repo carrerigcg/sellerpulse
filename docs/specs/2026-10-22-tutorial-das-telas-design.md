@@ -280,6 +280,8 @@ Corrigido nesta branch, porque o tutorial punha as duas frases lado a lado.
 **A vitrine afirma algo que o produto não faz.** A seção "Da análise à ação"
 diz que o vendedor informa o custo "com a data em que aquele custo passou a
 valer". O vendedor não escolhe data: o custo vale de hoje em diante.
+Corrigido em 2026-10-27: o texto passou a dizer que cada venda nova desconta
+o custo, e deixou de chamar a margem de "o que sobra mesmo, no bolso".
 
 **Da revisão, já existiam antes desta branch:**
 
