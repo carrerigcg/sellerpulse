@@ -65,6 +65,12 @@ Custos e Exportar — em `/dashboard` e em `/demo`. O tutorial é montado pelo
 `CabecalhoDeTela`, que só essas dez páginas usam; a vitrine e
 `/dashboard/conectar` ficam de fora por construção, não por condição.
 
+Desde 2026-10-27, também no **Resumo** (`/dashboard` e `/demo`), montado
+pelo `ResumoDaLoja`. A spec do Resumo tinha decidido que ele dispensava
+tutorial, por se explicar em frases; o dono sentiu falta do pop-up na tela
+de entrada, e ela é justamente onde quem não lê gráfico precisa saber onde
+fica cada coisa. O Financeiro (antigo Executive) mantém a chave `executive`.
+
 **Quando abre sozinho.** As quatro condições juntas:
 
 1. a pessoa nunca fechou este tutorial, nesta versão, neste contexto;
@@ -119,6 +125,13 @@ demo, porque lá a tela é outra coisa: só leitura. Uma lista inteira de
 variantes para mudar uma palavra num slide duplicaria os outros dois, e
 conteúdo duplicado diverge — a mesma razão das refatorações de duplicação
 que antecederam esta feature.
+
+### Resumo
+
+| # | título | texto | fonte |
+| --- | --- | --- | --- |
+| 1 | O que é a sobra | É o que fica das vendas depois de pagar o Mercado Livre, o frete e o custo dos produtos informado na tela de Custos. Aluguel, salários e outras despesas ainda saem daí — por isso não é lucro. | `montaVeredito` e a explicação em `lib/resumo.ts` |
+| 2 | O que fazer e onde ver mais | Os cartões de baixo mostram o que pede atenção agora, e cada botão abre a tela com os detalhes. As outras telas ficam no menu: Financeiro, Produtos, Clientes, Custos e Exportar. | `montaTarefas`; `components/nav/itens.ts` |
 
 ### Executive
 

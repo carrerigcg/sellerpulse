@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { TutorialDaTela } from "@/components/analytics/tutorial-da-tela";
 import type { Tarefa, Veredito } from "@/lib/resumo";
 
 import { BlocoDinheiro } from "./bloco-dinheiro";
@@ -38,6 +39,11 @@ export function ResumoDaLoja({
     <div className="text-base">
       <h1 className="text-2xl font-semibold tracking-tight">Sua loja nos últimos 30 dias</h1>
       <p className="mt-1 text-muted">{legenda}</p>
+      {/* `-ml-2` desfaz o `px-2` do botão, como no `CabecalhoDeTela`. Não
+          abre sozinho sobre erro ou vazio: lá o que importa é o recado. */}
+      <div className="-ml-2 mt-1">
+        <TutorialDaTela tela="resumo" temDados={!erro && !semVendas} />
+      </div>
 
       {erro ? (
         // Texto em `ink`, com a cor na borda e no fundo: o vermelho de

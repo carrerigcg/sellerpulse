@@ -10,7 +10,13 @@
  * a lógica que importa mora aqui, testável no vitest.
  */
 
-export type ChaveDeTutorial = "executive" | "produtos" | "clientes" | "custos" | "exportar";
+export type ChaveDeTutorial =
+  | "resumo"
+  | "executive"
+  | "produtos"
+  | "clientes"
+  | "custos"
+  | "exportar";
 
 export type Contexto = "demo" | "dashboard";
 
@@ -30,6 +36,23 @@ export type Tutorial = {
 };
 
 export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
+  // A tela de entrada. Explica a palavra que ela usa ("sobra") e onde fica o
+  // resto — quem não lê gráfico precisa, antes de tudo, saber para onde ir.
+  resumo: {
+    versao: 1,
+    slides: [
+      {
+        titulo: "O que é a sobra",
+        texto:
+          "É o que fica das vendas depois de pagar o Mercado Livre, o frete e o custo dos produtos informado na tela de Custos. Aluguel, salários e outras despesas ainda saem daí — por isso não é lucro.",
+      },
+      {
+        titulo: "O que fazer e onde ver mais",
+        texto:
+          "Os cartões de baixo mostram o que pede atenção agora, e cada botão abre a tela com os detalhes. As outras telas ficam no menu: Financeiro, Produtos, Clientes, Custos e Exportar.",
+      },
+    ],
+  },
   executive: {
     versao: 1,
     slides: [

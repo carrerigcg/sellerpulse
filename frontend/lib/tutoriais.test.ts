@@ -24,8 +24,15 @@ const TELAS = Object.keys(TUTORIAIS) as ChaveDeTutorial[];
 const CONTEXTOS: Contexto[] = ["demo", "dashboard"];
 
 describe("conteúdo dos tutoriais", () => {
-  it("cobre as cinco telas de análise", () => {
-    expect([...TELAS].sort()).toEqual(["clientes", "custos", "executive", "exportar", "produtos"]);
+  it("cobre o Resumo e as cinco telas de análise", () => {
+    expect([...TELAS].sort()).toEqual([
+      "clientes",
+      "custos",
+      "executive",
+      "exportar",
+      "produtos",
+      "resumo",
+    ]);
   });
 
   it("toda tela tem de 1 a 3 slides, nos dois contextos", () => {
