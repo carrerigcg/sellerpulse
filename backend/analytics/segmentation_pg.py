@@ -159,7 +159,18 @@ _RFM_BASE_QUERY = """
     SELECT
         buyer_id,
         MAX(date_closed)            AS ultima_compra,
-        COUNT(*)                    AS frequency,
+        -- Frequency conta COMPRAS, nao pedidos. Um carrinho com produtos
+        -- diferentes vira varios pedidos no ML, todos com o mesmo `pack_id`;
+        -- contar pedidos fazia quem comprou uma vez so parecer recorrente
+        -- (loja real: 22 de 96 "recorrentes"). Pedido sem pack e compra
+        -- propria. Os prefixos existem porque pack_id e order_id sao
+        -- numeracoes diferentes, e um numero igual nas duas nao e a mesma
+        -- compra. Divergencia INTENCIONAL de src/segmentation.py, que nao tem
+        -- o pedido cru; a demo nao tem pack, entao a paridade se mantem.
+        COUNT(DISTINCT COALESCE(
+            'p' || (raw_json->>'pack_id'),
+            'o' || order_id::text
+        ))                          AS frequency,
         ROUND(SUM(total_amount), 2) AS monetary
     FROM orders
     WHERE seller_id = $1

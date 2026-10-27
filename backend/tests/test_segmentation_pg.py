@@ -10,12 +10,21 @@ from backend.analytics.segmentation_pg import abc_pareto, cohort_produto, rfm_sc
 _INSERT_ORDER = """
     INSERT INTO orders (order_id, seller_id, date_closed, status, total_amount,
                         marketplace_fee, shipping_cost, buyer_id, raw_json, fetched_at)
-    VALUES ($1, $2, $3::timestamptz, $4, $5, $6, $7, $8, '{}'::jsonb, now())
+    VALUES ($1, $2, $3::timestamptz, $4, $5, $6, $7, $8, $9::jsonb, now())
 """
 
 
 async def _order(
-    pool, seller_id, order_id, date_closed, total, fee=0.0, ship=0.0, status="paid", buyer_id=1001
+    pool,
+    seller_id,
+    order_id,
+    date_closed,
+    total,
+    fee=0.0,
+    ship=0.0,
+    status="paid",
+    buyer_id=1001,
+    raw_json="{}",
 ):
     # asyncpg exige datetime real (nao str) para parametro usado com cast
     # ::timestamptz -- o protocolo binario nao faz esse parse.
@@ -24,7 +33,7 @@ async def _order(
         dt = dt.replace(tzinfo=UTC)
     async with pool.acquire() as conn:
         await conn.execute(
-            _INSERT_ORDER, order_id, seller_id, dt, status, total, fee, ship, buyer_id
+            _INSERT_ORDER, order_id, seller_id, dt, status, total, fee, ship, buyer_id, raw_json
         )
 
 
@@ -152,7 +161,7 @@ async def test_abc_pareto_acumulada_fecha_em_100_em_catalogo_grande(pg_pool, tes
     # round-trips e o teste ficaria lento sem nenhum ganho de clareza.
     itens = [(sid, f"MLB{i:04d}", f"Produto {i}", "CAT1") for i in range(1, len(receitas) + 1)]
     pedidos = [
-        (i, sid, datetime(2026, 7, 10, 10, 0, tzinfo=UTC), "paid", receita, 0.0, 0.0, 1001)
+        (i, sid, datetime(2026, 7, 10, 10, 0, tzinfo=UTC), "paid", receita, 0.0, 0.0, 1001, "{}")
         for i, receita in enumerate(receitas, start=1)
     ]
     linhas = [(sid, i, f"MLB{i:04d}", 1, receita) for i, receita in enumerate(receitas, start=1)]
@@ -447,6 +456,41 @@ async def test_rfm_recency_conta_a_venda_da_noite_no_dia_do_vendedor(pg_pool, te
 
     assert list(df["buyer_id"]) == [1001]
     assert df.iloc[0]["recency_dias"] == 1
+
+
+async def test_rfm_frequency_conta_compras_e_nao_pedidos_do_carrinho(pg_pool, test_seller):
+    """Um carrinho com produtos diferentes vira varios pedidos no ML, com o
+    mesmo `pack_id`. E uma compra so -- contar pedidos fazia esse comprador
+    aparecer como recorrente. Medido na loja real: 22 dos 96 "recorrentes"
+    tinham feito uma unica compra de carrinho.
+
+    O 1003 cobre a colisao: um `pack_id` numericamente igual ao `order_id` de
+    um pedido avulso do mesmo comprador continua sendo outra compra.
+    """
+    _, sid = test_seller
+    dia = "2026-07-10T10:00:00+00:00"
+    depois = "2026-07-20T10:00:00+00:00"
+    carrinho_a = '{"pack_id": 2000000001}'
+    carrinho_b = '{"pack_id": 2000000002}'
+
+    await _order(pg_pool, sid, 1, dia, 30.0, buyer_id=1001, raw_json=carrinho_a)
+    await _order(pg_pool, sid, 2, dia, 20.0, buyer_id=1001, raw_json=carrinho_a)
+
+    await _order(pg_pool, sid, 3, dia, 30.0, buyer_id=1002, raw_json=carrinho_b)
+    await _order(pg_pool, sid, 4, dia, 20.0, buyer_id=1002, raw_json=carrinho_b)
+    await _order(pg_pool, sid, 5, depois, 10.0, buyer_id=1002)
+
+    await _order(pg_pool, sid, 6, depois, 10.0, buyer_id=1003, raw_json='{"pack_id": 7}')
+    await _order(pg_pool, sid, 7, depois, 10.0, buyer_id=1003)
+
+    df = await rfm_scores(pg_pool, sid, "2026-07-01", "2026-08-01")
+    por_comprador = df.set_index("buyer_id")
+
+    assert por_comprador.loc[1001, "frequency"] == 1
+    assert por_comprador.loc[1002, "frequency"] == 2
+    assert por_comprador.loc[1003, "frequency"] == 2
+    # O valor continua sendo a soma dos pedidos: o carrinho custou 50.
+    assert por_comprador.loc[1001, "monetary"] == pytest.approx(50.0)
 
 
 async def test_rfm_scores_isola_por_seller(pg_pool, test_seller, outro_seller):
