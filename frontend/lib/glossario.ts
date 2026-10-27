@@ -87,6 +87,11 @@ export const GLOSSARIO_ABC: Glossario<AbcLinha> = {
     "Igual à receita significa que este produto não tem custo cadastrado; " +
     "zero significa que tem.",
   unidades: "Quantas unidades deste produto foram vendidas no período.",
+  unidades_com_visita:
+    "As unidades vendidas em dias com visita colhida. O Mercado Livre só " +
+    "entrega os últimos 150 dias de visitas, então venda mais antiga que " +
+    "isso não tem visita para comparar e fica de fora da conversão. É igual " +
+    "às unidades sempre que o período começa depois do início da colheita.",
   visitas:
     "Quantas vezes o anúncio foi visto no período. Vazio significa que o " +
     "Mercado Livre ainda não entregou visitas deste anúncio — diferente de " +
@@ -94,7 +99,7 @@ export const GLOSSARIO_ABC: Glossario<AbcLinha> = {
     "últimos dois dias chegam incompletas: o Mercado Livre leva cerca de 48 " +
     "horas para consolidar.",
   conversao:
-    "Unidades vendidas divididas pelas visitas, em porcentagem. É a coluna " +
+    "Unidades com visita medida divididas pelas visitas, em porcentagem. É a coluna " +
     "que separa dois problemas diferentes: produto com muita visita e pouca " +
     "venda é problema do anúncio — preço, foto, título; produto com pouca " +
     "visita é problema de tráfego. Um pedido com três unidades do mesmo " +

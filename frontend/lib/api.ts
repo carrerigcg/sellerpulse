@@ -55,6 +55,13 @@ export type AbcLinha = {
   /** Unidades vendidas no período. */
   unidades: number;
   /**
+   * Unidades vendidas a partir do primeiro dia de visita colhida da loja —
+   * o numerador da conversão. O Mercado Livre só entrega 150 dias de visita,
+   * e venda de dia sem visita medida inflaria a taxa. Igual a `unidades`
+   * sempre que o período começa depois da colheita.
+   */
+  unidades_com_visita: number;
+  /**
    * Visitas ao anúncio no período.
    *
    * `null` = nunca colhido, que é diferente de `0` = colhido e deu zero. A
@@ -63,7 +70,7 @@ export type AbcLinha = {
    */
   visitas: number | null;
   /**
-   * Unidades ÷ visitas, em porcentagem. `null` sem visita para dividir.
+   * `unidades_com_visita` ÷ visitas, em porcentagem. `null` sem visita para dividir.
    *
    * É uma aproximação declarada: um pedido com três unidades do mesmo item é
    * uma visita que converteu, não três. A métrica honesta seria

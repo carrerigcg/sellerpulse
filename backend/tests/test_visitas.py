@@ -376,12 +376,62 @@ async def test_conversao_e_unidades_sobre_visitas(pg_pool, test_seller):
     do custo estimado."""
     _, sid = test_seller
     await _vendeu(pg_pool, sid, 1, "MLB1")
-    await colhe_visitas(pg_pool, sid, client=ClienteDeVisitas({"MLB1": {"2026-10-05": 50}}))
+    await colhe_visitas(pg_pool, sid, client=ClienteDeVisitas({"MLB1": {"2026-10-01": 50}}))
 
     linha = (await _abc(pg_pool, sid))["MLB1"]
 
     assert linha["visitas"] == 50
     assert linha["conversao"] == pytest.approx(2.0), "1 unidade / 50 visitas = 2%"
+
+
+async def test_venda_de_antes_da_colheita_nao_entra_na_conversao(pg_pool, test_seller):
+    """O ML so entrega 150 dias de visita, e o pedido vem desde o comeco.
+
+    Num periodo que comeca antes da primeira visita colhida, a venda daqueles
+    dias entrava no numerador e a visita deles, que nunca foi colhida, nao
+    entrava no denominador. Medido na loja real com o historico inteiro:
+    conversao de 9,2% onde a real era 7,7%.
+
+    A unidade continua contada em `unidades` -- a venda aconteceu. So sai da
+    conversao, que compara vendas e visitas dos mesmos dias.
+    """
+    _, sid = test_seller
+    await _vendeu(pg_pool, sid, 1, "MLB1", quando="2026-09-20T13:00:00+00:00")
+    await _vendeu(pg_pool, sid, 2, "MLB1", quando="2026-10-10T13:00:00+00:00")
+    await colhe_visitas(pg_pool, sid, client=ClienteDeVisitas({"MLB1": {"2026-10-05": 50}}))
+
+    from backend.analytics.segmentation_pg import abc_pareto
+
+    df = await abc_pareto(pg_pool, sid, "2026-09-01", "2026-11-01")
+    linha = df.set_index("sku").loc["MLB1"]
+
+    assert linha["unidades"] == 2
+    assert linha["unidades_com_visita"] == 1
+    assert linha["conversao"] == pytest.approx(2.0), "4% aqui e a venda de setembro inflando"
+
+
+async def test_a_colheita_comeca_no_mesmo_dia_para_a_loja_inteira(pg_pool, test_seller):
+    """Linha de visita so existe em dia com visita: ausencia e zero.
+
+    Entao o primeiro dia com linha de UM anuncio nao e onde a colheita dele
+    comecou -- e so o primeiro dia em que alguem o visitou. A colheita comeca
+    na mesma data para a loja inteira, e e por ela que a venda e cortada.
+    Aqui o MLB1 vendeu em 03/10, foi visitado so a partir de 05/10, e a venda
+    conta: a colheita ja existia desde 02/10, dia que o MLB2 registrou.
+    """
+    _, sid = test_seller
+    await _vendeu(pg_pool, sid, 1, "MLB1", quando="2026-10-03T13:00:00+00:00")
+    await _vendeu(pg_pool, sid, 2, "MLB2", quando="2026-10-03T13:00:00+00:00")
+    await colhe_visitas(
+        pg_pool,
+        sid,
+        client=ClienteDeVisitas({"MLB1": {"2026-10-05": 50}, "MLB2": {"2026-10-02": 10}}),
+    )
+
+    linha = (await _abc(pg_pool, sid))["MLB1"]
+
+    assert linha["unidades_com_visita"] == 1
+    assert linha["conversao"] == pytest.approx(2.0)
 
 
 async def test_item_nunca_colhido_vem_como_none(pg_pool, test_seller):

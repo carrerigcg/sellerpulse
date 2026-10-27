@@ -17,7 +17,7 @@ import { ChipDeFiltro } from "./chip-de-filtro";
 const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 const pct = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
-type Campo = "titulo" | "visitas" | "unidades" | "conversao" | "diagnostico";
+type Campo = "titulo" | "visitas" | "unidades_com_visita" | "conversao" | "diagnostico";
 
 /**
  * O funil por anúncio: quem é visto, quem converte, e o que fazer com cada um.
@@ -90,6 +90,10 @@ export function DesempenhoAnuncios({
   }
 
   const semVisita = contagens.get("sem-visita") ?? 0;
+  // Só aparece quando o período começa antes da colheita de visitas: aí as
+  // unidades desta tabela ficam menores que as da tabela de produtos, e sem
+  // explicação isso pareceria erro.
+  const temVendaSemVisita = abc.some((l) => l.unidades_com_visita < l.unidades);
   const totalDeVisitas = abc.reduce((soma, l) => soma + (l.visitas ?? 0), 0);
 
   /**
@@ -143,6 +147,15 @@ export function DesempenhoAnuncios({
         </p>
       )}
 
+      {temVendaSemVisita && (
+        <p className="mt-3 rounded-lg bg-highlight-soft px-3 py-2 text-xs leading-relaxed text-ink">
+          O Mercado Livre só entrega os últimos 150 dias de visitas, e este período começa antes
+          disso. As vendas de dias sem visita colhida ficam fora desta tabela, para a conversão
+          comparar vendas e visitas dos mesmos dias — por isso as unidades aqui podem ser menores que
+          na curva ABC.
+        </p>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
         <ChipDeFiltro ativo={filtro === null} onClick={() => setFiltro(null)}>
           Todos · {comDiagnostico.length}
@@ -168,7 +181,7 @@ export function DesempenhoAnuncios({
               <Cabecalho campo="visitas" atual={campo} desc={descendente} ao={ordenarPor} direita>
                 Visitas
               </Cabecalho>
-              <Cabecalho campo="unidades" atual={campo} desc={descendente} ao={ordenarPor} direita>
+              <Cabecalho campo="unidades_com_visita" atual={campo} desc={descendente} ao={ordenarPor} direita>
                 Unidades
               </Cabecalho>
               <Cabecalho campo="conversao" atual={campo} desc={descendente} ao={ordenarPor} direita>
@@ -201,7 +214,7 @@ export function DesempenhoAnuncios({
                       inteiro.format(linha.visitas)
                     )}
                   </td>
-                  <td className="tabular py-2.5 pr-3 text-right">{linha.unidades}</td>
+                  <td className="tabular py-2.5 pr-3 text-right">{linha.unidades_com_visita}</td>
                   <td className="tabular py-2.5 pr-3 text-right">
                     {linha.conversao === null ? (
                       <span className="text-muted">—</span>
