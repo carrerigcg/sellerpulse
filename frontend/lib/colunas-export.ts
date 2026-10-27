@@ -33,6 +33,7 @@ export const COLUNAS_ABC: Coluna<AbcLinha>[] = [
   { titulo: "Custo dos produtos", campo: "custo_produtos" },
   { titulo: "Receita sem custo informado", campo: "receita_sem_custo" },
   { titulo: "Unidades", campo: "unidades" },
+  { titulo: "Unidades com visita medida", campo: "unidades_com_visita" },
   { titulo: "Visitas", campo: "visitas" },
   { titulo: "Conversão (%)", campo: "conversao" },
 ];

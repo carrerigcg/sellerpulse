@@ -205,6 +205,7 @@ async def test_abc_pareto_vazio_tem_as_colunas_certas(pg_pool, test_seller):
         "custo_produtos",
         "receita_sem_custo",
         "unidades",
+        "unidades_com_visita",
         "visitas",
         "conversao",
     ]

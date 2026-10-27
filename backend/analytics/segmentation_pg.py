@@ -62,6 +62,7 @@ _ABC_COLUMNS = [
     "custo_produtos",
     "receita_sem_custo",
     "unidades",
+    "unidades_com_visita",
     "visitas",
     "conversao",
 ]
@@ -94,6 +95,17 @@ _ABC_PARETO_QUERY = f"""
         COALESCE(ic.title, oi.item_id)                    AS titulo,
         ROUND(SUM(oi.quantity * oi.unit_price), 2)        AS receita,
         SUM(oi.quantity)::int                             AS unidades,
+        -- O numerador da conversao: so a venda de dias com visita colhida. O
+        -- ML entrega 150 dias de visita e o pedido desde o comeco; sem este
+        -- corte, um periodo que comeca antes da colheita somava vendas cuja
+        -- visita nunca foi medida (loja real, historico inteiro: 9,2% onde a
+        -- real era 7,7%). O inicio e o da LOJA, nao o do item: linha de
+        -- visita so existe em dia com visita, entao o primeiro dia de um item
+        -- e so quando alguem o visitou, nao quando a colheita comecou.
+        COALESCE(SUM(oi.quantity) FILTER (
+            WHERE (o.date_closed AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date
+                  >= (SELECT min(dia) FROM item_visits WHERE seller_id = $1)
+        ), 0)::int                                        AS unidades_com_visita,
         -- Mesmas duas colunas do fluxo financeiro, aqui por produto. Na tela
         -- de Custos e o que diz "este e o produto classe A que ainda nao tem
         -- custo", que e a ordem em que vale a pena preencher.
@@ -238,11 +250,16 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     Returns:
         DataFrame ordenado por receita desc com colunas:
         sku, titulo, receita, receita_pct, receita_acumulada_pct, classe,
-        custo_produtos, receita_sem_custo, unidades, visitas, conversao.
+        custo_produtos, receita_sem_custo, unidades, unidades_com_visita,
+        visitas, conversao.
 
         `visitas` e `None` quando o item nunca teve visita colhida, e 0 quando
         foi colhido e deu zero -- a tela mostra "—" no primeiro caso. Idem
         `conversao`, que e None sem visita para dividir.
+
+        `unidades_com_visita` sao as unidades vendidas a partir do primeiro
+        dia de visita colhida da loja, e e o numerador da conversao. Igual a
+        `unidades` sempre que o periodo comeca depois desse dia.
 
         As duas ultimas sao o custo de produto informado pelo vendedor
         (migration 0008), na vigencia que valia na data de cada pedido, e
@@ -280,7 +297,8 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     nunca_colhido = df["linhas_de_visita"] == 0
     df["visitas"] = df["visitas"].astype(object).where(~nunca_colhido, None)
 
-    # Conversao = unidades / visitas, em porcentagem.
+    # Conversao = unidades_com_visita / visitas, em porcentagem -- vendas e
+    # visitas dos mesmos dias (ver a coluna na query).
     #
     # E uma APROXIMACAO, e a tela diz isso: um pedido com tres unidades do
     # mesmo item e uma visita que converteu, nao tres. A metrica honesta seria
@@ -291,7 +309,7 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
         visitas = linha["visitas"]
         if visitas is None or visitas <= 0:
             return None
-        return round(100.0 * linha["unidades"] / visitas, 2)
+        return round(100.0 * linha["unidades_com_visita"] / visitas, 2)
 
     df["conversao"] = df.apply(_conversao, axis=1)
     df = df.drop(columns=["linhas_de_visita"])
