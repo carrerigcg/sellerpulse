@@ -48,7 +48,7 @@ export function PainelExportacao({
     {
       chave: "executive",
       titulo: "Fluxo financeiro",
-      descricao: "Uma linha por dia, com receita, comissão, frete e margem.",
+      descricao: "Uma linha por dia, com receita, comissão, custo e margem.",
       linhas: fluxo.length,
       colunas: COLUNAS_FLUXO.length,
       botao: (

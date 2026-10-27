@@ -49,7 +49,7 @@ describe("montaVeredito — a sobra", () => {
       "Principal motivo: as vendas caíram R$ 10.000 — de R$ 128.000 para R$ 118.000.",
     );
     expect(v.explicacao).toBe(
-      "É o que fica depois de pagar o Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas ainda saem daí.",
+      "É o que fica depois de pagar a comissão do Mercado Livre e os produtos. O frete ainda não entra na conta, e aluguel, salários e outras despesas também saem daí.",
     );
   });
 
@@ -83,7 +83,7 @@ describe("montaVeredito — a sobra", () => {
     });
     expect(t(v.sobra)).toBe("As vendas não cobriram os custos: faltaram R$ 2.000.");
     expect(v.explicacao).toBe(
-      "Na conta entram o Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas vêm depois.",
+      "Na conta entram a comissão do Mercado Livre e os produtos; o frete ainda não entra. Aluguel, salários e outras despesas vêm depois.",
     );
   });
 
@@ -155,7 +155,7 @@ describe("montaVeredito — principal motivo", () => {
     expect(v.avisoComparacao).toBeNull();
   });
 
-  it("tarifas do Mercado Livre e frete", () => {
+  it("comissão do Mercado Livre", () => {
     const v = montaVeredito({
       atual: totais(100_000, 30_000, 30_000),
       anterior: totais(100_000, 20_000, 30_000),
@@ -163,7 +163,7 @@ describe("montaVeredito — principal motivo", () => {
       coberturaAnterior: COMPLETA,
     });
     expect(t(v.maiorPeso)).toBe(
-      "Principal motivo: as tarifas do Mercado Livre e o frete subiram R$ 10.000.",
+      "Principal motivo: a comissão do Mercado Livre subiu R$ 10.000.",
     );
   });
 
@@ -234,7 +234,7 @@ describe("montaVeredito — aviso de cobertura e explicação", () => {
     const v = montaVeredito({ ...base, coberturaAtual: calculaCobertura(100, 100) });
     expect(v.avisoCobertura).toBe("Nenhuma venda deste período saiu com custo informado.");
     expect(v.explicacao).toBe(
-      "É o que fica depois de pagar o Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas também saem daí.",
+      "É o que fica depois de pagar a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas também saem daí.",
     );
   });
 
@@ -460,5 +460,25 @@ describe("montaResumo", () => {
 
   it("sem venda no período: estado vazio", () => {
     expect(montaResumo({ ...fontes, fluxo: ok([]), anterior: ok([]) }).semVendas).toBe(true);
+  });
+});
+
+describe("frete ainda não calculado", () => {
+  it("nenhuma variante da explicação afirma que o frete foi descontado", () => {
+    const casos = [
+      { atual: totais(1_000, 100, 300), cobertura: COMPLETA }, // sobra positiva, com custo
+      { atual: totais(1_000, 100, 0), cobertura: calculaCobertura(1_000, 1_000) }, // sem custo
+      { atual: totais(1_000, 100, 1_500), cobertura: COMPLETA }, // sobra negativa, com custo
+      { atual: totais(1_000, 1_200, 0), cobertura: calculaCobertura(1_000, 1_000) }, // negativa, sem custo
+    ];
+    for (const { atual, cobertura } of casos) {
+      const { explicacao } = montaVeredito({
+        atual,
+        anterior: null,
+        coberturaAtual: cobertura,
+        coberturaAnterior: null,
+      });
+      expect(explicacao).toMatch(/frete ainda não entra/);
+    }
   });
 });

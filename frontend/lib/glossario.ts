@@ -36,12 +36,15 @@ export const GLOSSARIO_FLUXO: Glossario<FluxoDia> = {
   taxas_ml:
     "A soma da comissão que o Mercado Livre retém sobre esses pedidos.",
   frete:
-    "A soma do custo de envio registrado nesses pedidos.",
+    "Ainda não calculado: a coluna sai vazia, e não com zero. O pedido do " +
+    "Mercado Livre não traz o frete que o vendedor paga — ele só existe na " +
+    "consulta de cada envio, que o SellerPulse ainda não faz. Por isso a " +
+    "margem desta planilha ainda não desconta frete.",
   margem_contribuicao:
-    "Receita bruta menos comissão menos frete. Não desconta o custo do " +
-    "produto: o SellerPulse não conhece esse custo até você informar, e " +
-    "chutar um percentual daria um número que parece lucro e não é. Por isso " +
-    "a coluna se chama margem de contribuição, e não lucro.",
+    "Receita bruta menos comissão menos o custo dos produtos que você " +
+    "informou. O custo só entra quando informado — chutar um percentual daria " +
+    "um número que parece lucro e não é —, e o frete ainda não entra. Por " +
+    "isso a coluna se chama margem de contribuição, e não lucro.",
   custo_produtos:
     "O custo dos produtos vendidos no dia: quantidade vezes o custo unitário " +
     "que você informou, valendo a vigência da data do pedido. Só entra o que " +

@@ -13,8 +13,9 @@
  * cliente mande.
  */
 
-import type { AbcLinha, CohortLinha, CustoLinha, FluxoDia, RfmLinha } from "@/lib/api";
+import type { AbcLinha, CohortLinha, CustoLinha, RfmLinha } from "@/lib/api";
 import { ApiError } from "@/lib/api";
+import { semFreteCalculado, type FluxoDiaDaApi } from "@/lib/frete";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL!;
 
@@ -58,10 +59,12 @@ async function buscarDemo<T>(caminho: string, params: Record<string, string>): P
 }
 
 export function getDemoFluxoFinanceiro(dateFrom: string, dateTo: string) {
-  return buscarDemo<FluxoDia[]>("/demo/fluxo-financeiro", {
+  // A demo traz frete sintético; a conta real, não. A mesma normalização dos
+  // dois lados, para a vitrine não prometer o que o produto não faz.
+  return buscarDemo<FluxoDiaDaApi[]>("/demo/fluxo-financeiro", {
     date_from: dateFrom,
     date_to: dateTo,
-  });
+  }).then(semFreteCalculado);
 }
 
 export function getDemoAbcPareto(dateFrom: string, dateTo: string) {

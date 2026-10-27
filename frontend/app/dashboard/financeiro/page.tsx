@@ -78,11 +78,11 @@ export default async function FinanceiroPage({
             }`}
           >
             <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
-            {/* "Custos do Mercado Livre", não "Custo total": este cartão é
-                comissão + frete, e chamá-lo de total seria repetir num rótulo
+            {/* "Comissão do Mercado Livre", não "Custo total": o frete ainda não
+                é calculado (`lib/frete.ts`), e chamá-lo de total seria repetir num rótulo
                 novo a mentira do custo estimado que saiu daqui. */}
             <KpiCard
-              rotulo="Custos do Mercado Livre"
+              rotulo="Comissão do Mercado Livre"
               valor={atual.custo}
               anterior={passado.custo}
               subirEhRuim
@@ -99,7 +99,7 @@ export default async function FinanceiroPage({
               rotulo="Margem de contribuição"
               valor={atual.margem}
               anterior={passado.margem}
-              nota="receita − comissão do Mercado Livre − frete − custo dos produtos"
+              nota="receita − comissão do Mercado Livre − custo dos produtos. O frete ainda não entra na conta."
             />
           </div>
 

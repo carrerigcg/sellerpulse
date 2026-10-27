@@ -1,3 +1,4 @@
+import { semFreteCalculado, type FluxoDiaDaApi } from "@/lib/frete";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -16,7 +17,8 @@ export type FluxoDia = {
   date: string;
   receita_bruta: number;
   taxas_ml: number;
-  frete: number;
+  /** `null` = ainda não calculado. Ver `semFreteCalculado` em `lib/frete.ts`. */
+  frete: number | null;
   /** Custo de produto informado pelo vendedor, na vigência da data do pedido. */
   custo_produtos: number;
   /**
@@ -28,7 +30,8 @@ export type FluxoDia = {
    */
   receita_sem_custo: number;
   /**
-   * receita_bruta − taxas_ml − frete − custo_produtos. Não existe mais um
+   * receita_bruta − taxas_ml − custo_produtos: o frete fica de fora enquanto
+   * não for calculado (`lib/frete.ts`). Não existe mais um
    * `custo_estimado` (55% da receita chutados) nem o `liquido` que saía dele
    * — ver o comentário no topo de `src/metrics.py`. O custo de produto que
    * entra aqui é informado pelo vendedor, nunca estimado.
@@ -150,10 +153,10 @@ async function buscar<T>(caminho: string, params: Record<string, string>): Promi
 }
 
 export function getFluxoFinanceiro(dateFrom: string, dateTo: string) {
-  return buscar<FluxoDia[]>("/metrics/fluxo-financeiro", {
+  return buscar<FluxoDiaDaApi[]>("/metrics/fluxo-financeiro", {
     date_from: dateFrom,
     date_to: dateTo,
-  });
+  }).then(semFreteCalculado);
 }
 
 export function getAbcPareto(dateFrom: string, dateTo: string) {

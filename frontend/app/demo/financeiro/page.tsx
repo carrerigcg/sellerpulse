@@ -74,7 +74,7 @@ export default async function DemoFinanceiroPage({
             {/* Mesmos rótulos de `/dashboard` — a demo não pode prometer uma
                 conta diferente da que o produto entrega. */}
             <KpiCard
-              rotulo="Custos do Mercado Livre"
+              rotulo="Comissão do Mercado Livre"
               valor={atual.custo}
               anterior={passado.custo}
               subirEhRuim
@@ -91,7 +91,7 @@ export default async function DemoFinanceiroPage({
               rotulo="Margem de contribuição"
               valor={atual.margem}
               anterior={passado.margem}
-              nota="receita − comissão do Mercado Livre − frete − custo dos produtos"
+              nota="receita − comissão do Mercado Livre − custo dos produtos. O frete ainda não entra na conta."
             />
           </div>
 

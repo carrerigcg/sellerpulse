@@ -200,17 +200,17 @@ Texto base de 16px, frase principal de 24px, botões com 44px de altura.
 
 | caso | frase |
 | --- | --- |
-| sobra ≥ 0, com algum custo | É o que fica depois de pagar o Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas ainda saem daí. |
-| sobra ≥ 0, cobertura zero | É o que fica depois de pagar o Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas também saem daí. |
-| sobra < 0, com algum custo | Na conta entram o Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas vêm depois. |
-| sobra < 0, cobertura zero | Na conta entram o Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas vêm depois. |
+| sobra ≥ 0, com algum custo | É o que fica depois de pagar a comissão do Mercado Livre e os produtos. O frete ainda não entra na conta, e aluguel, salários e outras despesas também saem daí. |
+| sobra ≥ 0, cobertura zero | É o que fica depois de pagar a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas também saem daí. |
+| sobra < 0, com algum custo | Na conta entram a comissão do Mercado Livre e os produtos; o frete ainda não entra. Aluguel, salários e outras despesas vêm depois. |
+| sobra < 0, cobertura zero | Na conta entra a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas vêm depois. |
 
 **Principal motivo:**
 
 | parte | frase |
 | --- | --- |
 | vendas | Principal motivo: as vendas {subiram\|caíram} {R$ x} — de {R$ a} para {R$ b}. |
-| Mercado Livre e frete | Principal motivo: as tarifas do Mercado Livre e o frete {subiram\|caíram} {R$ x}. |
+| comissão do Mercado Livre | Principal motivo: a comissão do Mercado Livre {subiu\|caiu} {R$ x}. |
 | custo dos produtos | Principal motivo: o custo dos produtos {subiu\|caiu} {R$ x}. |
 | aviso de comparação | Parte da diferença vem do custo informado: neste período, {p}% do valor vendido tinha custo; no anterior, {q}%. |
 
@@ -440,3 +440,12 @@ recomendações):
    depois do merge**, direto na `main`: o link leva
    `?segmento=em-risco#compradores`, a tabela abre filtrada nesse segmento e
    o tutorial de Clientes não abre por cima dela (seção 5).
+
+**O frete não é calculado** (auditoria de números, 2026-10-27). Na conta real,
+1.091 de 1.091 pedidos pagos chegavam com frete R$ 0,00: a ingestão lê um campo
+que o Mercado Livre nunca preenche, e o custo do vendedor só existe na consulta
+de cada envio. As frases afirmavam um desconto que não acontecia, e a demo
+(sintética, com frete) mostrava uma conta que o produto real não faz. Até o
+frete existir, `lib/frete.ts` trata o frete como ausência nos dois contextos:
+a margem sai sem ele e toda frase diz que ele ainda não entra. Erro estimado
+pela auditoria: de 0% a ~5,4% da receita a mais na sobra.
