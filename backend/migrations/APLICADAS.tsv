@@ -66,6 +66,8 @@
 0009_rls_custo_de_produto.sql	20261014163304	2026-10-14
 0010_visitas_do_anuncio.sql	20261015134158	2026-10-15
 0011_rls_visitas_do_anuncio.sql	20261015134553	2026-10-15
+0012_frete_real.sql	20261027204924	2026-10-27
+0013_rls_frete_real.sql	20261027204925	2026-10-27
 
 # SO PARA O BANCO DE TESTE -- nunca vai para producao.
 # Prefixo `!`. O `auth.users` do Supabase e nativo; este arquivo e o stub que
