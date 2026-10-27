@@ -130,14 +130,14 @@ que antecederam esta feature.
 
 | # | título | texto | fonte |
 | --- | --- | --- | --- |
-| 1 | O que é a sobra | É o que fica das vendas depois de pagar a comissão do Mercado Livre e o custo dos produtos informado na tela de Custos. O frete ainda não entra na conta, e aluguel, salários e outras despesas também saem daí — por isso não é lucro. | `montaVeredito` e a explicação em `lib/resumo.ts` |
+| 1 | O que é a sobra | É o que fica das vendas depois de pagar a comissão do Mercado Livre, o frete e o custo dos produtos informado na tela de Custos. Aluguel, salários e outras despesas também saem daí — por isso não é lucro. | `montaVeredito` e a explicação em `lib/resumo.ts` |
 | 2 | O que fazer e onde ver mais | Os cartões de baixo mostram o que pede atenção agora, e cada botão abre a tela com os detalhes. As outras telas ficam no menu: Financeiro, Produtos, Clientes, Custos e Exportar. | `montaTarefas`; `components/nav/itens.ts` |
 
 ### Executive
 
 | # | título | texto | fonte |
 | --- | --- | --- | --- |
-| 1 | Margem de contribuição não é lucro | É a receita menos a comissão do Mercado Livre e o custo dos produtos — o frete ainda não entra na conta. Aluguel, salários e outras despesas fixas também não entram: por isso é margem, e não lucro. | nota do cartão em `app/dashboard/page.tsx` |
+| 1 | Margem de contribuição não é lucro | É a receita menos a comissão do Mercado Livre, o frete que você pagou e o custo dos produtos. Aluguel, salários e outras despesas fixas não entram: por isso é margem, e não lucro. | nota do cartão em `app/dashboard/page.tsx` |
 | 2 | Quanto da conta está completa | O custo do produto só entra quando é informado na tela de Custos. Se falta custo, um aviso abaixo dos cartões mostra quanto da receita já está coberta — e, até chegar a 100%, a margem aparece maior do que a real. | `indicador-cobertura.tsx` (some quando completa); docstring de `app/dashboard/custos/page.tsx` |
 | 3 | Comparação e período | Cada cartão compara com o período anterior de mesmo tamanho. E o "Até" do seletor não inclui o próprio dia: escolher 13/10 mostra os dados até 12/10. | `janelaAnterior` em `lib/api.ts`; `CLAUDE.md` |
 

@@ -24,6 +24,7 @@ import asyncpg
 
 from backend.jobs import queue
 from backend.ml import oauth
+from backend.ml.frete_pg import colhe_frete
 from backend.ml.ingest_pg import ingest_janela
 from backend.ml.visitas_pg import colhe_visitas
 from src.ml_client import MLClient
@@ -174,6 +175,8 @@ async def executa_job(pool: asyncpg.Pool, job: asyncpg.Record, *, client=None) -
         await _delta(pool, job, client, ml_seller_id, seller_id, last_synced_at)
     elif kind == "visitas":
         await _visitas(pool, job, client, seller_id)
+    elif kind == "frete":
+        await _frete(pool, job, client, seller_id)
     else:
         raise ValueError(f"tipo de job desconhecido: {kind!r}")
 
@@ -214,7 +217,7 @@ async def _backfill(pool, job, client, ml_seller_id, seller_id) -> None:
         # idempotente) em vez de pular dado.
         await queue.salva_cursor(pool, job["id"], {"janelas_concluidas": indice + 1})
 
-    await _conclui(pool, job, seller_id, avisos, len(todas), encadeia_visitas=True)
+    await _conclui(pool, job, seller_id, avisos, len(todas), encadeia="visitas")
 
 
 async def _delta(pool, job, client, ml_seller_id, seller_id, last_synced_at) -> None:
@@ -240,7 +243,7 @@ async def _delta(pool, job, client, ml_seller_id, seller_id, last_synced_at) -> 
             pool, job["id"], fase=fase, processados=0, total=1
         ),
     )
-    await _conclui(pool, job, seller_id, resultado.warnings, 1, encadeia_visitas=True)
+    await _conclui(pool, job, seller_id, resultado.warnings, 1, encadeia="visitas")
 
 
 async def _visitas(pool, job, client, seller_id) -> None:
@@ -275,14 +278,41 @@ async def _visitas(pool, job, client, seller_id) -> None:
 
     # `marca_sincronizacao=False`: `last_synced_at` e a marca d'agua dos
     # PEDIDOS. Ver o docstring de `_conclui`.
-    #
-    # `encadeia_visitas=False`: senao a fila se alimenta para sempre.
     await _conclui(
         pool,
         job,
         seller_id,
         resultado.warnings,
         resultado.itens_processados,
+        marca_sincronizacao=False,
+        encadeia="frete",
+    )
+
+
+async def _frete(pool, job, client, seller_id) -> None:
+    """Colhe o frete do vendedor de cada envio que ainda nao tem custo.
+
+    UMA CHAMADA AO ML POR ENVIO -- a primeira colheita da loja real sao ~1.053.
+    Sem cursor: a lista de envios ja exclui os gravados, entao a retomada
+    recomeca do que falta. O lease e renovado a cada envio, pelo mesmo motivo
+    das visitas.
+    """
+
+    async def ao_concluir_envio(feitos: int, total: int) -> None:
+        await queue.heartbeat(
+            pool, job["id"], fase=f"Frete {feitos}/{total}", processados=feitos, total=total
+        )
+
+    resultado = await colhe_frete(pool, seller_id, client=client, on_envio=ao_concluir_envio)
+
+    # Ultimo elo da cadeia: sem `encadeia`, senao a fila se alimenta para
+    # sempre.
+    await _conclui(
+        pool,
+        job,
+        seller_id,
+        resultado.warnings,
+        resultado.envios_processados,
         marca_sincronizacao=False,
     )
 
@@ -295,22 +325,21 @@ async def _conclui(
     total: int,
     *,
     marca_sincronizacao: bool = True,
-    encadeia_visitas: bool = False,
+    encadeia: str | None = None,
 ) -> None:
     """Fecha o job. Os dois flags existem por motivos diferentes.
 
-    `marca_sincronizacao=False` para o job de visitas: `last_synced_at` e a
+    `marca_sincronizacao=False` para visitas e frete: `last_synced_at` e a
     marca d'agua da ingestao de PEDIDOS, e e dela que `_delta` deriva a janela
     a pedir. Um job de visitas que a atualizasse faria o delta seguinte achar
     que os pedidos ja foram buscados, e um dia inteiro de venda sumiria sem
     nada falhar.
 
-    `encadeia_visitas=True` depois de backfill e delta. A spec previa
-    enfileirar os dois juntos, mas `uniq_sync_job_ativo` garante UM job ativo
-    por seller -- o segundo `enqueue` devolveria None e a colheita nunca
-    aconteceria. Encadear mantem a garantia intacta, nao poe duas sequencias
-    de chamadas ao ML no ar ao mesmo tempo, e custa so um ciclo de atraso num
-    dado que ja nasce com 48h de defasagem.
+    `encadeia` monta a cadeia backfill/delta -> visitas -> frete. A spec das
+    visitas previa enfileirar os jobs juntos, mas `uniq_sync_job_ativo`
+    garante UM job ativo por seller -- o segundo `enqueue` devolveria None e
+    a colheita nunca aconteceria. Encadear mantem a garantia intacta e nao poe
+    duas sequencias de chamadas ao ML no ar ao mesmo tempo.
     """
     if marca_sincronizacao:
         async with pool.acquire() as conn:
@@ -318,11 +347,11 @@ async def _conclui(
     await queue.heartbeat(pool, job["id"], fase="Concluido", processados=total, total=total)
     await queue.finish(pool, job["id"], warnings=avisos)
 
-    if encadeia_visitas:
+    if encadeia is not None:
         # DEPOIS do finish, nunca antes: enquanto este job estiver 'running',
         # o indice unico recusa o proximo e a colheita se perderia em silencio
         # (enqueue devolve None, que nao e erro).
-        await queue.enqueue(pool, seller_id, "visitas")
+        await queue.enqueue(pool, seller_id, encadeia)
 
 
 async def loop(pool: asyncpg.Pool, *, parar: asyncio.Event, client_factory=None) -> None:

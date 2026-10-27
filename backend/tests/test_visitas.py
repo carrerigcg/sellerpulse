@@ -284,8 +284,9 @@ async def test_job_de_visitas_nao_mexe_em_last_synced_at(pg_pool, test_seller):
     assert depois == antes
 
 
-async def test_job_de_visitas_nao_se_auto_encadeia(pg_pool, test_seller):
-    """Senao a fila se alimenta para sempre."""
+async def test_job_de_visitas_encadeia_o_frete_e_nao_a_si_mesmo(pg_pool, test_seller):
+    """Visitas encadeando visitas alimentaria a fila para sempre. O proximo
+    elo e o frete, que fecha a cadeia (ver `test_frete.py`)."""
     _, sid = test_seller
     await _seller_conectado(pg_pool, sid)
     await _vendeu(pg_pool, sid, 1, "MLB1")
@@ -294,8 +295,8 @@ async def test_job_de_visitas_nao_se_auto_encadeia(pg_pool, test_seller):
     await runner.executa_job(pg_pool, job, client=ClienteDeVisitas({"MLB1": {"2026-10-10": 5}}))
 
     async with pg_pool.acquire() as conn:
-        total = await conn.fetchval("SELECT count(*) FROM sync_jobs WHERE seller_id=$1", sid)
-    assert total == 1
+        kinds = await conn.fetch("SELECT kind FROM sync_jobs WHERE seller_id=$1 ORDER BY id", sid)
+    assert [k["kind"] for k in kinds] == ["visitas", "frete"]
 
 
 async def test_kind_desconhecido_falha_alto(pg_pool, test_seller):

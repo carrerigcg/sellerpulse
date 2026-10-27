@@ -16,7 +16,7 @@
 // cartão sejam o mesmo número.
 import { totalizarFluxo } from "../components/analytics/executive-totals";
 import type { FluxoDia } from "./api";
-import { coberturaDoFluxo, type Cobertura } from "./cobertura";
+import { coberturaDoFluxo, coberturaDoFrete, type Cobertura } from "./cobertura";
 import { calculaReferencia, diagnostica, type Diagnostico, type LinhaDeFunil } from "./diagnostico";
 import { parametroDoSegmento } from "./segmento-da-url";
 
@@ -64,7 +64,7 @@ export function montaVeredito(entrada: {
       sobra >= 0
         ? `Sobraram ${reais(sobra)} das suas vendas.`
         : `As vendas não cobriram os custos: faltaram ${reais(sobra)}.`,
-    explicacao: explicacao(sobra, coberturaAtual),
+    explicacao: explicacao(sobra, coberturaAtual, coberturaDoFrete(atual)),
     avisoCobertura: avisoDeCobertura(coberturaAtual),
   };
 
@@ -112,26 +112,40 @@ export function montaVeredito(entrada: {
 /**
  * O que a sobra já descontou — e o que não. Com cobertura zero, dizer "depois
  * de pagar os produtos" seria afirmar um desconto que não aconteceu, na frase
- * que vem antes do aviso que o desmente. O mesmo vale para o frete, que
- * ainda não é calculado (`lib/frete.ts`): toda variante diz que ele não entra.
+ * que vem antes do aviso que o desmente.
+ *
+ * O frete segue a mesma regra, com uma terceira situação: buscado só em
+ * parte. A colheita é por envio e roda depois de cada sincronização, então
+ * logo após conectar a conta o frete pode estar pela metade — e dizer "depois
+ * de pagar o frete" ali afirmaria um desconto que ainda não aconteceu inteiro.
  */
-function explicacao(sobra: number, cobertura: Cobertura): string {
-  const semCustoDeProduto = cobertura.vazia && !cobertura.semReceita;
-  if (sobra < 0) {
-    return semCustoDeProduto
-      ? "Na conta entra a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas vêm depois."
-      : "Na conta entram a comissão do Mercado Livre e os produtos; o frete ainda não entra. Aluguel, salários e outras despesas vêm depois.";
+function explicacao(sobra: number, cobertura: Cobertura, frete: Cobertura): string {
+  const pagos = ["a comissão do Mercado Livre"];
+  const faltando: string[] = [];
+
+  if (frete.semReceita || frete.completa) pagos.push("o frete");
+  else if (frete.vazia) faltando.push("o frete ainda está sendo buscado no Mercado Livre");
+  else faltando.push("o frete de parte das vendas ainda está sendo buscado no Mercado Livre");
+
+  if (cobertura.vazia && !cobertura.semReceita) {
+    faltando.push("o custo dos produtos ainda não foi descontado");
+  } else {
+    pagos.push("os produtos");
   }
-  return semCustoDeProduto
-    ? "É o que fica depois de pagar a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas também saem daí."
-    : "É o que fica depois de pagar a comissão do Mercado Livre e os produtos. O frete ainda não entra na conta, e aluguel, salários e outras despesas também saem daí.";
+
+  const lista = pagos.length === 1 ? pagos[0] : `${pagos.slice(0, -1).join(", ")} e ${pagos.at(-1)}`;
+  const ressalva = faltando.length > 0 ? ` — ${faltando.join(", e ")}` : "";
+
+  return sobra < 0
+    ? `Na conta ${pagos.length === 1 ? "entra" : "entram"} ${lista}${ressalva}. Aluguel, salários e outras despesas vêm depois.`
+    : `É o que fica depois de pagar ${lista}${ressalva}. Aluguel, salários e outras despesas também saem daí.`;
 }
 
 /**
  * A parte da conta que mais mexeu na sobra, no sentido da mudança.
  *
- * Antes do arredondamento as três fecham a diferença: `margem_contribuicao` é
- * receita − comissão − custo dos produtos (`lib/frete.ts`). Depois dele
+ * Antes do arredondamento as quatro fecham a diferença: `margem_contribuicao`
+ * é receita − comissão − frete − custo dos produtos. Depois dele
  * a soma pode se afastar da diferença em um ou dois reais — e, numa diferença
  * de R$ 1, nenhuma parte pode ter andado no mesmo sentido. Daí o `null`.
  *
@@ -142,6 +156,7 @@ function oQueMaisPesou(atual: Totais, anterior: Totais, diferenca: number): stri
   const partes = [
     { parte: "vendas", efeito: arredonda(atual.receita) - arredonda(anterior.receita) },
     { parte: "mercado-livre", efeito: arredonda(anterior.custo) - arredonda(atual.custo) },
+    { parte: "frete", efeito: arredonda(anterior.frete) - arredonda(atual.frete) },
     {
       parte: "produtos",
       efeito: arredonda(anterior.custoProdutos) - arredonda(atual.custoProdutos),
@@ -158,6 +173,9 @@ function oQueMaisPesou(atual: Totais, anterior: Totais, diferenca: number): stri
   }
   if (maior.parte === "mercado-livre") {
     return `Principal motivo: a comissão do Mercado Livre ${maior.efeito < 0 ? "subiu" : "caiu"} ${reais(maior.efeito)}.`;
+  }
+  if (maior.parte === "frete") {
+    return `Principal motivo: o frete que você pagou ${maior.efeito < 0 ? "subiu" : "caiu"} ${reais(maior.efeito)}.`;
   }
   return `Principal motivo: o custo dos produtos ${maior.efeito < 0 ? "subiu" : "caiu"} ${reais(maior.efeito)}.`;
 }

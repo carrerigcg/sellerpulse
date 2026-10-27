@@ -45,13 +45,15 @@ from src.metrics import SEM_CATEGORIA
 # Nao existe custo estimado aqui, e nao deve voltar a existir: esta camada
 # espelha `src/metrics.py`, onde o comentario do topo explica por que o
 # percentual de COGS de 55% foi removido em vez de renomeado. A conta e
-# margem de contribuicao = receita_bruta - taxas_ml - frete, as tres parcelas
-# vindas de colunas de `orders`.
+# margem de contribuicao = receita_bruta - taxas_ml - frete - custo_produtos.
+# O frete vem de `shipment_costs`, por envio -- `orders.shipping_cost` nao e
+# mais lido (docs/specs/2026-10-27-frete-real-design.md).
 _FLUXO_COLUMNS = [
     "date",
     "receita_bruta",
     "taxas_ml",
     "frete",
+    "receita_sem_frete",
     "custo_produtos",
     "receita_sem_custo",
     "margem_contribuicao",
@@ -79,13 +81,45 @@ _FLUXO_QUERY = f"""
             to_char(o.date_closed AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM-DD') AS date,
             SUM(o.total_amount)                AS receita_bruta,
             SUM(o.marketplace_fee)             AS taxas_ml,
-            SUM(o.shipping_cost)               AS frete
+            -- Receita de pedido cujo envio ainda nao tem frete colhido. E o
+            -- `receita_sem_custo` do frete: sem ela, um frete parcial pareceria
+            -- completo. Pedido SEM envio nao entra -- sem envio nao ha frete a
+            -- pagar, e isso e um fato, nao uma ausencia.
+            COALESCE(SUM(o.total_amount) FILTER (
+                WHERE o.shipment_id IS NOT NULL AND sc.shipment_id IS NULL
+            ), 0)                              AS receita_sem_frete
         FROM orders o
+        LEFT JOIN shipment_costs sc
+          ON sc.seller_id = o.seller_id AND sc.shipment_id = o.shipment_id
         WHERE o.seller_id = $1
           AND o.status = 'paid'
           AND o.date_closed >= $2::timestamptz
           AND o.date_closed <  $3::timestamptz
         GROUP BY 1
+    ),
+    -- O frete e do ENVIO, e carrinho e um envio para varios pedidos: somado
+    -- por pedido, o carrinho de 7 pedidos da loja real pagaria 7 fretes. Cada
+    -- envio entra uma vez, no dia do seu primeiro pedido pago. Esse dia e
+    -- calculado sobre a historia inteira, e nao so sobre a janela: senao um
+    -- carrinho que atravessa a borda contaria nas duas janelas.
+    envios AS (
+        SELECT o.shipment_id, MIN(o.date_closed) AS primeiro_pedido
+          FROM orders o
+         WHERE o.seller_id = $1
+           AND o.status = 'paid'
+           AND o.shipment_id IS NOT NULL
+         GROUP BY o.shipment_id
+    ),
+    frete_por_dia AS (
+        SELECT
+            to_char(e.primeiro_pedido AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM-DD') AS date,
+            SUM(sc.custo_vendedor) AS frete
+          FROM envios e
+          JOIN shipment_costs sc
+            ON sc.seller_id = $1 AND sc.shipment_id = e.shipment_id
+         WHERE e.primeiro_pedido >= $2::timestamptz
+           AND e.primeiro_pedido <  $3::timestamptz
+         GROUP BY 1
     ),
     custo_por_dia AS (
         SELECT
@@ -132,13 +166,15 @@ _FLUXO_QUERY = f"""
         d.date,
         d.receita_bruta,
         d.taxas_ml,
-        d.frete,
+        COALESCE(f.frete, 0)             AS frete,
+        d.receita_sem_frete,
         -- LEFT JOIN + COALESCE: dia com pedido mas sem nenhuma linha em
         -- order_items (possivel em dado antigo) ainda aparece, com custo zero.
         COALESCE(c.custo_produtos, 0)    AS custo_produtos,
         COALESCE(c.receita_sem_custo, 0) AS receita_sem_custo
     FROM por_dia d
     LEFT JOIN custo_por_dia c ON c.date = d.date
+    LEFT JOIN frete_por_dia f ON f.date = d.date
     ORDER BY d.date
 """
 
@@ -246,10 +282,15 @@ async def fluxo_financeiro(
         date_from: início inclusivo (ISO 8601, ex: "2026-07-25").
         date_to: fim exclusivo (ISO 8601).
 
+    O frete segue a mesma regra do custo: so entra o que foi colhido, por
+    envio (`shipment_costs`), e a receita dos pedidos cujo envio ainda nao tem
+    frete aparece em `receita_sem_frete`.
+
     Returns:
         DataFrame com colunas: date, receita_bruta, taxas_ml, frete,
-        custo_produtos, receita_sem_custo, margem_contribuicao. Uma linha por
-        dia com pedidos pagos. Vazio se nenhum pedido no range.
+        receita_sem_frete, custo_produtos, receita_sem_custo,
+        margem_contribuicao. Uma linha por dia com pedidos pagos. Vazio se
+        nenhum pedido no range.
     """
     rows = await pool.fetch(
         _FLUXO_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
@@ -259,13 +300,21 @@ async def fluxo_financeiro(
         return pd.DataFrame(columns=_FLUXO_COLUMNS)
 
     df = pd.DataFrame([dict(r) for r in rows])
-    for col in ("receita_bruta", "taxas_ml", "frete", "custo_produtos", "receita_sem_custo"):
+    numericas = (
+        "receita_bruta",
+        "taxas_ml",
+        "frete",
+        "receita_sem_frete",
+        "custo_produtos",
+        "receita_sem_custo",
+    )
+    for col in numericas:
         df[col] = df[col].astype(float)
 
     # Arredondados aqui, e nao no SQL: o custo vem de `quantity * numeric` e a
     # soma de varios itens acumula casas que ninguem pediu.
-    df["custo_produtos"] = df["custo_produtos"].round(2)
-    df["receita_sem_custo"] = df["receita_sem_custo"].round(2)
+    for col in ("frete", "receita_sem_frete", "custo_produtos", "receita_sem_custo"):
+        df[col] = df[col].round(2)
 
     df["margem_contribuicao"] = (
         df["receita_bruta"] - df["taxas_ml"] - df["frete"] - df["custo_produtos"]

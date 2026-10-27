@@ -115,6 +115,9 @@ async def regenera_demo(
         # isso esta funcao aborta antes se `is_demo` nao for true.
         await conn.execute("DELETE FROM item_visits WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM product_costs WHERE seller_id = $1", seller_id)
+        # O frete da demo tambem e sintetico, e o envio e o proprio pedido:
+        # sem este DELETE, o frete de um pedido que nao existe mais ficaria.
+        await conn.execute("DELETE FROM shipment_costs WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM claims WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM orders WHERE seller_id = $1", seller_id)
         await conn.execute("DELETE FROM items_cache WHERE seller_id = $1", seller_id)

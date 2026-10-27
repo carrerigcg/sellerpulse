@@ -198,12 +198,20 @@ Texto base de 16px, frase principal de 24px, botões com 44px de altura.
 
 **Explicação:**
 
+A frase é montada por partes (`explicacao` em `lib/resumo.ts`): a lista do
+que já foi pago e, depois de um travessão, o que ainda falta.
+
+| parte | entra na lista do que foi pago quando | senão, a ressalva |
+| --- | --- | --- |
+| comissão do Mercado Livre | sempre | — |
+| frete | todo o frete do período foi buscado | "o frete ainda está sendo buscado no Mercado Livre" (nada buscado) ou "o frete de parte das vendas ainda está sendo buscado no Mercado Livre" (parte) |
+| produtos | há algum custo informado | "o custo dos produtos ainda não foi descontado" |
+
 | caso | frase |
 | --- | --- |
-| sobra ≥ 0, com algum custo | É o que fica depois de pagar a comissão do Mercado Livre e os produtos. O frete ainda não entra na conta, e aluguel, salários e outras despesas também saem daí. |
-| sobra ≥ 0, cobertura zero | É o que fica depois de pagar a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas também saem daí. |
-| sobra < 0, com algum custo | Na conta entram a comissão do Mercado Livre e os produtos; o frete ainda não entra. Aluguel, salários e outras despesas vêm depois. |
-| sobra < 0, cobertura zero | Na conta entra a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas vêm depois. |
+| sobra ≥ 0, tudo completo | É o que fica depois de pagar a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas também saem daí. |
+| sobra ≥ 0, frete pela metade | É o que fica depois de pagar a comissão do Mercado Livre e os produtos — o frete de parte das vendas ainda está sendo buscado no Mercado Livre. Aluguel, salários e outras despesas também saem daí. |
+| sobra < 0, nada de frete nem de custo | Na conta entra a comissão do Mercado Livre — o frete ainda está sendo buscado no Mercado Livre, e o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas vêm depois. |
 
 **Principal motivo:**
 
@@ -211,6 +219,7 @@ Texto base de 16px, frase principal de 24px, botões com 44px de altura.
 | --- | --- |
 | vendas | Principal motivo: as vendas {subiram\|caíram} {R$ x} — de {R$ a} para {R$ b}. |
 | comissão do Mercado Livre | Principal motivo: a comissão do Mercado Livre {subiu\|caiu} {R$ x}. |
+| frete | Principal motivo: o frete que você pagou {subiu\|caiu} {R$ x}. |
 | custo dos produtos | Principal motivo: o custo dos produtos {subiu\|caiu} {R$ x}. |
 | aviso de comparação | Parte da diferença vem do custo informado: neste período, {p}% do valor vendido tinha custo; no anterior, {q}%. |
 
@@ -449,3 +458,8 @@ de cada envio. As frases afirmavam um desconto que não acontecia, e a demo
 frete existir, `lib/frete.ts` trata o frete como ausência nos dois contextos:
 a margem sai sem ele e toda frase diz que ele ainda não entra. Erro estimado
 pela auditoria: de 0% a ~5,4% da receita a mais na sobra.
+
+**O frete passou a ser buscado** no mesmo dia, por envio
+(`docs/specs/2026-10-27-frete-real-design.md`). A explicação ganhou um
+terceiro estado, "buscado só em parte", porque logo depois de conectar a conta
+a colheita está pela metade.

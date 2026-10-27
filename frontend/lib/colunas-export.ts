@@ -18,6 +18,7 @@ export const COLUNAS_FLUXO: Coluna<FluxoDia>[] = [
   { titulo: "Receita bruta", campo: "receita_bruta" },
   { titulo: "Comissão do Mercado Livre", campo: "taxas_ml" },
   { titulo: "Frete", campo: "frete" },
+  { titulo: "Receita sem frete buscado", campo: "receita_sem_frete" },
   { titulo: "Custo dos produtos", campo: "custo_produtos" },
   { titulo: "Receita sem custo informado", campo: "receita_sem_custo" },
   { titulo: "Margem de contribuição", campo: "margem_contribuicao" },

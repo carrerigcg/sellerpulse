@@ -37,6 +37,7 @@ _TABELAS = (
     "claims",
     "product_costs",
     "item_visits",
+    "shipment_costs",
 )
 
 _TABELA_SQL = {
@@ -47,6 +48,7 @@ _TABELA_SQL = {
     "claims": "claims",
     "product_costs": "product_costs",
     "item_visits": "item_visits",
+    "shipment_costs": "shipment_costs",
 }
 
 _INSERT_CATEGORY = """
@@ -64,10 +66,20 @@ _INSERT_ITEM = """
 _INSERT_ORDER = """
     INSERT INTO orders (
         order_id, seller_id, date_closed, status, total_amount,
-        marketplace_fee, shipping_cost, buyer_id, raw_json, fetched_at
+        marketplace_fee, shipping_cost, buyer_id, raw_json, fetched_at, shipment_id
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, now())
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, now(), $10)
     ON CONFLICT DO NOTHING
+"""
+
+# O frete da demo e o `shipping_cost` sintetico do gerador, um envio por
+# pedido (`shipment_id = order_id`). Derivado aqui, como custo e visita, para
+# o `data/demo.db` nao mudar. `raw_json` diz de onde veio: quem abrir a linha
+# nao deve achar que e um payload do ML.
+_INSERT_FRETE = """
+    INSERT INTO shipment_costs (seller_id, shipment_id, custo_vendedor, raw_json)
+    VALUES ($1, $2, $3, '{"origem": "demonstracao"}'::jsonb)
+    ON CONFLICT (seller_id, shipment_id) DO NOTHING
 """
 
 _INSERT_ORDER_ITEM = """
@@ -320,6 +332,7 @@ async def seed_na_conexao(
                 order["shipping_cost"],
                 order["buyer_id"],
                 order["raw_json"],
+                order["order_id"],
             )
         )
         for item in _dedupe_order_items(order["items"]):
@@ -334,6 +347,14 @@ async def seed_na_conexao(
             )
     await conn.executemany(_INSERT_ORDER, pedidos_args)
     await conn.executemany(_INSERT_ORDER_ITEM, order_items_args)
+    await conn.executemany(
+        _INSERT_FRETE,
+        [
+            (seller_id, order["order_id"], order["shipping_cost"])
+            for order in orders
+            if order["status"] == "paid"
+        ],
+    )
 
     claims_args = [
         (

@@ -27,10 +27,28 @@ import { segmentoDaUrl } from "./segmento-da-url";
 /** O Intl usa espaço não separável em "R$ 1.000"; os textos esperados, não. */
 const t = (s: string | null) => (s === null ? null : s.replace(/ /g, " "));
 
-/** Totais coerentes: a margem é sempre a conta das outras três. */
-function totais(receita: number, custo: number, custoProdutos: number): Totais {
-  return { receita, custo, custoProdutos, margem: receita - custo - custoProdutos };
+/**
+ * Totais coerentes: a margem é sempre a conta das outras partes. Frete zero e
+ * todo buscado por padrão, para os testes de comparação não mudarem de motivo.
+ */
+function totais(
+  receita: number,
+  custo: number,
+  custoProdutos: number,
+  frete = { valor: 0, receitaSemFrete: 0 },
+): Totais {
+  return {
+    receita,
+    custo,
+    frete: frete.valor,
+    receitaSemFrete: frete.receitaSemFrete,
+    custoProdutos,
+    margem: receita - custo - frete.valor - custoProdutos,
+  };
 }
+
+/** Os campos de frete de um total montado à mão: zero, e todo buscado. */
+const SEM_FRETE = { frete: 0, receitaSemFrete: 0 };
 
 const COMPLETA = calculaCobertura(100, 0);
 
@@ -49,7 +67,7 @@ describe("montaVeredito — a sobra", () => {
       "Principal motivo: as vendas caíram R$ 10.000 — de R$ 128.000 para R$ 118.000.",
     );
     expect(v.explicacao).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre e os produtos. O frete ainda não entra na conta, e aluguel, salários e outras despesas também saem daí.",
+      "É o que fica depois de pagar a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas também saem daí.",
     );
   });
 
@@ -83,7 +101,7 @@ describe("montaVeredito — a sobra", () => {
     });
     expect(t(v.sobra)).toBe("As vendas não cobriram os custos: faltaram R$ 2.000.");
     expect(v.explicacao).toBe(
-      "Na conta entram a comissão do Mercado Livre e os produtos; o frete ainda não entra. Aluguel, salários e outras despesas vêm depois.",
+      "Na conta entram a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas vêm depois.",
     );
   });
 
@@ -111,7 +129,7 @@ describe("montaVeredito — a sobra", () => {
 
   it("falta no meio do real arredonda como o cartão do Financeiro (para longe do zero)", () => {
     const v = montaVeredito({
-      atual: { receita: 0, custo: 0, custoProdutos: 1_000.5, margem: -1_000.5 },
+      atual: { ...SEM_FRETE, receita: 0, custo: 0, custoProdutos: 1_000.5, margem: -1_000.5 },
       anterior: null,
       coberturaAtual: COMPLETA,
       coberturaAnterior: null,
@@ -120,8 +138,8 @@ describe("montaVeredito — a sobra", () => {
   });
 
   it("'o mesmo' quando os números da tela, já arredondados, são iguais", () => {
-    const atual = { receita: 5_000, custo: 1_000, custoProdutos: 2_999.6, margem: 1_000.4 };
-    const anterior = { receita: 5_000, custo: 1_000, custoProdutos: 3_000.4, margem: 999.6 };
+    const atual = { ...SEM_FRETE, receita: 5_000, custo: 1_000, custoProdutos: 2_999.6, margem: 1_000.4 };
+    const anterior = { ...SEM_FRETE, receita: 5_000, custo: 1_000, custoProdutos: 3_000.4, margem: 999.6 };
     const v = montaVeredito({ atual, anterior, coberturaAtual: COMPLETA, coberturaAnterior: COMPLETA });
     expect(v.comparacao).toBe("O mesmo que nos 30 dias anteriores.");
     expect(v.direcao).toBe("igual");
@@ -169,8 +187,8 @@ describe("montaVeredito — principal motivo", () => {
 
   it("diferença de R$ 1 que nenhuma parte arredondada explica: sem motivo, sem quebrar", () => {
     const v = montaVeredito({
-      atual: { receita: 10_000, custo: 2_000.4, custoProdutos: 0, margem: 7_999.6 },
-      anterior: { receita: 10_000, custo: 2_000.4, custoProdutos: 0.2, margem: 7_999.4 },
+      atual: { ...SEM_FRETE, receita: 10_000, custo: 2_000.4, custoProdutos: 0, margem: 7_999.6 },
+      anterior: { ...SEM_FRETE, receita: 10_000, custo: 2_000.4, custoProdutos: 0.2, margem: 7_999.4 },
       coberturaAtual: COMPLETA,
       coberturaAnterior: COMPLETA,
     });
@@ -234,7 +252,7 @@ describe("montaVeredito — aviso de cobertura e explicação", () => {
     const v = montaVeredito({ ...base, coberturaAtual: calculaCobertura(100, 100) });
     expect(v.avisoCobertura).toBe("Nenhuma venda deste período saiu com custo informado.");
     expect(v.explicacao).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre — o custo dos produtos ainda não foi descontado, e o frete ainda não entra. Aluguel, salários e outras despesas também saem daí.",
+      "É o que fica depois de pagar a comissão do Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas também saem daí.",
     );
   });
 
@@ -411,6 +429,7 @@ describe("montaResumo", () => {
       receita_bruta: receita,
       taxas_ml,
       frete,
+      receita_sem_frete: 0,
       custo_produtos: custoProdutos,
       receita_sem_custo: 0,
       margem_contribuicao: receita - taxas_ml - frete - custoProdutos,
@@ -463,22 +482,57 @@ describe("montaResumo", () => {
   });
 });
 
-describe("frete ainda não calculado", () => {
-  it("nenhuma variante da explicação afirma que o frete foi descontado", () => {
-    const casos = [
-      { atual: totais(1_000, 100, 300), cobertura: COMPLETA }, // sobra positiva, com custo
-      { atual: totais(1_000, 100, 0), cobertura: calculaCobertura(1_000, 1_000) }, // sem custo
-      { atual: totais(1_000, 100, 1_500), cobertura: COMPLETA }, // sobra negativa, com custo
-      { atual: totais(1_000, 1_200, 0), cobertura: calculaCobertura(1_000, 1_000) }, // negativa, sem custo
-    ];
-    for (const { atual, cobertura } of casos) {
-      const { explicacao } = montaVeredito({
-        atual,
-        anterior: null,
-        coberturaAtual: cobertura,
-        coberturaAnterior: null,
-      });
-      expect(explicacao).toMatch(/frete ainda não entra/);
+describe("o frete na explicação da sobra", () => {
+  /**
+   * O que carrega peso: a frase nunca diz "depois de pagar o frete" enquanto
+   * o frete não foi buscado inteiro. Logo depois de conectar a conta a
+   * colheita está pela metade, e a sobra ainda não descontou tudo.
+   */
+  const explica = (atual: Totais, cobertura = COMPLETA) =>
+    montaVeredito({ atual, anterior: null, coberturaAtual: cobertura, coberturaAnterior: null })
+      .explicacao;
+
+  it("frete todo buscado: entra na lista do que foi pago", () => {
+    expect(explica(totais(1_000, 100, 300, { valor: 50, receitaSemFrete: 0 }))).toBe(
+      "É o que fica depois de pagar a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas também saem daí.",
+    );
+  });
+
+  it("frete pela metade: avisa que parte ainda está sendo buscada", () => {
+    expect(explica(totais(1_000, 100, 300, { valor: 20, receitaSemFrete: 400 }))).toBe(
+      "É o que fica depois de pagar a comissão do Mercado Livre e os produtos — o frete de parte das vendas ainda está sendo buscado no Mercado Livre. Aluguel, salários e outras despesas também saem daí.",
+    );
+  });
+
+  it("nada de frete e nada de custo: as duas ressalvas, e só a comissão paga", () => {
+    const semCusto = calculaCobertura(1_000, 1_000);
+    expect(explica(totais(1_000, 1_200, 0, { valor: 0, receitaSemFrete: 1_000 }), semCusto)).toBe(
+      "Na conta entra a comissão do Mercado Livre — o frete ainda está sendo buscado no Mercado Livre, e o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas vêm depois.",
+    );
+  });
+
+  it("nenhuma variante incompleta afirma o frete como pago", () => {
+    const semCusto = calculaCobertura(1_000, 1_000);
+    for (const receitaSemFrete of [1_000, 400]) {
+      for (const [custoProdutos, cobertura] of [
+        [300, COMPLETA],
+        [0, semCusto],
+        [1_500, COMPLETA],
+      ] as const) {
+        const texto = explica(totais(1_000, 100, custoProdutos, { valor: 0, receitaSemFrete }), cobertura);
+        expect(texto).not.toMatch(/pagar[^—]*o frete/);
+        expect(texto).toMatch(/frete .*sendo buscado/);
+      }
     }
+  });
+
+  it("o frete pode ser o principal motivo da mudança", () => {
+    const v = montaVeredito({
+      atual: totais(10_000, 1_000, 0, { valor: 3_000, receitaSemFrete: 0 }),
+      anterior: totais(10_000, 1_000, 0, { valor: 500, receitaSemFrete: 0 }),
+      coberturaAtual: COMPLETA,
+      coberturaAnterior: COMPLETA,
+    });
+    expect(t(v.maiorPeso)).toBe("Principal motivo: o frete que você pagou subiu R$ 2.500.");
   });
 });

@@ -1,12 +1,17 @@
 import { FlowChart } from "@/components/analytics/flow-chart";
-import { totalizarFluxo } from "@/components/analytics/executive-totals";
+import {
+  GRADE_DOS_CARTOES,
+  temFreteBuscado,
+  totalizarFluxo,
+} from "@/components/analytics/executive-totals";
 import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
+import { IndicadorFrete } from "@/components/analytics/indicador-frete";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
 import { janelaAnterior, type FluxoDia } from "@/lib/api";
 import { COLUNAS_FLUXO } from "@/lib/colunas-export";
 import { getDemoFluxoFinanceiro } from "@/lib/demo";
-import { coberturaDoFluxo } from "@/lib/cobertura";
+import { coberturaDoFluxo, coberturaDoFrete } from "@/lib/cobertura";
 import { periodoPadrao } from "@/lib/periodo";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
@@ -62,12 +67,14 @@ export default async function DemoFinanceiroPage({
         </p>
       ) : (
         <>
-          {/* Quatro colunas quando há custo de produto, três quando não há:
-              com o cartão a conta fecha na tela (receita − custos do ML −
-              custo dos produtos = margem), e sem ele a tela fica como era. */}
+          {/* Um cartão por parcela da conta que existe no período, para ela
+              fechar na tela: receita − comissão − frete − custo dos produtos
+              = margem. Frete e custo de produto só aparecem quando há algum. */}
           <div
             className={`mt-6 grid gap-4 sm:grid-cols-2 ${
-              atual.custoProdutos > 0 ? "lg:grid-cols-4" : "lg:grid-cols-3"
+              GRADE_DOS_CARTOES[
+                3 + Number(temFreteBuscado(atual)) + Number(atual.custoProdutos > 0)
+              ]
             }`}
           >
             <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
@@ -79,6 +86,14 @@ export default async function DemoFinanceiroPage({
               anterior={passado.custo}
               subirEhRuim
             />
+            {temFreteBuscado(atual) && (
+              <KpiCard
+                rotulo="Frete pago por você"
+                valor={atual.frete}
+                anterior={passado.frete}
+                subirEhRuim
+              />
+            )}
             {atual.custoProdutos > 0 && (
               <KpiCard
                 rotulo="Custo dos produtos"
@@ -91,12 +106,13 @@ export default async function DemoFinanceiroPage({
               rotulo="Margem de contribuição"
               valor={atual.margem}
               anterior={passado.margem}
-              nota="receita − comissão do Mercado Livre − custo dos produtos. O frete ainda não entra na conta."
+              nota="receita − comissão do Mercado Livre − frete − custo dos produtos."
             />
           </div>
 
           {/* A regra de honestidade: a margem acima só está completa se
-              houver custo informado para toda a receita do período. */}
+              houver frete buscado e custo informado para toda a receita. */}
+          <IndicadorFrete cobertura={coberturaDoFrete(atual)} />
           <IndicadorCobertura
             cobertura={coberturaDoFluxo(fluxo)}
             href="/demo/custos"
