@@ -1,4 +1,4 @@
-import { semFreteCalculado, type FluxoDiaDaApi } from "@/lib/frete";
+import { comReceitaSemFrete, type FluxoDiaDaApi } from "@/lib/frete";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -17,8 +17,18 @@ export type FluxoDia = {
   date: string;
   receita_bruta: number;
   taxas_ml: number;
-  /** `null` = ainda não calculado. Ver `semFreteCalculado` em `lib/frete.ts`. */
-  frete: number | null;
+  /**
+   * Frete que o vendedor pagou, só dos envios já buscados no Mercado Livre.
+   * Cada envio conta uma vez, no dia do primeiro pedido — um carrinho é um
+   * envio para vários pedidos.
+   */
+  frete: number;
+  /**
+   * Receita de vendas cujo frete ainda não foi buscado. É o que torna `frete`
+   * honesto, do mesmo jeito que `receita_sem_custo` faz com o custo de
+   * produto: enquanto for maior que zero, a margem está maior do que a real.
+   */
+  receita_sem_frete: number;
   /** Custo de produto informado pelo vendedor, na vigência da data do pedido. */
   custo_produtos: number;
   /**
@@ -30,8 +40,7 @@ export type FluxoDia = {
    */
   receita_sem_custo: number;
   /**
-   * receita_bruta − taxas_ml − custo_produtos: o frete fica de fora enquanto
-   * não for calculado (`lib/frete.ts`). Não existe mais um
+   * receita_bruta − taxas_ml − frete − custo_produtos. Não existe mais um
    * `custo_estimado` (55% da receita chutados) nem o `liquido` que saía dele
    * — ver o comentário no topo de `src/metrics.py`. O custo de produto que
    * entra aqui é informado pelo vendedor, nunca estimado.
@@ -163,7 +172,7 @@ export function getFluxoFinanceiro(dateFrom: string, dateTo: string) {
   return buscar<FluxoDiaDaApi[]>("/metrics/fluxo-financeiro", {
     date_from: dateFrom,
     date_to: dateTo,
-  }).then(semFreteCalculado);
+  }).then(comReceitaSemFrete);
 }
 
 export function getAbcPareto(dateFrom: string, dateTo: string) {

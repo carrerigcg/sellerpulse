@@ -1,40 +1,28 @@
 import { describe, expect, it } from "vitest";
 
-import { semFreteCalculado } from "./frete";
+import { comReceitaSemFrete, type FluxoDiaDaApi } from "./frete";
 
-/**
- * O que carrega peso: a margem que sai daqui NÃO desconta frete. Na conta real
- * o frete chega sempre zerado (o campo que a ingestão lê nunca vem preenchido);
- * na demo ele é sintético e chega preenchido. Sem esta normalização, a demo
- * mostraria uma conta de frete que o produto real não faz.
- */
-describe("semFreteCalculado", () => {
-  const dia = {
+describe("comReceitaSemFrete", () => {
+  const dia: FluxoDiaDaApi = {
     date: "2026-10-01",
-    receita_bruta: 1_000,
+    receita_bruta: 1000,
     taxas_ml: 120,
-    frete: 35,
+    frete: 0,
     custo_produtos: 300,
     receita_sem_custo: 0,
-    margem_contribuicao: 545, // o backend descontou o frete
+    margem_contribuicao: 580,
   };
 
-  it("o frete vira ausência, não zero", () => {
-    expect(semFreteCalculado([dia])[0].frete).toBeNull();
+  it("backend sem a coluna: toda a receita fica sem frete, nunca zero", () => {
+    expect(comReceitaSemFrete([dia])[0].receita_sem_frete).toBe(1000);
   });
 
-  it("a margem é recalculada sem o frete", () => {
-    expect(semFreteCalculado([dia])[0].margem_contribuicao).toBe(580);
+  it("backend com a coluna: o valor dele passa intacto", () => {
+    const comColuna = { ...dia, frete: 35, receita_sem_frete: 200 };
+    expect(comReceitaSemFrete([comColuna])[0]).toEqual(comColuna);
   });
 
-  it("o resto do dia passa intacto", () => {
-    const [d] = semFreteCalculado([dia]);
-    expect(d).toMatchObject({
-      date: "2026-10-01",
-      receita_bruta: 1_000,
-      taxas_ml: 120,
-      custo_produtos: 300,
-      receita_sem_custo: 0,
-    });
+  it("zero vindo do backend é zero, e não ausência", () => {
+    expect(comReceitaSemFrete([{ ...dia, receita_sem_frete: 0 }])[0].receita_sem_frete).toBe(0);
   });
 });

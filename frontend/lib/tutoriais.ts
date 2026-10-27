@@ -39,13 +39,14 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
   // A tela de entrada. Explica a palavra que ela usa ("sobra") e onde fica o
   // resto — quem não lê gráfico precisa, antes de tudo, saber para onde ir.
   resumo: {
-    // v2 em 2026-10-27: o slide 1 dizia que o frete era descontado, e não é.
-    versao: 2,
+    // v3 em 2026-10-27: o frete passou a ser buscado e descontado (v2 dizia
+    // que não entrava, e naquele dia não entrava mesmo).
+    versao: 3,
     slides: [
       {
         titulo: "O que é a sobra",
         texto:
-          "É o que fica das vendas depois de pagar a comissão do Mercado Livre e o custo dos produtos informado na tela de Custos. O frete ainda não entra na conta, e aluguel, salários e outras despesas também saem daí — por isso não é lucro.",
+          "É o que fica das vendas depois de pagar a comissão do Mercado Livre, o frete e o custo dos produtos informado na tela de Custos. Aluguel, salários e outras despesas também saem daí — por isso não é lucro.",
       },
       {
         titulo: "O que fazer e onde ver mais",
@@ -55,13 +56,14 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
     ],
   },
   executive: {
-    // v2 em 2026-10-27: o slide 1 dizia que o frete era descontado, e não é.
-    versao: 2,
+    // v3 em 2026-10-27: o frete passou a ser buscado e descontado (v2 dizia
+    // que não entrava, e naquele dia não entrava mesmo).
+    versao: 3,
     slides: [
       {
         titulo: "Margem de contribuição não é lucro",
         texto:
-          "É a receita menos a comissão do Mercado Livre e o custo dos produtos — o frete ainda não entra na conta. Aluguel, salários e outras despesas fixas também não entram: por isso é margem, e não lucro.",
+          "É a receita menos a comissão do Mercado Livre, o frete que você pagou e o custo dos produtos. Aluguel, salários e outras despesas fixas não entram: por isso é margem, e não lucro.",
       },
       {
         titulo: "Quanto da conta está completa",

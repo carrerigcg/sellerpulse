@@ -116,6 +116,8 @@ async def test_idempotente(pg_pool, test_seller):
         # Idem visitas: a chave e (seller_id, item_id, dia) e os dias
         # derivam dos pedidos, que sao os mesmos nas duas chamadas.
         "item_visits": 0,
+        # Idem frete: um envio por pedido, chave (seller_id, shipment_id).
+        "shipment_costs": 0,
     }
     assert contagens_apos_segunda == contagens_apos_primeira
     assert all(n > 0 for n in contagens_apos_primeira.values())

@@ -28,14 +28,15 @@ import asyncpg
 _UPSERT_ORDER = """
     INSERT INTO orders (
         order_id, seller_id, date_closed, status, total_amount,
-        marketplace_fee, shipping_cost, buyer_id, raw_json, fetched_at
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, now())
+        marketplace_fee, shipping_cost, buyer_id, raw_json, fetched_at, shipment_id
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, now(), $10)
     ON CONFLICT (seller_id, order_id) DO UPDATE SET
         date_closed     = excluded.date_closed,
         status          = excluded.status,
         total_amount    = excluded.total_amount,
         marketplace_fee = excluded.marketplace_fee,
         shipping_cost   = excluded.shipping_cost,
+        shipment_id     = excluded.shipment_id,
         buyer_id        = excluded.buyer_id,
         raw_json        = excluded.raw_json,
         fetched_at      = excluded.fetched_at
@@ -91,27 +92,10 @@ def extrai_taxa_e_frete(bruto: dict) -> tuple[float, float]:
     o aviso de `ingest_janela` cobre o caso de a ausencia ser sistematica.
     Fica publica pra que o script de backfill reuse a mesma regra, sem copia.
 
-    ONDE O FRETE REAL ESTA (levantado em 2026-10-01 pra uma sprint futura; NAO
-    implementado aqui porque e ingestao nova, nao conserto de campo):
-
-    `GET /shipments/{shipping.id}` devolve o custo. Num pedido real de producao
-    (order 2000017366224920, shipment 47500894707, mode `me2`, logistic_type
-    `xd_drop_off`):
-
-        base_cost                     226.80
-        shipping_option.list_cost     226.99
-        total_amount do pedido        181.00
-        paid_amount do pedido         407.99   = 181.00 + 226.99
-
-    Ou seja: nesse pedido o COMPRADOR pagou o frete inteiro (o `list_cost` cai
-    exatamente na diferenca entre paid_amount e total_amount), e o custo do
-    vendedor foi zero. Em frete gratis sai do bolso dele.
-
-    Dai a pergunta de negocio que precisa ser respondida ANTES de implementar:
-    o frete e custo do vendedor em quais modalidades? A conta nao e "somar o
-    frete" — e somar so o que ele bancou. O payload tem `mode`,
-    `logistic_type`, `shipping_option` e `cost_components` pra decidir isso, e
-    sao 879 chamadas a mais (uma por pedido) mais uma tabela nova.
+    O frete devolvido aqui vai para `orders.shipping_cost`, que NENHUMA consulta
+    le mais. O frete real do vendedor e colhido por envio em `frete_pg.py`
+    (`senders[].cost` de GET /shipments/{id}/costs), e o porque esta em
+    docs/specs/2026-10-27-frete-real-design.md.
     """
     taxa = sum(
         (oi.get("sale_fee") or 0.0) * (oi.get("quantity") or 1)
@@ -119,6 +103,15 @@ def extrai_taxa_e_frete(bruto: dict) -> tuple[float, float]:
     )
     frete = bruto.get("shipping_cost") or 0.0
     return round(taxa, 2), round(frete, 2)
+
+
+def _id_do_envio(bruto: dict) -> int | None:
+    """O envio do pedido, que e onde o frete do vendedor mora (`frete_pg.py`).
+
+    Pedido de carrinho divide o envio com os outros pedidos do carrinho.
+    """
+    envio = (bruto.get("shipping") or {}).get("id")
+    return int(envio) if envio else None
 
 
 def _para_datetime(valor: str) -> datetime:
@@ -287,6 +280,7 @@ async def _persiste_pedido(
             frete,
             (bruto.get("buyer") or {}).get("id"),
             json.dumps(bruto),
+            _id_do_envio(bruto),
         )
         # DELETE + INSERT em vez de upsert item a item: se o pedido perdeu
         # um item numa revisao do ML, o upsert deixaria o antigo pra tras.

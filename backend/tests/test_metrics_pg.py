@@ -17,6 +17,11 @@ _INSERT_ORDER = """
 async def _order(
     pool, seller_id, order_id, date_closed, total, fee, ship, status="paid", buyer_id=1001
 ):
+    """Pedido com envio proprio (`shipment_id = order_id`) e frete ja colhido.
+
+    `ship` e o frete do vendedor. Ele mora em `shipment_costs` desde a 0012;
+    gravar so em `orders.shipping_cost` nao entraria em conta nenhuma.
+    """
     # asyncpg 0.31 exige datetime real (nao str) para um parametro usado com
     # cast ::timestamptz no SQL -- o protocolo binario nao faz esse parse.
     dt = datetime.fromisoformat(date_closed)
@@ -25,6 +30,18 @@ async def _order(
     async with pool.acquire() as conn:
         await conn.execute(
             _INSERT_ORDER, order_id, seller_id, dt, status, total, fee, ship, buyer_id
+        )
+        await conn.execute(
+            "UPDATE orders SET shipment_id = order_id WHERE seller_id = $1 AND order_id = $2",
+            seller_id,
+            order_id,
+        )
+        await conn.execute(
+            "INSERT INTO shipment_costs (seller_id, shipment_id, custo_vendedor, raw_json) "
+            "VALUES ($1, $2, $3, '{}'::jsonb)",
+            seller_id,
+            order_id,
+            ship,
         )
 
 
@@ -201,6 +218,7 @@ async def test_fluxo_vazio_tem_as_colunas_certas(pg_pool, test_seller):
         "receita_bruta",
         "taxas_ml",
         "frete",
+        "receita_sem_frete",
         "custo_produtos",
         "receita_sem_custo",
         "margem_contribuicao",

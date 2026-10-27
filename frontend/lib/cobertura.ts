@@ -83,6 +83,17 @@ export function coberturaDoFluxo(
   return calculaCobertura(soma(dias, "receita_bruta"), soma(dias, "receita_sem_custo"));
 }
 
+/**
+ * Quanto da receita já tem o frete buscado no Mercado Livre.
+ *
+ * Mesma régua do custo de produto, outra origem: aqui a lacuna não depende
+ * do vendedor — o frete é colhido por envio depois de cada sincronização, e
+ * fica incompleto só enquanto a colheita não termina.
+ */
+export function coberturaDoFrete(totais: { receita: number; receitaSemFrete: number }): Cobertura {
+  return calculaCobertura(totais.receita, totais.receitaSemFrete);
+}
+
 /** Cobertura da curva ABC, a partir das linhas por produto. */
 export function coberturaDosProdutos(
   produtos: readonly { receita: number; receita_sem_custo: number }[],

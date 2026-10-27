@@ -31,7 +31,7 @@ from src.demo_data import ANCHOR_DATE, DEFAULT_SEED
 # esconderia o bug.
 _PEQUENO = {"n_categories": 5, "n_products": 10, "weeks_back": 2, "claim_rate": 0.04}
 
-_TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims")
+_TABELAS = ("categories_cache", "items_cache", "orders", "order_items", "claims", "shipment_costs")
 
 
 class _ConnEspia:

@@ -12,7 +12,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL!;
 
 export type StatusJob = {
   id: number;
-  kind: "backfill" | "delta";
+  kind: "backfill" | "delta" | "visitas" | "frete";
   status: "queued" | "running" | "done" | "failed";
   fase: string | null;
   processados: number;
