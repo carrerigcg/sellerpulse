@@ -1,7 +1,7 @@
 # SellerPulse — Atualização da vitrine
 
 Data: 2026-10-20
-Estado: em implementação.
+Estado: implementado em 2026-10-20 (`3bf3a26`, direto na main por ser só front-end).
 
 ## 1. Por quê
 

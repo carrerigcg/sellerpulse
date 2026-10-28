@@ -96,11 +96,11 @@ Conta do Mercado Livre
 | Camada | |
 |---|---|
 | **Backend** | Python 3.11 · FastAPI · asyncpg · pandas |
-| **Banco** | PostgreSQL 17 (Supabase) · 12 migrations versionadas · RLS em todas as tabelas |
+| **Banco** | PostgreSQL 17 (Supabase) · 13 migrations versionadas · RLS em todas as tabelas |
 | **Frontend** | Next.js 16 · React 19 · TypeScript · Tailwind · Recharts |
 | **Auth** | Supabase Auth (JWT ES256) + OAuth 2.0 do Mercado Livre |
 | **Infra** | Render (Docker) · Vercel |
-| **Testes** | pytest · vitest · CI em 4 jobs (Linux + Windows) |
+| **Testes** | pytest · vitest · CI em 3 jobs (o legado roda em Linux e Windows) |
 
 ---
 
@@ -112,16 +112,21 @@ Pré-requisitos: Python 3.11+, Node 20+, PostgreSQL 17.
 # 1. Backend  (no Windows troque bin/ por Scripts/)
 python -m venv backend/.venv
 backend/.venv/bin/pip install -r backend/requirements.txt
-cp backend/.env.example backend/.env             # preencher as credenciais
+cp backend/.env.example backend/.env             # credenciais; ver o aviso abaixo
 backend/.venv/bin/python backend/scripts/setup_test_db.py
 
 # 2. Frontend
 cd frontend && npm ci && cp .env.local.example .env.local
 
-# 3. Subir
-backend/.venv/bin/python -m uvicorn backend.main:app --port 10000
+# 3. Subir contra o banco de TESTE, com o worker desligado
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sellerpulse_test WORKER_IN_PROCESS=0 DEMO_REFRESH_IN_PROCESS=0   backend/.venv/bin/python -m uvicorn backend.main:app --port 10000
 cd frontend && npm run dev                       # web em :3000
 ```
+
+> **Nunca suba o backend só com o `backend/.env`.** O worker vem ligado por
+> padrão e, se o `.env` apontar para a base de produção, ele drena a fila real.
+> O passo a passo seguro, com dados de demonstração, está em
+> [`docs/operacao.md`](./docs/operacao.md).
 
 Todo comando roda a partir da **raiz do repositório** — `backend/` não é instalado via pip, roda como pacote top-level igual a `src/`.
 
@@ -158,7 +163,7 @@ sellerpulse/
 │   ├── ml/               # OAuth, cifra de tokens, ingestão da API do ML
 │   ├── jobs/ worker/     # fila de sincronização com lease e retomada
 │   ├── routers/          # endpoints REST (autenticados + /demo público)
-│   ├── migrations/       # 12 migrations SQL versionadas
+│   ├── migrations/       # 13 migrations SQL versionadas
 │   └── tests/            # API, fila, ingestão e paridade
 ├── frontend/
 │   ├── app/              # landing, /demo público, /dashboard autenticado
@@ -187,7 +192,7 @@ sellerpulse/
 | Diagnóstico de anúncio por quadrante | ✅ em produção |
 | Servidor MCP somente leitura sobre a demonstração | ✅ em produção |
 | Produtos com visita e zero venda | 📋 planejado |
-| Custo de frete via API de shipments | 📋 planejado |
+| Frete pago pelo vendedor, buscado por envio | ✅ em produção |
 | Impostos por regime tributário | 📋 planejado |
 
 ---
