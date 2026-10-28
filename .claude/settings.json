@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|mcp__Claude_Browser__preview_start",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guarda.mjs\"",
+            "timeout": 15,
+            "statusMessage": "Guarda do SellerPulse"
+          }
+        ]
+      }
+    ]
+  }
+}

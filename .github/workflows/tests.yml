@@ -83,10 +83,17 @@ jobs:
           pip install -r backend/requirements.txt ruff
 
       - name: Ruff lint
-        run: python -m ruff check backend
+        run: python -m ruff check backend scripts
 
       - name: Ruff format check
-        run: python -m ruff format --check backend
+        run: python -m ruff format --check backend scripts
+
+      # O guarda (.claude/hooks/guarda.mjs) barra acoes sem ninguem olhar --
+      # migration aplicada, backend contra producao, descarte de trabalho. Um
+      # erro nele libera em silencio o que devia negar, entao a bateria roda
+      # aqui tambem, e nao so quando alguem lembra.
+      - name: Guarda dos hooks
+        run: node .claude/hooks/testa_guarda.mjs
 
       # Antes do banco, porque nao precisa dele e porque e a falha mais barata
       # de descobrir: um PR com migration nao aplicada em producao fica
