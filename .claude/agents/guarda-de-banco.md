@@ -86,3 +86,18 @@ para sempre?
 As policies protegem o acesso via PostgREST, que o front **não** usa (ele só faz
 `supabase.auth.*`). Isso significa que erro de policy não aparece em teste de
 aplicação — tem que ser lido.
+
+## Veredito (obrigatório, no fim do relato)
+
+Feche com **uma** destas linhas, porque é ela que a skill `/entregar` lê para
+decidir se segue para o merge:
+
+- `**Veredito:** bloqueia o merge` — há pelo menos um achado que produz número
+  errado, quebra uma tela, vaza dado entre vendedores ou contraria a spec.
+- `**Veredito:** não bloqueia` — nada do que você achou afeta correção ou
+  requisito.
+
+Só bloqueia o que afeta **correção ou requisito**. Preferência de estilo,
+nome melhor ou "eu faria diferente" vão numa seção à parte, "Opcional", e
+nunca bloqueiam: revisor instruído a achar lacuna sempre acha uma, e empurrar
+super-engenharia custa mais do que o defeito que ela evitaria.

@@ -15,7 +15,7 @@ description: |
   assistant: "Vou usar o cacador-de-duplicacao para procurar referências órfãs."
   </example>
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 ---
 
 # Caçador de duplicação e código morto

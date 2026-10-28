@@ -15,7 +15,7 @@ description: |
   assistant: "Vou usar o verificador-de-entrega para confirmar que a mudança foi mesmo aplicada no arquivo antes de acreditar no verde."
   </example>
 tools: Read, Grep, Glob, Bash
-model: inherit
+model: sonnet
 ---
 
 # Verificador de entrega do SellerPulse
