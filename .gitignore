@@ -43,8 +43,10 @@ Thumbs.db
 !.claude/agents/
 !.claude/settings.json
 !.claude/hooks/
-# Skills do projeto entram uma a uma: `.claude/skills/` tem tambem as de video
-# do comercial, que nao sao deste repositorio.
+# Skills do projeto entram uma a uma. As de video do comercial (HyperFrames)
+# ficavam aqui e carregavam a descricao em toda sessao do produto; desde
+# 2026-10-28 moram no projeto do TikTok, fora do repo. A regra fica para
+# barrar a proxima skill de terceiro instalada aqui sem querer.
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/entregar/
@@ -61,6 +63,8 @@ docs/plans/
 # HyperFrames (HeyGen) e os arquivos do comercial animado — ferramenta e
 # midia, nao produto. O repo e peca de portfolio; video pesado e skill de
 # terceiro nao tem por que entrar no historico dele.
+# `.agents/` e `skills-lock.json` sao onde o CLI do HyperFrames instala as
+# skills; sairam daqui em 2026-10-28, e a linha fica caso alguem reinstale.
 .agents/
 skills-lock.json
 video/
