@@ -6,11 +6,13 @@ import {
 } from "@/components/analytics/executive-totals";
 import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { IndicadorFrete } from "@/components/analytics/indicador-frete";
+import { LinhaDeCancelamentos } from "@/components/analytics/linha-de-cancelamentos";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
 import { janelaAnterior, type FluxoDia } from "@/lib/api";
 import { COLUNAS_FLUXO } from "@/lib/colunas-export";
-import { getDemoFluxoFinanceiro } from "@/lib/demo";
+import type { Cancelamentos } from "@/lib/cancelamentos";
+import { getDemoCancelamentos, getDemoFluxoFinanceiro } from "@/lib/demo";
 import { coberturaDoFluxo, coberturaDoFrete } from "@/lib/cobertura";
 import { periodoPadrao } from "@/lib/periodo";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
@@ -31,13 +33,15 @@ export default async function DemoFinanceiroPage({
 
   let fluxo: FluxoDia[] = [];
   let anterior: FluxoDia[] = [];
+  let cancelados: Cancelamentos | null = null;
   let erro: string | null = null;
 
   try {
     const [antDe, antAte] = janelaAnterior(de, ate);
-    [fluxo, anterior] = await Promise.all([
+    [fluxo, anterior, cancelados] = await Promise.all([
       getDemoFluxoFinanceiro(de, ate),
       getDemoFluxoFinanceiro(antDe, antAte),
+      getDemoCancelamentos(de, ate).catch(() => null),
     ]);
   } catch {
     erro = "Não foi possível carregar a demonstração agora. Tente de novo em instantes.";
@@ -77,7 +81,12 @@ export default async function DemoFinanceiroPage({
               ]
             }`}
           >
-            <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
+            <KpiCard
+              rotulo="Receita bruta"
+              valor={atual.receita}
+              anterior={passado.receita}
+              nota="Só vendas pagas. Canceladas e devolvidas ficam fora."
+            />
             {/* Mesmos rótulos de `/dashboard` — a demo não pode prometer uma
                 conta diferente da que o produto entrega. */}
             <KpiCard
@@ -110,6 +119,7 @@ export default async function DemoFinanceiroPage({
             />
           </div>
 
+          <LinhaDeCancelamentos cancelamentos={cancelados} />
           {/* A regra de honestidade: a margem acima só está completa se
               houver frete buscado e custo informado para toda a receita. */}
           <IndicadorFrete cobertura={coberturaDoFrete(atual)} />

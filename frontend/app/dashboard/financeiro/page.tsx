@@ -6,9 +6,17 @@ import {
 } from "@/components/analytics/executive-totals";
 import { IndicadorCobertura } from "@/components/analytics/indicador-cobertura";
 import { IndicadorFrete } from "@/components/analytics/indicador-frete";
+import { LinhaDeCancelamentos } from "@/components/analytics/linha-de-cancelamentos";
 import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
-import { mensagemDeFalhaAoCarregar, getFluxoFinanceiro, janelaAnterior, type FluxoDia } from "@/lib/api";
+import {
+  mensagemDeFalhaAoCarregar,
+  getCancelamentos,
+  getFluxoFinanceiro,
+  janelaAnterior,
+  type FluxoDia,
+} from "@/lib/api";
+import type { Cancelamentos } from "@/lib/cancelamentos";
 import { COLUNAS_FLUXO } from "@/lib/colunas-export";
 
 import { coberturaDoFluxo, coberturaDoFrete } from "@/lib/cobertura";
@@ -38,13 +46,17 @@ export default async function FinanceiroPage({
 
   let fluxo: FluxoDia[] = [];
   let anterior: FluxoDia[] = [];
+  let cancelados: Cancelamentos | null = null;
   let erro: string | null = null;
 
   try {
     const [antDe, antAte] = janelaAnterior(de, ate);
-    [fluxo, anterior] = await Promise.all([
+    // A linha de cancelamentos é apoio: se a busca dela falhar, a tela segue
+    // sem ela, em vez de cair inteira junto.
+    [fluxo, anterior, cancelados] = await Promise.all([
       getFluxoFinanceiro(de, ate),
       getFluxoFinanceiro(antDe, antAte),
+      getCancelamentos(de, ate).catch(() => null),
     ]);
   } catch (e) {
     erro = mensagemDeFalhaAoCarregar(e);
@@ -84,7 +96,12 @@ export default async function FinanceiroPage({
               ]
             }`}
           >
-            <KpiCard rotulo="Receita bruta" valor={atual.receita} anterior={passado.receita} />
+            <KpiCard
+              rotulo="Receita bruta"
+              valor={atual.receita}
+              anterior={passado.receita}
+              nota="Só vendas pagas. Canceladas e devolvidas ficam fora."
+            />
             {/* "Comissão do Mercado Livre", e o frete em cartão próprio: um
                 "Custo total" juntaria parcelas de origem e cobertura diferentes
                 num número só, a mesma mentira do custo estimado que saiu daqui. */}
@@ -118,6 +135,7 @@ export default async function FinanceiroPage({
             />
           </div>
 
+          <LinhaDeCancelamentos cancelamentos={cancelados} />
           {/* A regra de honestidade: a margem acima só está completa se
               houver frete buscado e custo informado para toda a receita. */}
           <IndicadorFrete cobertura={coberturaDoFrete(atual)} />

@@ -357,3 +357,24 @@ async def test_isolamento_e_bidirecional(client, pg_pool, test_seller, outro_sel
     assert resp_b.json()[0]["receita_bruta"] == pytest.approx(999.0), (
         "token de B nao viu dados de B"
     )
+
+
+async def test_cancelamentos_endpoint(client, pg_pool, test_seller):
+    """O total que fecha a conta contra o "vendas brutas" do Mercado Livre."""
+    user_id, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 100.0)
+    await _order(pg_pool, sid, 2, "2026-07-25T11:00:00+00:00", 40.0, status="cancelled")
+    resp = client.get(
+        "/metrics/cancelamentos",
+        params={"date_from": "2026-07-25", "date_to": "2026-07-26"},
+        headers=_auth(user_id),
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"pedidos": 1, "valor": 40.0}
+
+
+async def test_cancelamentos_exige_autenticacao(client):
+    resp = client.get(
+        "/metrics/cancelamentos", params={"date_from": "2026-07-25", "date_to": "2026-07-26"}
+    )
+    assert resp.status_code == 401

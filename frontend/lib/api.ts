@@ -1,3 +1,4 @@
+import type { Cancelamentos } from "@/lib/cancelamentos";
 import { comReceitaSemFrete, type FluxoDiaDaApi } from "@/lib/frete";
 import { createClient } from "@/lib/supabase/server";
 
@@ -166,6 +167,10 @@ async function buscar<T>(caminho: string, params: Record<string, string>): Promi
     throw new ApiError(resposta.status, `Falha ao buscar ${caminho}`);
   }
   return resposta.json();
+}
+
+export function getCancelamentos(dateFrom: string, dateTo: string) {
+  return buscar<Cancelamentos>("/metrics/cancelamentos", { date_from: dateFrom, date_to: dateTo });
 }
 
 export function getFluxoFinanceiro(dateFrom: string, dateTo: string) {

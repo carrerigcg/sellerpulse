@@ -739,3 +739,54 @@ async def test_fluxo_independe_do_fuso_da_sessao(pg_pool, pg_pool_fuso_nao_utc, 
 
     pd.testing.assert_frame_equal(em_utc, em_sp, check_dtype=False, atol=1e-6)
     assert em_utc.iloc[0]["date"] == "2026-07-25"
+
+
+# ---------- cancelamentos ----------
+#
+# O "vendas brutas" do Mercado Livre soma o que foi cancelado ou devolvido
+# depois; a nossa receita bruta, nao. Esta funcao e o que permite a tela fechar
+# a conta contra o painel do ML (docs/specs/2026-10-28-receita-vs-vendas-brutas-design.md).
+
+
+async def test_cancelamentos_soma_so_os_cancelados_da_janela(pg_pool, test_seller):
+    from backend.analytics.metrics_pg import cancelamentos
+
+    _, sid = test_seller
+    await _order(pg_pool, sid, 1, "2026-09-10T15:00:00+00:00", 100.0, 0.0, 0.0)
+    await _order(pg_pool, sid, 2, "2026-09-11T15:00:00+00:00", 79.0, 0.0, 0.0, status="cancelled")
+    await _order(pg_pool, sid, 3, "2026-09-12T15:00:00+00:00", 21.5, 0.0, 0.0, status="cancelled")
+    await _order(pg_pool, sid, 4, "2026-10-02T15:00:00+00:00", 999.0, 0.0, 0.0, status="cancelled")
+
+    resultado = await cancelamentos(pg_pool, sid, "2026-09-01", "2026-10-01")
+
+    assert resultado == {"pedidos": 2, "valor": pytest.approx(100.5)}
+
+
+async def test_cancelamentos_usa_o_dia_do_vendedor_e_o_ate_exclusivo(pg_pool, test_seller):
+    """A janela tem que ser a mesma dos cartoes, senao a conta nao fecha."""
+    from backend.analytics.metrics_pg import cancelamentos
+
+    _, sid = test_seller
+    # 23:30 de 30/09 em Brasilia e 02:30 de 01/10 em UTC: e setembro.
+    await _order(pg_pool, sid, 1, "2026-09-30T23:30:00-03:00", 50.0, 0.0, 0.0, status="cancelled")
+    # 00:10 de 01/10 em Brasilia: fora de uma janela que vai "ate" 01/10.
+    await _order(pg_pool, sid, 2, "2026-10-01T00:10:00-03:00", 70.0, 0.0, 0.0, status="cancelled")
+
+    resultado = await cancelamentos(pg_pool, sid, "2026-09-01", "2026-10-01")
+
+    assert resultado == {"pedidos": 1, "valor": pytest.approx(50.0)}
+
+
+async def test_cancelamentos_isola_por_seller_e_vazio_e_zero(pg_pool, test_seller, outro_seller):
+    from backend.analytics.metrics_pg import cancelamentos
+
+    _, sid = test_seller
+    _, outro = outro_seller
+    await _order(
+        pg_pool, outro, 1, "2026-09-10T15:00:00+00:00", 999.0, 0.0, 0.0, status="cancelled"
+    )
+
+    resultado = await cancelamentos(pg_pool, sid, "2026-09-01", "2026-10-01")
+
+    # Zero aqui e um fato medido (nenhum pedido cancelado na janela), nao ausencia.
+    assert resultado == {"pedidos": 0, "valor": 0.0}
