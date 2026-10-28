@@ -88,3 +88,18 @@ Não perca tempo procurando de novo.
 Hoje há **um** vendedor real. Quase nada desta lista está sangrando. Separe
 sempre "isto quebra hoje" de "isto quebra com 100 vendedores" — inflar urgência
 gasta o crédito de quem lê.
+
+## Veredito (obrigatório, no fim do relato)
+
+Feche com **uma** destas linhas, porque é ela que a skill `/entregar` lê para
+decidir se segue para o merge:
+
+- `**Veredito:** bloqueia o merge` — há pelo menos um achado que produz número
+  errado, quebra uma tela, vaza dado entre vendedores ou contraria a spec.
+- `**Veredito:** não bloqueia` — nada do que você achou afeta correção ou
+  requisito.
+
+Só bloqueia o que afeta **correção ou requisito**. Preferência de estilo,
+nome melhor ou "eu faria diferente" vão numa seção à parte, "Opcional", e
+nunca bloqueiam: revisor instruído a achar lacuna sempre acha uma, e empurrar
+super-engenharia custa mais do que o defeito que ela evitaria.

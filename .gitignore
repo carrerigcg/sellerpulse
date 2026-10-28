@@ -43,6 +43,11 @@ Thumbs.db
 !.claude/agents/
 !.claude/settings.json
 !.claude/hooks/
+# Skills do projeto entram uma a uma: `.claude/skills/` tem tambem as de video
+# do comercial, que nao sao deste repositorio.
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/entregar/
 
 # Working notes (implementation plans stay local)
 docs/plans/

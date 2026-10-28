@@ -16,6 +16,22 @@ viajar junto com o código.
 **Agente novo só é registrado ao reiniciar a sessão.** Criar o arquivo não
 basta.
 
+## Como eles entram no trabalho
+
+Quem chama os agentes é a skill **`/entregar`** (`.claude/skills/entregar/`),
+no passo de revisão, escolhendo pelos caminhos que o diff toca. Os agentes só
+leem e julgam; quem escreve é a sessão principal. Quem gera não julga.
+
+Os quatro revisores (`revisor-de-codigo`, `revisor-de-interface`,
+`guarda-de-banco`, `auditor-de-escala`) terminam todo relato com
+`**Veredito:** bloqueia o merge` ou `não bloqueia`. Só bloqueia o que afeta
+correção ou requisito; preferência vai em "Opcional".
+
+**Modelo por papel:** a varredura (`cacador-de-duplicacao`) e a conferência de
+deploy (`verificador-de-entrega`) rodam em `sonnet`, porque o trabalho delas é
+procurar e comparar. Os revisores herdam o modelo da sessão, porque é neles que
+o julgamento pesa.
+
 ## Por que estes, e não os 318 do `agency-agents`
 
 A origem foi o repositório [`msitarzewski/agency-agents`](https://github.com/msitarzewski/agency-agents)

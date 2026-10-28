@@ -143,7 +143,8 @@ contra produção e descarte de trabalho não commitado.
   Leitura é livre.
 - **Credencial colada na conversa não é usada.**
 
-## Agentes
+## Agentes e entrega
 
-Revisores e verificadores em `.claude/agents/` (o "quando usar" está no
-`README.md` de lá). Quem gera não julga: revisão é de contexto limpo.
+Para implementar ou corrigir algo, siga a skill **`/entregar`**: spec → teste
+que cai → `verifica.py` → revisores de contexto limpo → merge → deploy
+conferido. Os agentes de `.claude/agents/` só leem e julgam.
