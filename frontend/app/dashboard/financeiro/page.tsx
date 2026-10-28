@@ -135,9 +135,9 @@ export default async function FinanceiroPage({
             />
           </div>
 
+          <LinhaDeCancelamentos cancelamentos={cancelados} />
           {/* A regra de honestidade: a margem acima só está completa se
               houver frete buscado e custo informado para toda a receita. */}
-          <LinhaDeCancelamentos cancelamentos={cancelados} />
           <IndicadorFrete cobertura={coberturaDoFrete(atual)} />
           <IndicadorCobertura
             cobertura={coberturaDoFluxo(fluxo)}
