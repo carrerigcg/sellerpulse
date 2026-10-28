@@ -15,6 +15,7 @@
 
 import type { AbcLinha, CohortLinha, CustoLinha, RfmLinha } from "@/lib/api";
 import { ApiError } from "@/lib/api";
+import type { Cancelamentos } from "@/lib/cancelamentos";
 import { comReceitaSemFrete, type FluxoDiaDaApi } from "@/lib/frete";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL!;
@@ -56,6 +57,10 @@ async function buscarDemo<T>(caminho: string, params: Record<string, string>): P
     throw new ApiError(resposta.status, `Resposta não-JSON em ${caminho}`);
   }
   return resposta.json();
+}
+
+export function getDemoCancelamentos(dateFrom: string, dateTo: string) {
+  return buscarDemo<Cancelamentos>("/demo/cancelamentos", { date_from: dateFrom, date_to: dateTo });
 }
 
 export function getDemoFluxoFinanceiro(dateFrom: string, dateTo: string) {

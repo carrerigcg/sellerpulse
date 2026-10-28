@@ -26,7 +26,7 @@ import asyncpg
 from fastapi import APIRouter, HTTPException, Response
 
 from backend.analytics.custos_pg import listar_custos
-from backend.analytics.metrics_pg import fluxo_financeiro, top_produtos
+from backend.analytics.metrics_pg import cancelamentos, fluxo_financeiro, top_produtos
 from backend.analytics.segmentation_pg import abc_pareto, cohort_produto, rfm_scores
 from backend.db import get_pool
 from backend.routers._common import validate_n, validate_window
@@ -79,6 +79,15 @@ async def demo_fluxo_financeiro(date_from: str, date_to: str, response: Response
     seller_id = await _seller_de_demo(pool)
     df = await fluxo_financeiro(pool, seller_id, date_from, date_to)
     return df.to_dict(orient="records")
+
+
+@router.get("/cancelamentos")
+async def demo_cancelamentos(date_from: str, date_to: str, response: Response) -> dict:
+    date_from, date_to = validate_window(date_from, date_to)
+    response.headers["Cache-Control"] = _CACHE
+    pool = await get_pool()
+    seller_id = await _seller_de_demo(pool)
+    return await cancelamentos(pool, seller_id, date_from, date_to)
 
 
 @router.get("/top-produtos")

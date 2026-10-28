@@ -529,3 +529,19 @@ def test_demo_aceita_n_no_teto(client_demo):
     client, _sid = client_demo
     resp = client.get("/demo/top-produtos", params={**_janela(30), "n": MAX_N})
     assert resp.status_code == 200, resp.text
+
+
+async def test_demo_cancelamentos_sem_autenticacao_e_so_da_demo(client_demo, pg_pool, outro_seller):
+    """Mesma porta publica do fluxo: sem sessao, e nunca de outro vendedor."""
+    client, seller_id = client_demo
+    _ub, seller_b = outro_seller
+    cancelado = _INSERT_ORDER.replace("'paid'", "'cancelled'")
+    async with pg_pool.acquire() as conn:
+        await conn.execute(cancelado, 1, seller_id, datetime(2026, 7, 15, tzinfo=UTC), 30.0)
+        await conn.execute(cancelado, 2, seller_b, datetime(2026, 7, 16, tzinfo=UTC), 999.0)
+    resp = client.get(
+        "/demo/cancelamentos",
+        params={"date_from": "2026-07-01", "date_to": "2026-08-01", "seller_id": str(seller_b)},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"pedidos": 1, "valor": 30.0}

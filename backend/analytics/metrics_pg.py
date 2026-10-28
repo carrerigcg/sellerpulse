@@ -323,6 +323,41 @@ async def fluxo_financeiro(
     return df[_FLUXO_COLUMNS]
 
 
+_CANCELAMENTOS_QUERY = """
+    SELECT count(*)::int                         AS pedidos,
+           COALESCE(SUM(total_amount), 0)        AS valor
+      FROM orders
+     WHERE seller_id = $1
+       AND status = 'cancelled'
+       AND date_closed >= $2::timestamptz
+       AND date_closed <  $3::timestamptz
+"""
+
+
+async def cancelamentos(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> dict:
+    """Quantos pedidos da janela foram cancelados ou devolvidos, e quanto somam.
+
+    Existe para a tela fechar a conta contra o painel do Mercado Livre. O
+    "vendas brutas" de lá soma o que voltou depois; a `receita_bruta` daqui só
+    conta o que continua pago. Medido em 01/09 a 28/09 na conta real: R$ 22.919
+    pagos, mais R$ 750 do dia 28 ("Até" exclusivo), mais R$ 5.004 cancelados e
+    devolvidos, dão os R$ 28.673 do painel do ML até o centavo. Ver
+    docs/specs/2026-10-28-receita-vs-vendas-brutas-design.md.
+
+    Cancelada e devolvida chegam juntas: as duas são `cancelled` na nossa base.
+    A janela é a mesma do fluxo (`_parse_boundary`, no fuso do vendedor, com o
+    fim exclusivo); outra janela faria a conta não fechar.
+
+    Returns:
+        `{"pedidos": int, "valor": float}`. Zero quando não houve cancelamento:
+        aqui zero é um fato medido, não ausência de dado.
+    """
+    linha = await pool.fetchrow(
+        _CANCELAMENTOS_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
+    )
+    return {"pedidos": linha["pedidos"], "valor": round(float(linha["valor"]), 2)}
+
+
 async def top_produtos(
     pool, seller_id: uuid.UUID, date_from: str, date_to: str, n: int = 10
 ) -> dict[str, pd.DataFrame]:
