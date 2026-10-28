@@ -1,5 +1,8 @@
 # Frete real do vendedor
 
+Estado: mergeada em `c10aca0` (#25), migrations 0012 e 0013 aplicadas em
+produção em 2026-10-27. Pendente: o 4b (ver "Fora desta spec").
+
 Item 4a da auditoria de números de 2026-10-27. Até aqui, o frete gravado
 vinha de `orders.shipping_cost`, um campo da raiz do pedido que o Mercado
 Livre nunca preenche: 1.091 de 1.091 pedidos pagos da loja real tinham frete
@@ -93,7 +96,11 @@ a receita sem frete buscado", e não como zero.
 
 ## Fora desta spec
 
-- **4b, pedido que muda de status depois** (reembolso parcial): é outro PR.
+- **4b, pedido que muda de status depois** (reembolso parcial): é outro PR, e
+  ainda está pendente. O delta só pede ao ML pedidos `paid` e `cancelled`.
+  Um pedido que vira `partially_refunded` nunca é relido e fica como pago,
+  com o valor cheio (0,3% a 0,6% da receita, pela auditoria). Recomendação
+  já combinada: manter o pedido na receita, descontando o valor reembolsado.
 - O frete por produto na curva ABC: o envio pode juntar vários produtos, e
   ratear seria inventar uma regra.
 

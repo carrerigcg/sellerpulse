@@ -1,7 +1,7 @@
 # SellerPulse — Resumo da loja
 
 Data: 2026-10-23
-Estado: implementada em `feat/resumo-da-loja`, revisada por `revisor-de-interface` e `revisor-de-codigo`. As três decisões da revisão foram tomadas (seção 9).
+Estado: mergeada em `5e40f07` (#22), revisada por `revisor-de-interface` e `revisor-de-codigo`. As três decisões da revisão foram tomadas (seção 9).
 
 ## 1. Por quê
 
