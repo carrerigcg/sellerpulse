@@ -140,3 +140,42 @@ PR #18 e a Vercel no PR #20.
   respectivamente. Por isso renovam o lease a cada passo.
 - `last_synced_at` é a marca d'água dos **pedidos**. Só o delta e o backfill a
   atualizam.
+
+## 8. Guarda e verificação
+
+**`scripts/verifica.py`** é o "rodei e passou" do agente. No modo rápido
+(sem argumento), ele olha o que mudou desde a `origin/main` e roda só o que a
+mudança pode quebrar:
+
+- ruff;
+- a trava de migrations;
+- a bateria do guarda;
+- os arquivos de teste do backend que citam o `.py` alterado;
+- vitest, eslint e tsc no front.
+
+Quando um `.py` do backend muda e nenhum teste o cita, ele avisa em vez de
+fingir que testou. `--completo` reproduz o CI inteiro.
+
+**`.claude/hooks/guarda.mjs`** é um hook `PreToolUse`, configurado no
+`.claude/settings.json`. Ele nega três coisas:
+
+1. Editar migration registrada no `APLICADAS.tsv`.
+2. Subir o backend sem banco de teste e sem `WORKER_IN_PROCESS=0`, ou usar a
+   config `backend` no `preview_start`.
+3. Push forçado, ou `git checkout --` / `git restore` / `git reset --hard`
+   sobre mudança não commitada.
+
+Quando ele nega, a mensagem já diz o que fazer no lugar. **Siga a
+alternativa.** Não contorne o guarda nem o desligue sem o ok do Guilherme.
+Se o próprio guarda falhar (JSON inesperado, por exemplo), ele **libera e
+avisa**: um guarda com bug não pode parar o trabalho em silêncio.
+
+Ao mexer no guarda, rode `node .claude/hooks/testa_guarda.mjs`. O
+`verifica.py` e o CI também rodam essa bateria. Ela testa caminhos nos três
+formatos que chegam no Windows (`C:\`, `C:/` e o `/c/` do Git Bash), porque o
+primeiro bug do guarda foi uma comparação de pasta que não casava e liberava
+a edição da migration. Os casos ficam num arquivo, e não na linha de comando,
+porque o Git Bash reescreve as barras invertidas nos argumentos.
+
+Configuração nova de hook só vale numa sessão nova, ou quando o Claude Code
+recarrega o `.claude/settings.json`.

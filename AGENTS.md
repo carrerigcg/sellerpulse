@@ -42,9 +42,10 @@ backend/.venv/Scripts/python.exe -m ruff format --check backend
 cd frontend && npm test && npm run lint && npm run build
 ```
 
-A **suíte completa do backend** fica com o CI ou com o Guilherme, não com o
-agente. Tela rodando: configs `backend-teste` e `frontend` do
-`.claude/launch.json` (ver `docs/operacao.md`).
+**Antes de dizer "pronto":** `backend/.venv/Scripts/python.exe scripts/verifica.py`
+roda só o que a mudança toca (lint, migrations, testes da área); `--completo` é
+o CI inteiro. A **suíte completa do backend** fica com o CI ou com o Guilherme.
+Tela rodando: configs `backend-teste` e `frontend` do `.claude/launch.json`.
 
 ## O que o CI exige (`.github/workflows/tests.yml`)
 
@@ -52,11 +53,8 @@ Três jobs:
 
 1. **test**, em Linux e Windows: ruff check e format em `src tests`, depois
    pytest legado.
-2. **backend**:
-   - ruff check e format em `backend`;
-   - `checa_migrations.py`: toda migration precisa estar no `APLICADAS.tsv`;
-   - `setup_test_db.py`;
-   - `pytest backend/tests`.
+2. **backend**: ruff em `backend` e `scripts`, `checa_migrations.py` (toda
+   migration no `APLICADAS.tsv`), `setup_test_db.py` e `pytest backend/tests`.
 3. **frontend**: `npm ci`, lint, vitest e build (o build inclui os tipos).
 
 ## Onde está o estado
@@ -91,7 +89,7 @@ Uma tarefa só está pronta com evidência, nunca com "parece certo":
 1. **Teste que falha quando o código quebra.** Quebre de propósito, confirme
    que a quebra foi aplicada (`diff`) **antes** de ler o resultado, veja o
    teste cair e restaure a partir de uma **cópia**.
-2. **Lint, format e testes da área**, rodados e passando.
+2. **`scripts/verifica.py` verde**: lint, format, migrations e testes da área.
 3. **Tela aberta no navegador**, se a mudança aparece numa tela. Lint e build
    não renderizam rota dinâmica.
 4. **Migration**: aplicada em produção e registrada no `APLICADAS.tsv`
@@ -101,8 +99,9 @@ Uma tarefa só está pronta com evidência, nunca com "parece certo":
 
 ## Armadilhas que já custaram caro
 
-Cada uma quebrou de verdade. A versão longa e o "como evitar" estão em
-`docs/operacao.md`.
+Cada uma quebrou de verdade (versão longa em `docs/operacao.md`). Três são
+barradas por hook, `.claude/hooks/guarda.mjs`: migration aplicada, backend
+contra produção e descarte de trabalho não commitado.
 
 - **Nunca inventar número.** Um custo estimado de 55% virou "lucro" na tela.
   Custo só entra se o vendedor informar. Referência sai do dado da própria

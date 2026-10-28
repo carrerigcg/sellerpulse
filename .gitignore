@@ -35,10 +35,14 @@ Thumbs.db
 # um diretorio excluido -- excluindo os filhos, o `!` abaixo funciona.
 #
 # Os agentes sao versionados de proposito: eles carregam as convencoes e as
-# armadilhas deste projeto, entao precisam viajar junto com o codigo. O
+# armadilhas deste projeto, entao precisam viajar junto com o codigo. Pelo
+# mesmo motivo entram o `settings.json` e os `hooks/`: sao a guarda que barra
+# migration aplicada, backend contra producao e descarte de trabalho. O
 # `launch.json` e o `settings.local.json` continuam locais.
 .claude/*
 !.claude/agents/
+!.claude/settings.json
+!.claude/hooks/
 
 # Working notes (implementation plans stay local)
 docs/plans/
