@@ -1,6 +1,7 @@
 # Receita bruta x "vendas brutas" do Mercado Livre
 
-Estado: em implementação (branch `feat/receita-vs-vendas-brutas`).
+Estado: mergeada em `ed71ef8` (#29), no ar no Render e na Vercel em 2026-10-28.
+Primeira entrega feita pela skill `/entregar`; os três revisores deram "não bloqueia".
 
 ## Por quê
 
