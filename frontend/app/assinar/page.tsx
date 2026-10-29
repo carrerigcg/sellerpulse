@@ -48,8 +48,8 @@ export default async function AssinarPage({ searchParams }: PageProps<"/assinar"
         </div>
         <h1 className="mt-10 text-2xl font-semibold tracking-tight">Assinar o SellerPulse</h1>
         <p className="mt-2 text-muted">
-          O pagamento é feito na página do Asaas, nosso parceiro de cobrança. Os dados do seu
-          cartão não passam pelo SellerPulse.
+          O pagamento é feito na página do Asaas, nosso parceiro de cobrança. Os seus dados de
+          cobrança e do cartão não passam pelo SellerPulse.
         </p>
 
         {acesso === null ? (
@@ -61,7 +61,6 @@ export default async function AssinarPage({ searchParams }: PageProps<"/assinar"
             <ResumoDosTermos versao={acesso.termos.versao} />
             <FormularioDeAssinatura
               planoInicial={plano}
-              email={user.email ?? ""}
               versao={acesso.termos.versao}
             />
           </>

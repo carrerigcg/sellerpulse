@@ -108,9 +108,6 @@ export type Contratacao = {
   plano: "essencial" | "exclusive" | "premium";
   ciclo: "mensal" | "anual";
   versao_dos_termos: string;
-  nome: string;
-  cpf_cnpj: string;
-  email: string;
 };
 
 /** Aceita os termos e abre o checkout do Asaas. Devolve o link para pagar. */

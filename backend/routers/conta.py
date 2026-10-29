@@ -16,13 +16,12 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import uuid
 from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from backend.db import get_pool
 from backend.deps import Acesso, get_acesso, get_current_seller_id, le_plano_e_aceite, recusa
@@ -151,28 +150,10 @@ class Contratacao(BaseModel):
     plano: NomeDoPlano
     ciclo: Literal["mensal", "anual"]
     versao_dos_termos: str
-    nome: str = Field(min_length=3, max_length=120)
-    cpf_cnpj: str = Field(min_length=11, max_length=18)
-    # Conferência leve: o Asaas valida de novo, e uma dependência a mais só
-    # para isso não se paga.
-    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
-def _cpf_cnpj_normalizado(valor: str) -> str:
-    """CPF com 11 dígitos, ou CNPJ com 14 caracteres.
-
-    O CNPJ pode ter letras nas 12 primeiras posições: a Receita emite o CNPJ
-    alfanumérico desde julho de 2026, e só os 2 dígitos verificadores
-    continuam numéricos. Tirar as letras recusaria toda empresa nova.
-    """
-    limpo = re.sub(r"[^0-9A-Za-z]", "", valor).upper()
-    cpf = len(limpo) == 11 and limpo.isdigit()
-    cnpj = len(limpo) == 14 and limpo[-2:].isdigit()
-    if not (cpf or cnpj):
-        raise recusa(
-            422, "cpf-cnpj-invalido", "Informe um CPF (11 dígitos) ou um CNPJ (14 caracteres)"
-        )
-    return limpo
+    # Sem nome, CPF/CNPJ, e-mail ou endereço: quem pede os dados de cobrança é
+    # a página do Asaas. Com `customerData`, o Asaas exige endereço completo e
+    # telefone (medido no sandbox, 2026-10-29); sem ele, a página dele coleta.
+    # O SellerPulse não recebe esses dados nem de passagem.
 
 
 def _url_de_retorno() -> str:
@@ -191,12 +172,11 @@ async def post_checkout(
     """Aceite dos termos, depois o checkout do Asaas. Devolve o link para pagar.
 
     O aceite vem ANTES do pagamento (decisão 2 da spec de cobrança). O valor
-    sai de `backend/planos.py`, nunca do corpo. O CPF/CNPJ vai para o Asaas e
-    não é guardado aqui.
+    sai de `backend/planos.py`, nunca do corpo. Os dados de cobrança (CPF,
+    endereço, cartão) a pessoa preenche na página do Asaas, não aqui.
     """
     if not asaas.configurado():
         raise recusa(503, "cobranca-indisponivel", "A contratação está indisponível agora")
-    cpf_cnpj = _cpf_cnpj_normalizado(corpo.cpf_cnpj)
     pool = await get_pool()
 
     plano_atual, _ = await le_plano_e_aceite(pool, seller_id)
@@ -223,7 +203,6 @@ async def post_checkout(
             ciclo=corpo.ciclo,
             recorrente=recorrente,
             primeira_cobranca=hoje_do_vendedor() + timedelta(days=DIAS_DE_TESTE if teste else 0),
-            cliente={"name": corpo.nome, "cpfCnpj": cpf_cnpj, "email": corpo.email},
             referencia=referencia_do_vendedor(seller_id),
             url_de_retorno=_url_de_retorno(),
         )

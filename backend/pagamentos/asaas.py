@@ -52,15 +52,22 @@ def _cliente() -> httpx.AsyncClient:
     if not chave:
         raise AsaasNaoConfigurado("ASAAS_API_KEY não está configurada")
     return httpx.AsyncClient(
-        base_url=os.environ.get("ASAAS_BASE_URL", URL_PADRAO).rstrip("/"),
+        # `or`, e não o padrão do `get`: o `.env` traz a linha `ASAAS_BASE_URL=`
+        # vazia, e vazio tem que valer como "não informado" (o sandbox).
+        base_url=(os.environ.get("ASAAS_BASE_URL") or URL_PADRAO).rstrip("/"),
         headers={"access_token": chave, "User-Agent": _USER_AGENT},
         timeout=20.0,
     )
 
 
 async def _pede(metodo: str, caminho: str, corpo: dict | None = None) -> dict:
-    async with _cliente() as cliente:
-        resposta = await cliente.request(metodo, caminho, json=corpo)
+    try:
+        async with _cliente() as cliente:
+            resposta = await cliente.request(metodo, caminho, json=corpo)
+    except httpx.HTTPError as erro:
+        # Rede fora, timeout, URL errada: para quem chama, é o Asaas que não
+        # respondeu, e vira o mesmo "não foi possível agora", não um 500.
+        raise AsaasErro(0, f"{type(erro).__name__}: {erro}") from erro
     if resposta.status_code >= 400:
         raise AsaasErro(resposta.status_code, resposta.text)
     return resposta.json() if resposta.content else {}
@@ -79,7 +86,6 @@ async def criar_checkout(
     ciclo: str,
     recorrente: bool,
     primeira_cobranca: date,
-    cliente: dict,
     referencia: str,
     url_de_retorno: str,
 ) -> dict:
@@ -109,7 +115,6 @@ async def criar_checkout(
                 "imageBase64": _IMAGEM_DO_ITEM,
             }
         ],
-        "customerData": cliente,
     }
     if recorrente:
         corpo["subscription"] = {

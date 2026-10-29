@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { contratar } from "@/lib/ml";
 import { NOMES_DOS_PLANOS, type NomeDoPlano } from "@/lib/plano";
@@ -22,23 +22,18 @@ const PLANOS: NomeDoPlano[] = ["essencial", "exclusive", "premium"];
  * os preços vêm de `lib/precos.ts` aqui mesmo, e são só o que se MOSTRA — o
  * valor cobrado sai do backend.
  *
- * O CPF/CNPJ vai para o Asaas, que exige o dado para cobrar, e não fica
- * guardado no SellerPulse.
+ * Sem nome, CPF/CNPJ ou endereço: quem pede os dados de cobrança é a página
+ * do Asaas, e o SellerPulse não os recebe nem de passagem.
  */
 export function FormularioDeAssinatura({
   planoInicial,
-  email,
   versao,
 }: {
   planoInicial: NomeDoPlano;
-  email: string;
   versao: string;
 }) {
   const [plano, setPlano] = useState<NomeDoPlano>(planoInicial);
   const [ciclo, setCiclo] = useState<Ciclo>("mensal");
-  const [nome, setNome] = useState("");
-  const [documento, setDocumento] = useState("");
-  const [emailDeCobranca, setEmailDeCobranca] = useState(email);
   const [aceito, setAceito] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -64,9 +59,6 @@ export function FormularioDeAssinatura({
         plano,
         ciclo,
         versao_dos_termos: versao,
-        nome,
-        cpf_cnpj: documento,
-        email: emailDeCobranca,
       });
       // Página do Asaas: navegação inteira, não do roteador do Next.
       window.location.assign(link);
@@ -160,25 +152,10 @@ export function FormularioDeAssinatura({
         )}
       </fieldset>
 
-      <fieldset className="space-y-3">
-        <legend className="text-sm font-semibold">Dados para a cobrança</legend>
-        <Campo rotulo="Nome ou razão social" valor={nome} muda={setNome} autoComplete="name" />
-        {/* Sem `inputMode="numeric"`: o CNPJ novo tem letras, e o teclado
-            numérico do celular não deixaria digitá-las. */}
-        <Campo
-          rotulo="CPF ou CNPJ"
-          valor={documento}
-          muda={setDocumento}
-          ajuda="Exigido pelo Asaas para emitir a cobrança. Não fica guardado no SellerPulse."
-        />
-        <Campo
-          rotulo="E-mail para a cobrança"
-          valor={emailDeCobranca}
-          muda={setEmailDeCobranca}
-          tipo="email"
-          autoComplete="email"
-        />
-      </fieldset>
+      <p className="text-xs text-muted">
+        Os dados de cobrança (nome, CPF ou CNPJ, endereço e cartão) você preenche na página
+        do Asaas, no próximo passo.
+      </p>
 
       <label className="flex items-start gap-3 text-sm">
         <input
@@ -199,8 +176,8 @@ export function FormularioDeAssinatura({
 
       <button
         type="submit"
-        // Habilitado mesmo com campo vazio: com o botão desabilitado, o navegador
-        // nunca diz o que falta. O `required` dos campos faz isso.
+        // Habilitado mesmo sem o aceite marcado: com o botão desabilitado, o
+        // navegador nunca diz o que falta. O `required` da caixa faz isso.
         disabled={enviando}
         className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
       >
@@ -211,42 +188,5 @@ export function FormularioDeAssinatura({
             : "Ir para o pagamento"}
       </button>
     </form>
-  );
-}
-
-function Campo({
-  rotulo,
-  valor,
-  muda,
-  tipo = "text",
-  ajuda,
-  autoComplete,
-}: {
-  rotulo: string;
-  valor: string;
-  muda: (v: string) => void;
-  tipo?: string;
-  ajuda?: string;
-  autoComplete?: string;
-}) {
-  const idDaAjuda = useId();
-  return (
-    <label className="block text-sm">
-      <span className="font-medium">{rotulo}</span>
-      <input
-        type={tipo}
-        value={valor}
-        onChange={(e) => muda(e.target.value)}
-        required
-        autoComplete={autoComplete}
-        aria-describedby={ajuda ? idDaAjuda : undefined}
-        className="mt-1 block w-full rounded-lg border border-line bg-bg px-3 py-2 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
-      />
-      {ajuda && (
-        <span id={idDaAjuda} className="mt-1 block text-xs text-muted">
-          {ajuda}
-        </span>
-      )}
-    </label>
   );
 }

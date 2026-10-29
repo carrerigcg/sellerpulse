@@ -93,7 +93,7 @@ e `plano_no_proximo_ciclo`, este último para o downgrade.
 
 ### Contratar
 
-`POST /conta/checkout` recebe `{plano, ciclo, versao_dos_termos, nome, cpf_cnpj, email}`:
+`POST /conta/checkout` recebe `{plano, ciclo, versao_dos_termos}`:
 
 1. Confere a versão dos termos e grava o aceite (a mesma prova de hoje).
 2. Monta o checkout do Asaas com o valor de `backend/planos.py`:
@@ -104,8 +104,12 @@ e `plano_no_proximo_ciclo`, este último para o downgrade.
    ele que o webhook descobre de quem é o pagamento.
 4. Devolve o link, e o front redireciona.
 
-**O CPF/CNPJ vai para o Asaas e não é guardado aqui.** O Asaas exige o dado
-para cobrar; nós não precisamos dele depois (minimização, LGPD art. 6º, III).
+**Os dados de cobrança não passam pelo SellerPulse** (decisão de 2026-10-29,
+depois da medição no sandbox). Mandar `customerData` faz o Asaas exigir
+endereço completo e telefone (CEP, rua, número, bairro); sem ele, a página do
+Asaas pede nome, CPF/CNPJ, endereço e cartão ela mesma. O nosso formulário
+fica só com o plano, o ciclo e o aceite, e o SellerPulse não recebe CPF nem
+endereço nem de passagem (minimização, LGPD art. 6º, III).
 
 ### Webhook
 
@@ -137,8 +141,8 @@ para cobrar; nós não precisamos dele depois (minimização, LGPD art. 6º, III
 ### Front
 
 - **`/planos`:**
-  - para quem está logado, "Assinar" abre o formulário: mensal ou anual, nome,
-    CPF/CNPJ, e-mail e o aceite dos termos;
+  - para quem está logado, "Assinar" abre o formulário: plano, mensal ou
+    anual, e o aceite dos termos;
   - para quem não está, leva ao cadastro e volta;
   - o Exclusive mensal mostra "7 dias grátis".
 - **Uma tela "Minha assinatura"** no painel: plano, próximo vencimento,
@@ -166,6 +170,15 @@ Já resolvido pela documentação, na revisão de 2026-10-29:
 - **`imageBase64` é obrigatório** em cada item do checkout. Vai o quadrado da
   marca (`backend/pagamentos/marca.png`).
 
+Medido no sandbox (2026-10-29):
+
+- **URLs de retorno com `localhost` são recusadas**; HTTPS público é aceito,
+  com ou sem `?checkout=ok`. Teste local precisa de uma URL pública de retorno.
+- **Sem `customerData`, o checkout recorrente é aceito** e a página do Asaas
+  coleta os dados. Com `customerData`, ele exige endereço completo e telefone.
+- **Checkout com Pix exige uma chave Pix cadastrada na conta Asaas.** Vale
+  para o sandbox e para a conta de produção.
+
 A documentação não responde estes pontos, e o código só se fecha depois de
 vê-los num evento de verdade:
 
@@ -174,7 +187,6 @@ vê-los num evento de verdade:
   mesma pessoa tem duas contas (a busca por `asaas_cliente` não é única).
 - Se o checkout com teste (primeira cobrança no 8º dia) dispara
   `CHECKOUT_PAID` quando o cartão é validado, sem cobrança.
-- Se o checkout coleta o CPF sozinho quando `customerData` não vai.
 
 ## Riscos
 
@@ -196,7 +208,6 @@ vê-los num evento de verdade:
   aberta entre duas migrations.
 - **Datas na tela:** o prazo é a meia-noite em que ele ACABA. "Pago até" e
   "vale até" mostram o dia anterior; "próxima cobrança" mostra o próprio dia.
-- **CNPJ alfanumérico aceito** (Receita, julho de 2026).
 - **Login devolve a pessoa para onde ela ia** (`?proximo=`). A conferência é
   pela origem do endereço resolvido, e não pelo começo do texto: o navegador
   remove TAB e quebra de linha, e `/<TAB>/golpe.dev` viraria `//golpe.dev`.
@@ -215,5 +226,5 @@ vê-los num evento de verdade:
 - Nota fiscal.
 - O link entre login e cadastro não carrega o `?proximo=`: quem troca de uma
   tela para a outra volta ao painel, e não à contratação.
-- Atualizar a Política de Privacidade: o CPF/CNPJ passa pelo SellerPulse a
-  caminho do Asaas, e o Asaas entra como fornecedor (`docs/legal/`).
+- Atualizar a Política de Privacidade: o Asaas entra como fornecedor e
+  recebe os dados de cobrança direto do cliente (`docs/legal/`).

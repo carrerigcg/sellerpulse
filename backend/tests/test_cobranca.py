@@ -101,9 +101,6 @@ def _contratacao(**muda) -> dict:
         "plano": "exclusive",
         "ciclo": "mensal",
         "versao_dos_termos": VERSAO_DOS_TERMOS,
-        "nome": "Loja de Teste",
-        "cpf_cnpj": "123.456.789-09",
-        "email": "loja@teste.dev",
     }
     corpo.update(muda)
     return corpo
@@ -165,7 +162,8 @@ async def test_contratar_o_exclusive_mensal_grava_o_aceite_e_abre_o_teste(
     assert (
         corpo["subscription"]["nextDueDate"] == (hoje_do_vendedor() + timedelta(days=7)).isoformat()
     )
-    assert corpo["customerData"]["cpfCnpj"] == "12345678909"
+    # Os dados de cobrança são pedidos pela página do Asaas, não por nós.
+    assert "customerData" not in corpo
 
     async with pg_pool.acquire() as conn:
         aceite = await conn.fetchval(
@@ -207,19 +205,6 @@ async def test_so_o_exclusive_mensal_tem_teste(client, sem_plano, asaas_falso):
     )
 
 
-async def test_o_cpf_nao_fica_guardado(client, pg_pool, sem_plano, asaas_falso):
-    user_id, seller_id = sem_plano
-    client.post("/conta/checkout", json=_contratacao(), headers=_auth(user_id))
-    async with pg_pool.acquire() as conn:
-        linhas = await conn.fetch(
-            "SELECT row_to_json(c)::text AS t FROM checkouts c WHERE seller_id = $1 "
-            "UNION ALL SELECT row_to_json(a)::text FROM aceites_de_termos a WHERE seller_id = $1",
-            seller_id,
-        )
-    assert linhas
-    assert all("12345678909" not in linha["t"] for linha in linhas)
-
-
 async def test_contratar_com_versao_velha_dos_termos_nao_abre_checkout(
     client, sem_plano, asaas_falso
 ):
@@ -228,15 +213,6 @@ async def test_contratar_com_versao_velha_dos_termos_nao_abre_checkout(
         "/conta/checkout", json=_contratacao(versao_dos_termos="velha"), headers=_auth(user_id)
     )
     assert resp.status_code == 409
-    assert asaas_falso.pedidos == []
-
-
-async def test_contratar_com_cpf_invalido_e_recusado(client, sem_plano, asaas_falso):
-    user_id, _ = sem_plano
-    resp = client.post(
-        "/conta/checkout", json=_contratacao(cpf_cnpj="123.456.789"), headers=_auth(user_id)
-    )
-    assert resp.status_code == 422
     assert asaas_falso.pedidos == []
 
 
@@ -781,17 +757,6 @@ async def test_o_item_do_checkout_leva_a_imagem_que_o_asaas_exige(client, sem_pl
     assert item["imageBase64"].startswith("iVBORw0KGgo")  # assinatura de PNG em base64
 
 
-async def test_cnpj_alfanumerico_e_aceito(client, sem_plano, asaas_falso):
-    user_id, _ = sem_plano
-    resp = client.post(
-        "/conta/checkout",
-        json=_contratacao(cpf_cnpj="12.ABC.345/01DE-35"),
-        headers=_auth(user_id),
-    )
-    assert resp.status_code == 201
-    assert asaas_falso.pedidos[0][2]["customerData"]["cpfCnpj"] == "12ABC34501DE35"
-
-
 async def test_no_teste_de_7_dias_a_assinatura_ja_aparece_como_recorrente(
     client, pg_pool, sem_plano
 ):
@@ -823,3 +788,47 @@ async def test_pagamento_atrasado_da_assinatura_antiga_nao_grava_o_id_antigo(pg_
 
     await eventos.processa(pg_pool, _pagamento("evt_novo", hoje, assinatura="sub_nova"))
     assert (await _assinatura(pg_pool, seller_id))["asaas_assinatura"] == "sub_nova"
+
+
+def test_base_url_vazia_no_env_vale_como_sandbox(monkeypatch):
+    """O `.env` traz `ASAAS_BASE_URL=` vazio; vazio não pode virar URL vazia."""
+    monkeypatch.setenv("ASAAS_API_KEY", "chave-de-teste")
+    monkeypatch.setenv("ASAAS_BASE_URL", "")
+    assert str(asaas._cliente().base_url) == asaas.URL_PADRAO + "/"
+
+
+async def test_asaas_fora_do_ar_vira_502_e_nao_500(client, monkeypatch, sem_plano):
+    def sem_rede(request):
+        raise httpx.ConnectError("sem rede", request=request)
+
+    monkeypatch.setenv("ASAAS_API_KEY", "chave-de-teste")
+    monkeypatch.setattr(
+        asaas,
+        "_cliente",
+        lambda: httpx.AsyncClient(
+            base_url="https://asaas.test/v3", transport=httpx.MockTransport(sem_rede)
+        ),
+    )
+    user_id, _ = sem_plano
+    resp = client.post("/conta/checkout", json=_contratacao(), headers=_auth(user_id))
+    assert resp.status_code == 502
+    assert resp.json()["detail"]["codigo"] == "gateway-recusou"
+
+
+async def test_o_checkout_nao_recebe_nem_manda_dado_de_cliente(client, sem_plano, asaas_falso):
+    """Nome, CPF/CNPJ, e-mail e endereço ficam na página do Asaas.
+
+    Mandar `customerData` faz o Asaas exigir endereço completo e telefone
+    (medido no sandbox); sem ele, a página dele coleta. Um corpo com esses
+    campos é ignorado, não repassado.
+    """
+    user_id, _ = sem_plano
+    resp = client.post(
+        "/conta/checkout",
+        json=_contratacao(nome="Loja", cpf_cnpj="52998224725", email="a@b.dev"),
+        headers=_auth(user_id),
+    )
+    assert resp.status_code == 201
+    corpo = asaas_falso.pedidos[0][2]
+    assert "customerData" not in corpo
+    assert "52998224725" not in json.dumps(corpo)
