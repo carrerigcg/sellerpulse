@@ -33,7 +33,7 @@ type Plano = {
 const PLANOS: Plano[] = [
   {
     nome: "Essencial",
-    preco: 49.92,
+    preco: 49.9,
     chamada: "Para saber quanto sobra de cada venda.",
     itens: [
       "Resumo da loja",
@@ -47,7 +47,7 @@ const PLANOS: Plano[] = [
   },
   {
     nome: "Exclusive",
-    preco: 79.97,
+    preco: 79.9,
     chamada: "O painel inteiro, para decidir com a loja toda à vista.",
     destaque: true,
     itens: [
@@ -64,7 +64,7 @@ const PLANOS: Plano[] = [
   },
   {
     nome: "Premium",
-    preco: 139.95,
+    preco: 139.9,
     chamada: "Para quem quer o máximo do produto e alguém do lado.",
     itens: ["Tudo do Exclusive", "Gerente de conta dedicado"],
     depois: {
