@@ -1,6 +1,6 @@
 # Planos e controle de acesso (Essencial primeiro)
 
-Estado: spec aprovada, em implementação.
+Estado: no ar desde 2026-10-29 (#34). Migrations 0016 e 0017 aplicadas antes do merge; a conta real está no Premium (origem manual) e aceita os termos pela tela `/aceite`.
 
 ## Por quê
 
