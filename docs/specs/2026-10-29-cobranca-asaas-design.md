@@ -41,15 +41,15 @@ inadimplência e o cancelamento.
 
 | plano | mensal | anual (10 × mensal) |
 | --- | --- | --- |
-| Essencial | R$ 49,92 | R$ 499,20 |
-| Exclusive | R$ 79,97 | R$ 799,70 |
-| Premium | R$ 139,95 | R$ 1.399,50 |
+| Essencial | R$ 49,90 | R$ 499,00 |
+| Exclusive | R$ 79,90 | R$ 799,00 |
+| Premium | R$ 139,90 | R$ 1.399,00 |
 
 ### Promoção de lançamento (2026-10-29)
 
 Os preços acima são de lançamento. A vitrine mostra riscado o preço de depois
-do lançamento (R$ 59,90 / 108,92 / 179,59), com o desconto ("−17%", "−27%",
-"−22%") e a economia por mês.
+do lançamento (R$ 59,90 / 109,90 / 169,90), com o desconto ("−17%", "−27%",
+"−18%"; o Exclusive tem o maior de propósito) e a economia por mês.
 
 - **O riscado é dito como o preço depois do lançamento, nunca como um "de"
   que já foi cobrado.** Anunciar um preço anterior que nunca existiu é

@@ -9,17 +9,19 @@ import type { NomeDoPlano } from "@/lib/plano";
  * preço e o checkout cobrar outro.
  *
  * Decididos pelo dono em 2026-10-29, com entrada baixa de propósito para trazer
- * os primeiros clientes e feedback.
+ * os primeiros clientes e feedback. Todos terminam em ,90, o padrão que se lê
+ * como preço de tabela.
  */
 export const PRECOS_MENSAIS: Record<NomeDoPlano, number> = {
-  essencial: 49.92,
-  exclusive: 79.97,
-  premium: 139.95,
+  essencial: 49.9,
+  exclusive: 79.9,
+  premium: 139.9,
 };
 
 /**
  * O preço depois do lançamento, que a vitrine mostra RISCADO ao lado do
- * preço de agora (decisão do dono, 2026-10-29).
+ * preço de agora (decisão do dono, 2026-10-29). O Exclusive tem o maior
+ * desconto de propósito: o recomendado é também o que mais compensa agora.
  *
  * Ele é apresentado como o preço que vem depois do lançamento, e não como um
  * "de" que já foi cobrado: anunciar um preço anterior que nunca existiu é
@@ -28,8 +30,8 @@ export const PRECOS_MENSAIS: Record<NomeDoPlano, number> = {
  */
 export const PRECOS_DEPOIS_DO_LANCAMENTO: Record<NomeDoPlano, number> = {
   essencial: 59.9,
-  exclusive: 108.92,
-  premium: 179.59,
+  exclusive: 109.9,
+  premium: 169.9,
 };
 
 /** Desconto do lançamento, em pontos percentuais inteiros (ex.: 17 para "−17%"). */
@@ -54,8 +56,7 @@ export function precoAnual(plano: NomeDoPlano): number {
   return Math.round(PRECOS_MENSAIS[plano] * MESES_PAGOS_NO_ANUAL * 100) / 100;
 }
 
-// Com centavos: os preços são quebrados de propósito, e arredondar R$ 49,92
-// para R$ 50 mostraria outro preço.
+// Com centavos: arredondar R$ 49,90 para R$ 50 mostraria outro preço.
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",

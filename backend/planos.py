@@ -70,7 +70,7 @@ _TUDO = frozenset(Recurso)
 PLANOS: dict[str, Plano] = {
     "essencial": Plano(
         nome="essencial",
-        preco_mensal=Decimal("49.92"),
+        preco_mensal=Decimal("49.90"),
         recursos=frozenset(),
         dias_de_historico=90,
         produtos_na_abc=10,
@@ -80,14 +80,14 @@ PLANOS: dict[str, Plano] = {
     # cada feature (decisão 8 da spec).
     "exclusive": Plano(
         nome="exclusive",
-        preco_mensal=Decimal("79.97"),
+        preco_mensal=Decimal("79.90"),
         recursos=_TUDO,
         dias_de_historico=None,
         produtos_na_abc=None,
     ),
     "premium": Plano(
         nome="premium",
-        preco_mensal=Decimal("139.95"),
+        preco_mensal=Decimal("139.90"),
         recursos=_TUDO,
         dias_de_historico=None,
         produtos_na_abc=None,

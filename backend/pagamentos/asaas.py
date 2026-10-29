@@ -68,7 +68,7 @@ async def _pede(metodo: str, caminho: str, corpo: dict | None = None) -> dict:
 
 def _reais(valor: Decimal) -> float:
     # O Asaas recebe número, em reais. Arredonda nos centavos ANTES de virar
-    # float, para R$ 499,20 não sair 499.20000000000005.
+    # float, para um R$ 499,20 não sair 499.20000000000005.
     return float(valor.quantize(Decimal("0.01")))
 
 

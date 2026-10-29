@@ -121,9 +121,9 @@ def test_o_anual_cobre_doze_meses():
 
 
 def test_o_anual_custa_dez_mensais():
-    assert PLANOS["essencial"].preco("anual") == Decimal("499.20")
-    assert PLANOS["exclusive"].preco("anual") == Decimal("799.70")
-    assert PLANOS["premium"].preco("anual") == Decimal("1399.50")
+    assert PLANOS["essencial"].preco("anual") == Decimal("499.00")
+    assert PLANOS["exclusive"].preco("anual") == Decimal("799.00")
+    assert PLANOS["premium"].preco("anual") == Decimal("1399.00")
 
 
 def test_os_precos_da_vitrine_batem_com_os_do_backend():
@@ -160,7 +160,7 @@ async def test_contratar_o_exclusive_mensal_grava_o_aceite_e_abre_o_teste(
     assert (metodo, caminho) == ("POST", "/v3/checkouts")
     assert corpo["chargeTypes"] == ["RECURRENT"]
     assert corpo["billingTypes"] == ["CREDIT_CARD"]
-    assert corpo["items"][0]["value"] == 79.97
+    assert corpo["items"][0]["value"] == 79.9
     assert corpo["subscription"]["cycle"] == "MONTHLY"
     assert (
         corpo["subscription"]["nextDueDate"] == (hoje_do_vendedor() + timedelta(days=7)).isoformat()
@@ -192,7 +192,7 @@ async def test_contratar_o_anual_e_pagamento_unico_por_pix_ou_cartao(
     corpo = asaas_falso.pedidos[0][2]
     assert corpo["chargeTypes"] == ["DETACHED"]
     assert set(corpo["billingTypes"]) == {"CREDIT_CARD", "PIX"}
-    assert corpo["items"][0]["value"] == 499.2
+    assert corpo["items"][0]["value"] == 499.0
     assert "subscription" not in corpo
 
 
@@ -561,7 +561,7 @@ async def test_upgrade_vale_na_hora_e_o_valor_novo_na_proxima_cobranca(
     await _assinante(pg_pool, seller_id, "essencial")
     resp = client.post("/conta/plano", json={"plano": "premium"}, headers=_auth(user_id))
     assert resp.json() == {"plano": "premium", "no_proximo_ciclo": None}
-    assert asaas_falso.pedidos == [("PUT", "/v3/subscriptions/sub_9", {"value": 139.95})]
+    assert asaas_falso.pedidos == [("PUT", "/v3/subscriptions/sub_9", {"value": 139.9})]
     assert (await _assinatura(pg_pool, seller_id))["plano"] == "premium"
 
 
@@ -570,7 +570,7 @@ async def test_downgrade_fica_para_o_proximo_ciclo(client, pg_pool, test_seller,
     await _assinante(pg_pool, seller_id, "premium")
     resp = client.post("/conta/plano", json={"plano": "essencial"}, headers=_auth(user_id))
     assert resp.json() == {"plano": "premium", "no_proximo_ciclo": "essencial"}
-    assert asaas_falso.pedidos == [("PUT", "/v3/subscriptions/sub_9", {"value": 49.92})]
+    assert asaas_falso.pedidos == [("PUT", "/v3/subscriptions/sub_9", {"value": 49.9})]
     linha = await _assinatura(pg_pool, seller_id)
     assert (linha["plano"], linha["plano_no_proximo_ciclo"]) == ("premium", "essencial")
 
@@ -757,7 +757,7 @@ async def test_desfazer_um_downgrade_agendado(client, pg_pool, test_seller, asaa
     resp = client.post("/conta/plano", json={"plano": "premium"}, headers=_auth(user_id))
 
     assert resp.json() == {"plano": "premium", "no_proximo_ciclo": None}
-    assert asaas_falso.pedidos[-1] == ("PUT", "/v3/subscriptions/sub_9", {"value": 139.95})
+    assert asaas_falso.pedidos[-1] == ("PUT", "/v3/subscriptions/sub_9", {"value": 139.9})
     assert (await _assinatura(pg_pool, seller_id))["plano_no_proximo_ciclo"] is None
 
 
