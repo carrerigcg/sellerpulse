@@ -9,8 +9,9 @@ endpoints publicos de demonstracao) e `0008_custo_de_produto.sql` (tabela
 `product_costs`, o custo de produto informado pelo vendedor, com data de
 vigencia), `0010_visitas_do_anuncio.sql` (`item_visits` e o tipo de job
 `visitas` na fila) e `0012_frete_real.sql` (`orders.shipment_id`,
-`shipment_costs` e o tipo de job `frete`). As migrations 0002, 0003, 0005,
-0009, 0011 e 0013 NAO sao aplicadas:
+`shipment_costs` e o tipo de job `frete`) e `0014_minimiza_pagamentos.sql`
+(so dado; no banco vazio e no-op). As migrations 0002, 0003, 0005, 0009, 0011
+e 0013 NAO sao aplicadas:
 dependem de `auth.uid()`, funcao exclusiva do ambiente Supabase. O isolamento entre tenants que os testes exercitam e o filtro
 explicito por `seller_id` nas queries, nao a RLS.
 
@@ -43,6 +44,7 @@ MIGRATIONS = (
     "0008_custo_de_produto.sql",
     "0010_visitas_do_anuncio.sql",
     "0012_frete_real.sql",
+    "0014_minimiza_pagamentos.sql",
 )
 
 
