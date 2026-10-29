@@ -238,7 +238,7 @@ async def _id_da_assinatura(pool, seller_id: uuid.UUID):
     """
     async with pool.acquire() as conn:
         linha = await conn.fetchrow(
-            "SELECT plano, ciclo, origem, asaas_cliente, asaas_assinatura, pago_ate, "
+            "SELECT plano, ciclo, origem, checkout_id, asaas_cliente, asaas_assinatura, pago_ate, "
             "cancelada_em, plano_no_proximo_ciclo FROM assinaturas WHERE seller_id = $1",
             seller_id,
         )
@@ -252,6 +252,14 @@ async def _id_da_assinatura(pool, seller_id: uuid.UUID):
     if linha["asaas_assinatura"]:
         return linha, linha["asaas_assinatura"]
     if not linha["asaas_cliente"]:
+        # Mensal pelo Asaas sem cliente nem assinatura: os avisos que trazem os
+        # ids se perderam (fila pausada). Não há como achar a assinatura daqui;
+        # o dono precisa cancelar no painel do Asaas.
+        _log.warning(
+            "[asaas] seller %s mensal sem ids do Asaas (checkout %s): avisos perdidos?",
+            seller_id,
+            linha["checkout_id"],
+        )
         return linha, None
     try:
         ativas = await asaas.assinaturas_ativas_do_cliente(linha["asaas_cliente"])

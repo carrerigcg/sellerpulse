@@ -26,7 +26,7 @@ alter table assinaturas
     -- pagamento e a assinatura trazem `checkoutSession` (medido no sandbox),
     -- e um evento de um checkout ANTIGO (de quem cancelou e recontratou) nao
     -- toca a linha da assinatura nova.
-    add column checkout_id            text;
+    add column checkout_id            text unique;
 
 -- Cada checkout criado, e de quem ele e. O webhook do Asaas fala de checkout,
 -- cobranca e assinatura; e por esta tabela que um checkout pago vira o plano

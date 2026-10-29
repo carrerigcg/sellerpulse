@@ -853,24 +853,69 @@ async def test_no_teste_de_7_dias_a_assinatura_ja_aparece_como_recorrente(
 
 
 async def test_pagamento_atrasado_da_assinatura_antiga_nao_grava_o_id_antigo(pg_pool, sem_plano):
+    """Recontratação: a assinatura antiga (chk_velho / sub_velha) foi cancelada,
+    a nova (chk_2) foi paga, e um `PAYMENT_RECEIVED` atrasado da antiga chega
+    depois. Ele não pode gravar `sub_velha` na linha da assinatura nova."""
     _, seller_id = sem_plano
     hoje = hoje_do_vendedor()
-    await _checkout_criado(pg_pool, seller_id, plano="essencial")
-    await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje)
-
-    # O pagamento da assinatura antiga traz o checkout ANTIGO.
-    antigo = _pagamento(
-        "evt_velho",
-        hoje - timedelta(days=32),
-        tipo="PAYMENT_RECEIVED",
-        assinatura="sub_velha",
-        checkout="chk_velho",
+    velho = hoje - timedelta(days=32)
+    await _checkout_criado(pg_pool, seller_id, plano="essencial", checkout_id="chk_velho")
+    await eventos.processa(
+        pg_pool, _checkout_pago(evento_id="evt_chk_velho", checkout_id="chk_velho"), hoje=velho
     )
-    await eventos.processa(pg_pool, antigo)
-    assert (await _assinatura(pg_pool, seller_id))["asaas_assinatura"] is None
+    await eventos.processa(
+        pg_pool,
+        _assinatura_criada(evento_id="evt_sub_velha", assinatura="sub_velha", checkout="chk_velho"),
+    )
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET cancelada_em = now() WHERE seller_id = $1", seller_id
+        )
+    await _checkout_criado(pg_pool, seller_id, plano="essencial", checkout_id="chk_2")
+    await eventos.processa(
+        pg_pool, _checkout_pago(evento_id="evt_chk_2", checkout_id="chk_2"), hoje=hoje
+    )
+    # O Asaas reaproveita o cliente da mesma pessoa: a linha nova já o conhece,
+    # mas ainda não sabe o id da assinatura nova.
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET asaas_cliente = 'cus_1' WHERE seller_id = $1", seller_id
+        )
 
-    await eventos.processa(pg_pool, _pagamento("evt_novo", hoje, assinatura="sub_nova"))
+    antigo = _pagamento(
+        "evt_velho", velho, tipo="PAYMENT_RECEIVED", assinatura="sub_velha", checkout="chk_velho"
+    )
+    assert await eventos.processa(pg_pool, antigo) == "prazo-estendido"
+
+    linha = await _assinatura(pg_pool, seller_id)
+    assert (linha["checkout_id"], linha["asaas_assinatura"]) == ("chk_2", None)
+
+    novo = _pagamento("evt_novo", hoje, assinatura="sub_nova", checkout="chk_2")
+    await eventos.processa(pg_pool, novo, hoje=hoje)
     assert (await _assinatura(pg_pool, seller_id))["asaas_assinatura"] == "sub_nova"
+
+
+async def test_segundo_checkout_pago_nao_sobrescreve_o_plano_vigente(pg_pool, sem_plano):
+    """Duas abas, dois checkouts, os dois pagos: o segundo não troca os ids da
+    assinatura vigente (senão ela seguiria cobrando sem poder ser cancelada)."""
+    _, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id, plano="premium", checkout_id="chk_a")
+    await _checkout_criado(pg_pool, seller_id, plano="essencial", checkout_id="chk_b")
+    await eventos.processa(
+        pg_pool, _pagamento("evt_a", HOJE, assinatura="sub_a", checkout="chk_a"), hoje=HOJE
+    )
+
+    resultado = await eventos.processa(
+        pg_pool, _checkout_pago(evento_id="evt_b", checkout_id="chk_b"), hoje=HOJE
+    )
+
+    assert resultado == "checkout-duplicado"
+    linha = await _assinatura(pg_pool, seller_id)
+    assert (linha["plano"], linha["checkout_id"], linha["asaas_assinatura"]) == (
+        "premium",
+        "chk_a",
+        "sub_a",
+    )
 
 
 def test_base_url_vazia_no_env_vale_como_sandbox(monkeypatch):

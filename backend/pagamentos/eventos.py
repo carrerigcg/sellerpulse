@@ -158,6 +158,31 @@ async def _ativa_checkout(conn, checkout_id: str | None, hoje: date) -> str:
             return "checkout-desconhecido"
         return "ja-ativado"
 
+    # Dois checkouts pagos do mesmo vendedor (duas abas, pagas as duas): o
+    # segundo NÃO sobrescreve o plano vigente de outro checkout. Sobrescrever
+    # trocaria os ids na linha, e a assinatura do primeiro seguiria cobrando
+    # sem que o produto conseguisse cancelá-la. O segundo pagamento precisa de
+    # estorno à mão: o alerta no log é para isso.
+    vigente = await conn.fetchval(
+        """
+        SELECT checkout_id FROM assinaturas
+         WHERE seller_id = $1 AND origem = 'gateway' AND cancelada_em IS NULL
+           AND checkout_id IS NOT NULL AND checkout_id <> $2
+           AND (acesso_ate IS NULL OR acesso_ate > now())
+        """,
+        registro["seller_id"],
+        checkout_id,
+    )
+    if vigente is not None:
+        _log.error(
+            "[asaas] checkout %s pago com o plano do checkout %s ainda vigente (seller %s): "
+            "cobranca em dobro, estornar no painel do Asaas",
+            checkout_id,
+            vigente,
+            registro["seller_id"],
+        )
+        return "checkout-duplicado"
+
     # O teste de 7 dias: o cartão foi validado e a primeira cobrança é no 8º
     # dia. O período "pago" vai até lá; os pagamentos seguintes empurram.
     em_teste = registro["ciclo"] == "mensal" and registro["plano"] in PLANOS_COM_TESTE
