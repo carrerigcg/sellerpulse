@@ -80,6 +80,35 @@ _UPSERT_CUSTO = """
     DO UPDATE SET custo_unitario = excluded.custo_unitario
 """
 
+# Início do histórico: anterior a qualquer pedido possível. Cada venda usa a
+# última vigência que começou até a data dela, então uma linha aqui cobre
+# exatamente o que está ANTES do primeiro custo datado do item, e nada depois
+# dele. É o que torna "retroativo" um preenchimento de lacuna, e não uma
+# reescrita do passado (docs/specs/2026-10-28-custo-retroativo-design.md).
+VIGENCIA_DO_HISTORICO = date(2000, 1, 1)
+
+# Grava o início do histórico uma vez só. Linha que já existe só é atualizada
+# se foi gravada hoje (correção de digitação do mesmo dia). Gravada em outro
+# dia, aquele período já tem custo informado, e a decisão 4 da spec de
+# 2026-10-13 vale para ele: corrigir o custo de hoje não muda o passado.
+_GRAVA_INICIO_DO_HISTORICO = f"""
+    INSERT INTO product_costs (seller_id, item_id, vigente_desde, custo_unitario)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (seller_id, item_id, vigente_desde)
+    DO UPDATE SET custo_unitario = excluded.custo_unitario
+     WHERE (product_costs.criado_em AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date = $5
+"""
+
+# "Desfazer o que foi digitado hoje": a vigência de hoje e, se tiver sido
+# gravado hoje, o início do histórico. Um retroativo de outro dia fica.
+_REMOVE_CUSTO_DO_DIA = f"""
+    DELETE FROM product_costs
+     WHERE seller_id = $1 AND item_id = $2
+       AND (vigente_desde = $3
+            OR (vigente_desde = $4
+                AND (criado_em AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date = $5))
+"""
+
 
 def hoje_do_vendedor() -> date:
     """O "hoje" que vale para a vigência: o dia no fuso do vendedor.
@@ -129,32 +158,56 @@ async def item_e_do_vendedor(pool, seller_id: uuid.UUID, item_id: str) -> bool:
 
 
 async def gravar_custo(
-    pool, seller_id: uuid.UUID, item_id: str, custo_unitario: float, dia: date | None = None
+    pool,
+    seller_id: uuid.UUID,
+    item_id: str,
+    custo_unitario: float,
+    dia: date | None = None,
+    retroativo: bool = False,
 ) -> date:
     """Grava o custo com vigência a partir de `dia` (padrão: hoje).
 
     Dois PUT no mesmo dia geram UMA linha — o upsert bate na chave
     (seller_id, item_id, vigente_desde). Num dia diferente, acrescenta um
     período em vez de substituir, que é o que preserva o passado.
+
+    Com `retroativo`, o mesmo valor também passa a valer para as vendas que
+    estão sem custo: grava o início do histórico, uma vez só (ver
+    `_GRAVA_INICIO_DO_HISTORICO`). As duas escritas vão na mesma transação,
+    para a tela nunca ficar com metade do que o vendedor pediu.
     """
     vigencia = dia or hoje_do_vendedor()
-    async with pool.acquire() as conn:
+    async with pool.acquire() as conn, conn.transaction():
         await conn.execute(_UPSERT_CUSTO, seller_id, item_id, vigencia, custo_unitario)
+        if retroativo:
+            await conn.execute(
+                _GRAVA_INICIO_DO_HISTORICO,
+                seller_id,
+                item_id,
+                VIGENCIA_DO_HISTORICO,
+                custo_unitario,
+                hoje_do_vendedor(),
+            )
     return vigencia
 
 
 async def remover_custo(pool, seller_id: uuid.UUID, item_id: str, dia: date | None = None) -> bool:
-    """Remove a vigência de `dia` (padrão: hoje). Devolve se removeu algo.
+    """Desfaz o que foi digitado hoje para o item. Devolve se removeu algo.
 
-    Desfaz erro de digitação do dia, e só. Vigência antiga não é apagada por
-    aqui: o passado não se edita por esta tela.
+    Remove a vigência de `dia` (padrão: hoje) e, se tiver sido gravado hoje, o
+    início do histórico do retroativo — senão um erro de digitação com a
+    opção ligada ficaria preso no passado. Vigência antiga, inclusive um
+    retroativo de outro dia, não é apagada: o passado não se edita por esta
+    tela.
     """
     vigencia = dia or hoje_do_vendedor()
     async with pool.acquire() as conn:
         resultado = await conn.execute(
-            "DELETE FROM product_costs WHERE seller_id=$1 AND item_id=$2 AND vigente_desde=$3",
+            _REMOVE_CUSTO_DO_DIA,
             seller_id,
             item_id,
             vigencia,
+            VIGENCIA_DO_HISTORICO,
+            hoje_do_vendedor(),
         )
     return resultado != "DELETE 0"

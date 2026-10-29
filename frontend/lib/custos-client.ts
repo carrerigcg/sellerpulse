@@ -10,6 +10,7 @@
  * página, como todo o resto do dashboard.
  */
 
+import { corpoDoCusto } from "@/lib/custo-informado";
 import { createClient } from "@/lib/supabase/client";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL!;
@@ -41,12 +42,19 @@ async function falha(resposta: Response): Promise<never> {
   throw new Error("Não foi possível salvar agora.");
 }
 
-/** Grava o custo com vigência a partir de hoje. */
-export async function salvaCusto(sku: string, custoUnitario: number): Promise<void> {
+/**
+ * Grava o custo com vigência a partir de hoje. Com `retroativo`, ele também
+ * cobre as vendas anteriores que estão sem custo — só elas.
+ */
+export async function salvaCusto(
+  sku: string,
+  custoUnitario: number,
+  retroativo: boolean,
+): Promise<void> {
   const resposta = await fetch(url(sku), {
     method: "PUT",
     headers: { Authorization: await autorizacao(), "Content-Type": "application/json" },
-    body: JSON.stringify({ custo_unitario: custoUnitario }),
+    body: JSON.stringify(corpoDoCusto(custoUnitario, retroativo)),
   });
   if (!resposta.ok) await falha(resposta);
 }

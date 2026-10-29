@@ -277,3 +277,30 @@ async def test_delete_sem_nada_gravado_hoje_nao_e_erro(client, pg_pool, test_sel
 
     assert resp.status_code == 200
     assert resp.json()["removido"] is False
+
+
+async def test_put_retroativo_grava_tambem_o_inicio_do_historico(client, pg_pool, test_seller):
+    """A opção da tela chega ao banco (docs/specs/2026-10-28-custo-retroativo-design.md)."""
+    from backend.analytics.custos_pg import VIGENCIA_DO_HISTORICO
+
+    user_id, sid = test_seller
+    await _vendeu(pg_pool, sid, 1, "MLB1", "Produto 1", 1, 50.0, "2026-07-25T13:00:00+00:00")
+
+    resp = client.put(
+        "/custos/MLB1", json={"custo_unitario": 12.0, "retroativo": True}, headers=_token(user_id)
+    )
+
+    assert resp.status_code == 200
+    linhas = await _linhas_de_custo(pg_pool, sid, "MLB1")
+    assert linhas[0]["vigente_desde"] == VIGENCIA_DO_HISTORICO
+    assert [float(x["custo_unitario"]) for x in linhas] == [12.0, 12.0]
+
+
+async def test_put_sem_o_campo_retroativo_continua_so_de_hoje(client, pg_pool, test_seller):
+    """Cliente antigo, que não manda o campo, mantém o comportamento de antes."""
+    user_id, sid = test_seller
+    await _vendeu(pg_pool, sid, 1, "MLB1", "Produto 1", 1, 50.0, "2026-07-25T13:00:00+00:00")
+
+    client.put("/custos/MLB1", json={"custo_unitario": 12.0}, headers=_token(user_id))
+
+    assert len(await _linhas_de_custo(pg_pool, sid, "MLB1")) == 1

@@ -31,8 +31,9 @@ type Estado = "parado" | "salvando" | "salvo" | "erro";
  *
  * CAMPO VAZIO SIGNIFICA "NÃO INFORMADO", nunca zero. Zero é uma afirmação —
  * "este produto não me custa nada" — e precisa ser digitada. Esvaziar um
- * campo que tinha valor remove a vigência de hoje, e só: o custo de ontem
- * continua valendo para os pedidos de ontem.
+ * campo que tinha valor desfaz o que foi digitado hoje (inclusive o
+ * retroativo de hoje), e só: o custo de ontem continua valendo para os
+ * pedidos de ontem.
  *
  * A ordem vem do servidor (receita decrescente, que é "classe A primeiro") e
  * não é reordenada aqui: é a ordem em que preencher muda mais a conta.
@@ -56,6 +57,12 @@ export function TabelaCustos({
   const [valores, setValores] = useState<Record<string, number | null>>(() =>
     Object.fromEntries(linhas.map((l) => [l.sku, l.custo_unitario])),
   );
+  // Ligada por padrão: quem chega com seis meses de histórico quer ver o
+  // passado com custo, e marcar produto por produto não serve para centenas
+  // deles. Só preenche o que está sem custo — nunca reescreve um período
+  // informado (docs/specs/2026-10-28-custo-retroativo-design.md).
+  const [retroativo, setRetroativo] = useState(true);
+  const [salvoNoHistorico, setSalvoNoHistorico] = useState<Record<string, boolean>>({});
 
   function marca(sku: string, estado: Estado, erro?: string) {
     setEstados((anterior) => ({ ...anterior, [sku]: estado }));
@@ -80,9 +87,10 @@ export function TabelaCustos({
       if (lido === null) {
         await removeCusto(linha.sku);
       } else {
-        await salvaCusto(linha.sku, lido);
+        await salvaCusto(linha.sku, lido, retroativo);
       }
       setValores((anterior) => ({ ...anterior, [linha.sku]: lido }));
+      setSalvoNoHistorico((anterior) => ({ ...anterior, [linha.sku]: lido !== null && retroativo }));
       marca(linha.sku, "salvo");
     } catch (e) {
       marca(linha.sku, "erro", e instanceof Error ? e.message : "Não foi possível salvar.");
@@ -90,6 +98,24 @@ export function TabelaCustos({
   }
 
   return (
+    <div>
+      {!somenteLeitura && (
+        <label className="mb-4 flex items-start gap-2.5 rounded-lg border border-line px-3 py-2.5 text-sm">
+          <input
+            type="checkbox"
+            checked={retroativo}
+            onChange={(e) => setRetroativo(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+          />
+          <span>
+            <span className="font-medium">Aplicar também às vendas anteriores sem custo</span>
+            <span className="block text-xs text-muted">
+              O custo salvo passa a valer para as vendas que ainda não têm custo. Um período em que você
+              já informou um custo nunca é alterado.
+            </span>
+          </span>
+        </label>
+      )}
     <div className="overflow-x-auto">
       <table className="w-full min-w-[42rem] text-left text-sm">
         <thead className="text-xs text-muted">
@@ -151,6 +177,12 @@ export function TabelaCustos({
                   {estado === "erro" && (
                     <p className="mt-1 text-xs text-negative">{erros[linha.sku]}</p>
                   )}
+                  {/* No momento de salvar, e não depois: um retroativo errado
+                      só se corrige no mesmo dia, então é agora que precisa
+                      aparecer. */}
+                  {estado === "salvo" && salvoNoHistorico[linha.sku] && (
+                    <p className="mt-1 text-xs text-muted">também nas vendas anteriores sem custo</p>
+                  )}
                     </>
                   )}
                 </td>
@@ -159,6 +191,7 @@ export function TabelaCustos({
           })}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }
