@@ -1,9 +1,11 @@
 # `sellers` sem escrita pelo navegador
 
-Estado: `0015` aplicada em produção em 2026-10-28 (version 20261029013222) e
-registrada no `APLICADAS.tsv`. Conferido depois: `sellers` só tem
-`sellers_select_own`, RLS ligada, 2 sellers (1 demo, 1 conectado) intactos.
-Falta CI verde e merge.
+Estado: no ar desde 2026-10-29 (#33). A `0015` foi aplicada em produção antes
+do merge (version 20261029013222) e registrada no `APLICADAS.tsv`. Conferido
+antes e depois do merge: `sellers` só tem `sellers_select_own`, RLS ligada,
+2 sellers (1 demo, 1 conectado) intactos. O Render serve o commit do merge
+(`749d977`) como `live`; a mudança é só de banco, então não há marcador de
+código para conferir.
 
 ## Por quê
 
