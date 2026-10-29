@@ -28,7 +28,11 @@ from datetime import date, timedelta
 
 import asyncpg
 
-from backend.pagamentos.prazos import meia_noite_do_vendedor, prazos_de_um_pagamento
+from backend.pagamentos.prazos import (
+    hoje_do_vendedor,
+    meia_noite_do_vendedor,
+    prazos_de_um_pagamento,
+)
 from backend.planos import DIAS_DE_TESTE, DIAS_DE_TOLERANCIA, PLANOS_COM_TESTE
 
 _log = logging.getLogger(__name__)
@@ -37,17 +41,33 @@ _PAGAMENTO_CONFIRMADO = frozenset({"PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"})
 _ASSINATURA_ENCERRADA = frozenset({"SUBSCRIPTION_DELETED", "SUBSCRIPTION_INACTIVATED"})
 _DINHEIRO_DEVOLVIDO = frozenset({"PAYMENT_REFUNDED", "PAYMENT_CHARGEBACK_REQUESTED"})
 
+# Dado pessoal de quem paga, que o Asaas pode repetir no payload. O CPF/CNPJ
+# não é guardado no SellerPulse (spec, "Contratar"), e o log de eventos não
+# pode virar a exceção: estas chaves saem antes de gravar, em qualquer nível.
+_CHAVES_PESSOAIS = frozenset(
+    {"cpfCnpj", "customerData", "creditCard", "creditCardHolderInfo", "phone", "mobilePhone"}
+)
+
+
+def sem_dados_pessoais(valor):
+    """Cópia do payload sem as chaves de dado pessoal, recursivamente."""
+    if isinstance(valor, dict):
+        return {k: sem_dados_pessoais(v) for k, v in valor.items() if k not in _CHAVES_PESSOAIS}
+    if isinstance(valor, list):
+        return [sem_dados_pessoais(v) for v in valor]
+    return valor
+
 
 def _id_de(valor) -> str | None:
     """O Asaas manda referência ora como string, ora como objeto com `id`."""
     if isinstance(valor, dict):
         return valor.get("id")
-    return valor or None
+    return valor if isinstance(valor, str) and valor else None
 
 
 async def processa(pool: asyncpg.Pool, evento: dict, *, hoje: date | None = None) -> str:
     """Aplica o evento e devolve, em uma palavra, o que aconteceu (vai pro log)."""
-    hoje = hoje or date.today()
+    hoje = hoje or hoje_do_vendedor()
     id_do_evento = evento.get("id")
     tipo = evento.get("event") or ""
     if not id_do_evento:
@@ -62,7 +82,7 @@ async def processa(pool: asyncpg.Pool, evento: dict, *, hoje: date | None = None
             """,
             id_do_evento,
             tipo,
-            json.dumps(evento),
+            json.dumps(sem_dados_pessoais(evento)),
         )
         if novo is None:
             return "repetido"
@@ -71,6 +91,8 @@ async def processa(pool: asyncpg.Pool, evento: dict, *, hoje: date | None = None
             return await _checkout_pago(conn, evento.get("checkout") or {}, hoje)
         if tipo in _PAGAMENTO_CONFIRMADO:
             return await _pagamento_confirmado(conn, evento.get("payment") or {})
+        if tipo == "SUBSCRIPTION_CREATED":
+            return await _assinatura_criada(conn, evento.get("subscription") or {})
         if tipo in _ASSINATURA_ENCERRADA:
             return await _assinatura_encerrada(conn, evento.get("subscription") or {})
         if tipo in _DINHEIRO_DEVOLVIDO:
@@ -97,17 +119,23 @@ async def _checkout_pago(conn, checkout: dict, hoje: date) -> str:
     else:
         pago_ate, acesso_ate = prazos_de_um_pagamento(hoje, registro["ciclo"])
 
+    # O `subscription` do checkout é a CONFIGURAÇÃO da assinatura (ciclo,
+    # vencimento), não ela: a documentação do evento mostra
+    # `{"cycle": ..., "nextDueDate": ...}`. O id chega depois, no
+    # `SUBSCRIPTION_CREATED` ou no primeiro pagamento. Por isso
+    # `asaas_assinatura` começa nulo — e zera numa recontratação, porque a
+    # assinatura anterior foi encerrada antes do checkout novo.
     await conn.execute(
         """
         INSERT INTO assinaturas (seller_id, plano, origem, ciclo, asaas_cliente,
-                                 asaas_assinatura, pago_ate, acesso_ate, desde)
-        VALUES ($1, $2, 'gateway', $3, $4, $5, $6, $7, now())
+                                 pago_ate, acesso_ate, desde)
+        VALUES ($1, $2, 'gateway', $3, $4, $5, $6, now())
         ON CONFLICT (seller_id) DO UPDATE SET
             plano = EXCLUDED.plano,
             origem = 'gateway',
             ciclo = EXCLUDED.ciclo,
             asaas_cliente = COALESCE(EXCLUDED.asaas_cliente, assinaturas.asaas_cliente),
-            asaas_assinatura = COALESCE(EXCLUDED.asaas_assinatura, assinaturas.asaas_assinatura),
+            asaas_assinatura = NULL,
             pago_ate = GREATEST(assinaturas.pago_ate, EXCLUDED.pago_ate),
             acesso_ate = GREATEST(assinaturas.acesso_ate, EXCLUDED.acesso_ate),
             plano_no_proximo_ciclo = NULL,
@@ -117,11 +145,29 @@ async def _checkout_pago(conn, checkout: dict, hoje: date) -> str:
         registro["plano"],
         registro["ciclo"],
         _id_de(checkout.get("customer")),
-        _id_de(checkout.get("subscription")),
         pago_ate,
         acesso_ate,
     )
     return "plano-ativado"
+
+
+async def _assinatura_criada(conn, assinatura: dict) -> str:
+    """Liga o id da assinatura ao vendedor, pelo cliente do Asaas.
+
+    É o que deixa cancelar durante o teste de 7 dias, antes de qualquer
+    pagamento trazer o id. Se chegar antes do checkout pago (fila fora de
+    ordem), não acha o cliente: o primeiro pagamento, ou a consulta ao Asaas
+    na hora de cancelar, cobrem.
+    """
+    resultado = await conn.execute(
+        """
+        UPDATE assinaturas SET asaas_assinatura = $1
+         WHERE asaas_cliente = $2 AND asaas_assinatura IS NULL AND cancelada_em IS NULL
+        """,
+        _id_de(assinatura),
+        _id_de(assinatura.get("customer")),
+    )
+    return "assinatura-ligada" if resultado.endswith(" 1") else "assinatura-sem-dono"
 
 
 async def _dono(conn, assinatura: str | None, cliente: str | None) -> asyncpg.Record | None:
@@ -159,6 +205,17 @@ async def _pagamento_confirmado(conn, pagamento: dict) -> str:
     )
     novo_plano = linha["plano_no_proximo_ciclo"] if periodo_novo else None
 
+    # O pagamento traz o id da assinatura que o checkout não trouxe: grava, se
+    # ainda faltar (e se não foi cancelada, para não ressuscitar a antiga).
+    await conn.execute(
+        """
+        UPDATE assinaturas SET asaas_assinatura = $2
+         WHERE seller_id = $1 AND asaas_assinatura IS NULL AND cancelada_em IS NULL
+           AND $2::text IS NOT NULL
+        """,
+        linha["seller_id"],
+        _id_de(pagamento.get("subscription")),
+    )
     await conn.execute(
         """
         UPDATE assinaturas SET

@@ -18,7 +18,7 @@ import logging
 import os
 import re
 import uuid
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
@@ -28,6 +28,7 @@ from backend.db import get_pool
 from backend.deps import Acesso, get_acesso, get_current_seller_id, le_plano_e_aceite, recusa
 from backend.pagamentos import asaas
 from backend.pagamentos.eventos import referencia_do_vendedor
+from backend.pagamentos.prazos import hoje_do_vendedor
 from backend.planos import DIAS_DE_TESTE, PLANOS, PLANOS_COM_TESTE, VERSAO_DOS_TERMOS
 
 _log = logging.getLogger(__name__)
@@ -152,11 +153,21 @@ class Contratacao(BaseModel):
     email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
-def _so_digitos_de_cpf_cnpj(valor: str) -> str:
-    digitos = re.sub(r"\D", "", valor)
-    if len(digitos) not in (11, 14):
-        raise recusa(422, "cpf-cnpj-invalido", "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)")
-    return digitos
+def _cpf_cnpj_normalizado(valor: str) -> str:
+    """CPF com 11 dígitos, ou CNPJ com 14 caracteres.
+
+    O CNPJ pode ter letras nas 12 primeiras posições: a Receita emite o CNPJ
+    alfanumérico desde julho de 2026, e só os 2 dígitos verificadores
+    continuam numéricos. Tirar as letras recusaria toda empresa nova.
+    """
+    limpo = re.sub(r"[^0-9A-Za-z]", "", valor).upper()
+    cpf = len(limpo) == 11 and limpo.isdigit()
+    cnpj = len(limpo) == 14 and limpo[-2:].isdigit()
+    if not (cpf or cnpj):
+        raise recusa(
+            422, "cpf-cnpj-invalido", "Informe um CPF (11 dígitos) ou um CNPJ (14 caracteres)"
+        )
+    return limpo
 
 
 def _url_de_retorno() -> str:
@@ -180,7 +191,7 @@ async def post_checkout(
     """
     if not asaas.configurado():
         raise recusa(503, "cobranca-indisponivel", "A contratação está indisponível agora")
-    cpf_cnpj = _so_digitos_de_cpf_cnpj(corpo.cpf_cnpj)
+    cpf_cnpj = _cpf_cnpj_normalizado(corpo.cpf_cnpj)
     pool = await get_pool()
 
     plano_atual, _ = await le_plano_e_aceite(pool, seller_id)
@@ -191,6 +202,12 @@ async def post_checkout(
 
     await _grava_aceite(pool, seller_id, corpo.versao_dos_termos, request)
 
+    # Quem volta depois de ficar inadimplente ainda tem a assinatura antiga
+    # viva no Asaas, gerando cobrança todo mês. Encerra ANTES do checkout novo:
+    # duas assinaturas cobrando em paralelo é exatamente o que não pode existir.
+    # Se o Asaas recusar, não abre o checkout novo.
+    await _encerra_assinatura_anterior(pool, seller_id)
+
     plano = PLANOS[corpo.plano]
     recorrente = corpo.ciclo == "mensal"
     teste = recorrente and corpo.plano in PLANOS_COM_TESTE
@@ -200,7 +217,7 @@ async def post_checkout(
             valor=plano.preco(corpo.ciclo),
             ciclo=corpo.ciclo,
             recorrente=recorrente,
-            primeira_cobranca=date.today() + timedelta(days=DIAS_DE_TESTE) if teste else None,
+            primeira_cobranca=hoje_do_vendedor() + timedelta(days=DIAS_DE_TESTE if teste else 0),
             cliente={"name": corpo.nome, "cpfCnpj": cpf_cnpj, "email": corpo.email},
             referencia=referencia_do_vendedor(seller_id),
             url_de_retorno=_url_de_retorno(),
@@ -227,19 +244,74 @@ class Troca(BaseModel):
     plano: NomeDoPlano
 
 
-async def _assinatura_recorrente(pool, seller_id: uuid.UUID):
+async def _id_da_assinatura(pool, seller_id: uuid.UUID):
+    """`(linha, id da assinatura no Asaas)` de uma assinatura mensal não cancelada.
+
+    O id pode ainda não estar gravado: o checkout pago não o traz, e no teste
+    de 7 dias nenhum pagamento chegou para trazê-lo. Aí pergunta ao Asaas pelo
+    cliente, e grava. `(linha, None)` quando não há o que mexer (plano dado à
+    mão, anual, ou já cancelado).
+    """
     async with pool.acquire() as conn:
         linha = await conn.fetchrow(
-            "SELECT plano, asaas_assinatura, pago_ate, cancelada_em FROM assinaturas "
-            "WHERE seller_id = $1",
+            "SELECT plano, ciclo, origem, asaas_cliente, asaas_assinatura, pago_ate, "
+            "cancelada_em, plano_no_proximo_ciclo FROM assinaturas WHERE seller_id = $1",
             seller_id,
         )
-    if linha is None or linha["asaas_assinatura"] is None or linha["cancelada_em"] is not None:
-        # Plano dado à mão ou anual: não há recorrência no Asaas para mexer.
+    if (
+        linha is None
+        or linha["origem"] != "gateway"
+        or linha["ciclo"] != "mensal"
+        or linha["cancelada_em"] is not None
+    ):
+        return linha, None
+    if linha["asaas_assinatura"]:
+        return linha, linha["asaas_assinatura"]
+    if not linha["asaas_cliente"]:
+        return linha, None
+    try:
+        ativas = await asaas.assinaturas_ativas_do_cliente(linha["asaas_cliente"])
+    except asaas.AsaasErro as erro:
+        _log.error("[asaas] consulta de assinaturas recusada: %s", erro)
+        raise recusa(
+            502, "gateway-recusou", "Não foi possível consultar a assinatura agora"
+        ) from erro
+    if not ativas:
+        return linha, None
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET asaas_assinatura = $2 "
+            "WHERE seller_id = $1 AND asaas_assinatura IS NULL",
+            seller_id,
+            ativas[0],
+        )
+    return linha, ativas[0]
+
+
+async def _assinatura_recorrente(pool, seller_id: uuid.UUID):
+    linha, assinatura = await _id_da_assinatura(pool, seller_id)
+    if assinatura is None:
         raise recusa(
             409, "sem-assinatura-recorrente", "Seu plano não tem cobrança mensal para alterar"
         )
-    return linha
+    return linha, assinatura
+
+
+async def _encerra_assinatura_anterior(pool, seller_id: uuid.UUID) -> None:
+    _, assinatura = await _id_da_assinatura(pool, seller_id)
+    if assinatura is None:
+        return
+    try:
+        await asaas.remover_assinatura(assinatura)
+    except asaas.AsaasErro as erro:
+        _log.error("[asaas] assinatura anterior nao encerrada: %s", erro)
+        raise recusa(502, "gateway-recusou", "Não foi possível abrir o pagamento agora") from erro
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET cancelada_em = now(), "
+            "acesso_ate = LEAST(acesso_ate, pago_ate) WHERE seller_id = $1",
+            seller_id,
+        )
 
 
 @router.post("/plano")
@@ -250,19 +322,21 @@ async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)
     do mês corrente, no upgrade, fica por nossa conta.
     """
     pool = await get_pool()
-    linha = await _assinatura_recorrente(pool, acesso.seller_id)
+    linha, assinatura = await _assinatura_recorrente(pool, acesso.seller_id)
     novo = PLANOS[corpo.plano]
     atual = PLANOS[linha["plano"]]
-    if novo.nome == atual.nome:
+    if novo.nome == atual.nome and linha["plano_no_proximo_ciclo"] is None:
         raise recusa(409, "mesmo-plano", "Esse já é o seu plano")
+    # Escolher o plano atual com um downgrade agendado desfaz o downgrade: o
+    # valor volta ao do plano atual, e nada muda no próximo ciclo.
 
     try:
-        await asaas.mudar_valor_da_assinatura(linha["asaas_assinatura"], novo.preco_mensal)
+        await asaas.mudar_valor_da_assinatura(assinatura, novo.preco_mensal)
     except asaas.AsaasErro as erro:
         _log.error("[asaas] troca de plano recusada: %s", erro)
         raise recusa(502, "gateway-recusou", "Não foi possível trocar o plano agora") from erro
 
-    upgrade = novo.preco_mensal > atual.preco_mensal
+    upgrade = novo.preco_mensal >= atual.preco_mensal
     async with pool.acquire() as conn:
         if upgrade:
             await conn.execute(
@@ -284,12 +358,17 @@ async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)
 
 
 @router.post("/cancelar")
-async def post_cancelar(acesso: Acesso = Depends(get_acesso)) -> dict:
-    """Encerra a recorrência. O acesso vale até o fim do período já pago."""
+async def post_cancelar(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
+    """Encerra a recorrência. O acesso vale até o fim do período já pago.
+
+    Não exige plano ativo nem os termos vigentes: o inadimplente, que já
+    perdeu o acesso, é justamente quem mais precisa conseguir parar a
+    cobrança.
+    """
     pool = await get_pool()
-    linha = await _assinatura_recorrente(pool, acesso.seller_id)
+    linha, assinatura = await _assinatura_recorrente(pool, seller_id)
     try:
-        await asaas.remover_assinatura(linha["asaas_assinatura"])
+        await asaas.remover_assinatura(assinatura)
     except asaas.AsaasErro as erro:
         _log.error("[asaas] cancelamento recusado: %s", erro)
         raise recusa(502, "gateway-recusou", "Não foi possível cancelar agora") from erro
@@ -299,6 +378,6 @@ async def post_cancelar(acesso: Acesso = Depends(get_acesso)) -> dict:
         await conn.execute(
             "UPDATE assinaturas SET acesso_ate = LEAST(acesso_ate, pago_ate), "
             "plano_no_proximo_ciclo = NULL, cancelada_em = now() WHERE seller_id = $1",
-            acesso.seller_id,
+            seller_id,
         )
     return {"acesso_ate": _iso(linha["pago_ate"])}

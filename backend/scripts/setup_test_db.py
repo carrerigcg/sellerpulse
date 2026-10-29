@@ -13,7 +13,7 @@ vigencia), `0010_visitas_do_anuncio.sql` (`item_visits` e o tipo de job
 (so dado; no banco vazio e no-op), `0016_planos_e_aceite.sql` (`assinaturas`
 e `aceites_de_termos`) e `0018_cobranca.sql` (prazo do acesso, `checkouts` e
 `eventos_do_gateway`). As migrations 0002, 0003, 0005, 0009, 0011, 0013, 0015,
-0017 e 0019 NAO sao aplicadas:
+0017 NAO sao aplicadas:
 dependem de `auth.uid()`, funcao exclusiva do ambiente Supabase (a 0015 so
 apaga uma policy da 0002, que aqui nao existe). O isolamento entre tenants que os testes exercitam e o filtro
 explicito por `seller_id` nas queries, nao a RLS.

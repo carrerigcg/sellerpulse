@@ -27,6 +27,12 @@ def fim_do_periodo(inicio: date, ciclo: str) -> date:
     return inicio + relativedelta(months=meses)
 
 
+def hoje_do_vendedor() -> date:
+    """O "hoje" no fuso do vendedor. O Render roda em UTC, e entre 21h e
+    meia-noite de Brasília `date.today()` já seria amanhã."""
+    return datetime.now(_TZ_VENDEDOR).date()
+
+
 def meia_noite_do_vendedor(dia: date) -> datetime:
     """O começo do dia no fuso do vendedor: o dia é o dele, não o UTC."""
     return datetime.combine(dia, time.min, tzinfo=_TZ_VENDEDOR)

@@ -45,3 +45,13 @@ create table eventos_do_gateway (
     payload      jsonb not null,
     recebido_em  timestamptz not null default now()
 );
+
+-- RLS ligada AQUI, e nao numa migration separada como as outras: tabela nova
+-- em `public` nasce com todos os privilegios para `anon` e `authenticated`, e
+-- entre duas migrations as duas tabelas ficariam abertas pela chave publica.
+-- Ligar a RLS sem policy roda tambem no banco de teste (so policy depende de
+-- `auth.uid()`). Nenhuma policy: so o backend, que conecta como dono, le e
+-- escreve. As colunas novas de `assinaturas` ja estao sob a policy de leitura
+-- da 0017.
+alter table checkouts enable row level security;
+alter table eventos_do_gateway enable row level security;
