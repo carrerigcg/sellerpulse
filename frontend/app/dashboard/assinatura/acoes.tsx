@@ -70,7 +70,7 @@ export function AcoesDaAssinatura({
       <section className="mt-6 rounded-xl border border-line p-5">
         <h2 className="text-sm font-semibold">Trocar de plano</h2>
         <ul className="mt-3 space-y-4">
-          {PLANOS.filter((p) => p !== plano).map((p) => {
+          {PLANOS.filter((p) => p !== plano && p !== proximoPlano).map((p) => {
             const upgrade = PRECOS_MENSAIS[p] > PRECOS_MENSAIS[plano];
             const efeito = upgrade
               ? `Libera na hora. A partir da próxima cobrança, ${formatarPreco(PRECOS_MENSAIS[p])} por mês.`
@@ -164,7 +164,7 @@ export function AcoesDaAssinatura({
       </section>
 
       {aviso && (
-        <p role="status" className="mt-4 rounded-lg bg-positive/10 px-3 py-2 text-sm text-positive">
+        <p role="status" className="mt-4 rounded-lg border border-positive/40 bg-positive/10 px-3 py-2 text-sm text-ink">
           {aviso}
         </p>
       )}

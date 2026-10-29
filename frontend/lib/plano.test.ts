@@ -116,4 +116,28 @@ describe("datas da assinatura", () => {
       }),
     ).toBe("/planos?motivo=vencido");
   });
+
+  it("quem cancelou ou tinha o anual vai com o motivo encerrado, não vencido", () => {
+    const base = {
+      origem: "gateway" as const,
+      pago_ate: "2026-11-29T03:00:00+00:00",
+      acesso_ate: "2026-11-29T03:00:00+00:00",
+      plano_no_proximo_ciclo: null,
+      recorrente: false,
+    };
+    expect(
+      destinoSemAcesso({
+        ...ESSENCIAL,
+        plano: null,
+        assinatura: { ...base, ciclo: "mensal", cancelada: true },
+      }),
+    ).toBe("/planos?motivo=encerrado");
+    expect(
+      destinoSemAcesso({
+        ...ESSENCIAL,
+        plano: null,
+        assinatura: { ...base, ciclo: "anual", cancelada: false },
+      }),
+    ).toBe("/planos?motivo=encerrado");
+  });
 });

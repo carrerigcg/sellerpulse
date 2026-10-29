@@ -95,8 +95,8 @@ export default async function AssinaturaPage() {
       )}
       {assinatura?.origem === "gateway" && assinatura.ciclo === "anual" && (
         <p className="mt-6 text-sm text-muted">
-          O plano anual não renova sozinho. Perto do fim, você contrata de novo pela página de
-          planos.
+          O plano anual não renova sozinho. Quando ele terminar, você contrata de novo pela
+          página de planos.
         </p>
       )}
     </>

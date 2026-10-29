@@ -55,10 +55,15 @@ do lançamento (R$ 59,90 / 108,92 / 179,59), com o desconto ("−17%", "−27%",
   que já foi cobrado.** Anunciar um preço anterior que nunca existiu é
   propaganda enganosa (CDC, art. 37). Por isso, esses números têm que ser
   mesmo o preço futuro.
-- **"Quem assina agora mantém este preço enquanto a assinatura estiver
-  ativa"** é uma promessa ao cliente. Ela é verdade pelo jeito que a cobrança
-  funciona: a assinatura no Asaas guarda o valor do dia em que foi criada.
-  Subir o preço depois vale só para quem assina depois.
+- **"No plano mensal, você mantém este preço enquanto continuar no mesmo
+  plano"** é uma promessa ao cliente. Ela é verdade pelo jeito que a cobrança
+  funciona: a assinatura mensal no Asaas guarda o valor do dia em que foi
+  criada. Não vale para o anual (pagamento único, recontratado pelo preço do
+  dia) nem para a troca de plano (que usa a tabela vigente), e o texto diz
+  isso.
+- **Antes de subir os preços**, a tela "Minha assinatura" precisa mostrar o
+  valor que a pessoa de fato paga, e não o da tabela. Hoje os dois são iguais;
+  depois do aumento não serão.
 
 Quem cobra é `backend/planos.py`: o checkout é montado com esses valores, e
 o valor nunca vem do navegador. A vitrine mostra os mesmos números a partir de
@@ -192,8 +197,16 @@ vê-los num evento de verdade:
 - **Datas na tela:** o prazo é a meia-noite em que ele ACABA. "Pago até" e
   "vale até" mostram o dia anterior; "próxima cobrança" mostra o próprio dia.
 - **CNPJ alfanumérico aceito** (Receita, julho de 2026).
-- **Login devolve a pessoa para onde ela ia** (`?proximo=`, só caminho do
-  próprio site).
+- **Login devolve a pessoa para onde ela ia** (`?proximo=`). A conferência é
+  pela origem do endereço resolvido, e não pelo começo do texto: o navegador
+  remove TAB e quebra de linha, e `/<TAB>/golpe.dev` viraria `//golpe.dev`.
+- **"Recorrente" na tela não depende do id da assinatura** (mensal pelo Asaas
+  e não cancelado): no teste de 7 dias o id ainda não chegou, e o "Cancelar"
+  sumiria.
+- **Pagamento atrasado de uma assinatura antiga não grava o id dela** na
+  assinatura nova (o vencimento dele é anterior ao começo da nova).
+- **Quem cancelou ou tinha o anual** sai do painel com "o seu plano terminou",
+  e não com "o pagamento não foi confirmado".
 
 ## Fora desta spec
 

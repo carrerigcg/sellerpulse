@@ -52,7 +52,12 @@ async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_
             """
             SELECT origem, ciclo, pago_ate, acesso_ate, plano_no_proximo_ciclo,
                    cancelada_em IS NOT NULL AS cancelada,
-                   asaas_assinatura IS NOT NULL AND cancelada_em IS NULL AS recorrente
+                   -- Mensal pelo Asaas e não cancelado: tem o que trocar e cancelar,
+                   -- MESMO sem o id gravado (no teste de 7 dias ele ainda não
+                   -- chegou; `_id_da_assinatura` pergunta ao Asaas). Depender do id
+                   -- escondia o "Cancelar" de quem estava no teste.
+                   origem = 'gateway' AND ciclo = 'mensal' AND cancelada_em IS NULL
+                       AS recorrente
               FROM assinaturas WHERE seller_id = $1
             """,
             seller_id,

@@ -100,8 +100,10 @@ export function FormularioDeAssinatura({
                 <span className="font-medium">{NOMES_DOS_PLANOS[p]}</span>
               </span>
               <span className="mt-1 text-xs text-muted">
-                <s className="mr-1">{formatarPreco(PRECOS_DEPOIS_DO_LANCAMENTO[p])}</s>
                 <span className="font-medium text-ink">{formatarPreco(PRECOS_MENSAIS[p])}</span>/mês
+                <span className="block">
+                  depois do lançamento: <s>{formatarPreco(PRECOS_DEPOIS_DO_LANCAMENTO[p])}</s>
+                </span>
               </span>
             </label>
           ))}

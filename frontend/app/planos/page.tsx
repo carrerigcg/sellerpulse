@@ -18,7 +18,9 @@ export const metadata: Metadata = { title: "Planos · SellerPulse" };
 export default async function PlanosPage({ searchParams }: PageProps<"/planos">) {
   // O layout do painel manda para cá quem teve plano e ele venceu. Sem este
   // aviso, a pessoa cai numa vitrine sem saber por que saiu do painel.
-  const venceu = (await searchParams).motivo === "vencido";
+  const motivo = (await searchParams).motivo;
+  const venceu = motivo === "vencido";
+  const encerrou = motivo === "encerrado";
   return (
     <main className="min-h-screen bg-bg px-4 py-10 text-ink sm:px-6">
       <div className="mx-auto max-w-5xl">
@@ -40,6 +42,19 @@ export default async function PlanosPage({ searchParams }: PageProps<"/planos">)
                 e-mail
               </a>
               .
+            </p>
+          </div>
+        )}
+
+        {encerrou && (
+          <div
+            role="status"
+            className="mt-8 rounded-xl border border-line bg-surface px-4 py-3 text-sm leading-relaxed"
+          >
+            <p className="font-semibold">O seu plano terminou.</p>
+            <p className="mt-1 text-muted">
+              O painel voltou a mostrar só a demonstração. Os seus dados continuam guardados:
+              assine de novo e tudo volta como estava.
             </p>
           </div>
         )}

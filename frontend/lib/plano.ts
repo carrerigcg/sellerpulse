@@ -55,9 +55,14 @@ export function libera(acesso: Acesso, recurso: Recurso): boolean {
  */
 export function destinoSemAcesso(
   acesso: Acesso,
-): "/planos" | "/planos?motivo=vencido" | "/aceite" | null {
+): "/planos" | "/planos?motivo=vencido" | "/planos?motivo=encerrado" | "/aceite" | null {
   if (acesso.plano === null) {
-    return acesso.assinatura?.acesso_ate ? "/planos?motivo=vencido" : "/planos";
+    const assinatura = acesso.assinatura;
+    if (!assinatura?.acesso_ate) return "/planos";
+    // "Vencido" é só o mensal que não foi pago. Quem cancelou, ou tinha o
+    // anual (que não renova), não deixou de pagar nada: o plano terminou.
+    const naoPagou = assinatura.ciclo === "mensal" && !assinatura.cancelada;
+    return naoPagou ? "/planos?motivo=vencido" : "/planos?motivo=encerrado";
   }
   if (!acesso.termos.aceito) return "/aceite";
   return null;

@@ -80,7 +80,7 @@ const PLANOS: Plano[] = [
     chamada: "Para quem quer o máximo do produto e alguém do lado.",
     itens: ["Tudo do Exclusive", "Gerente de conta dedicado"],
     depois: {
-      titulo: "Chegando antes do lançamento",
+      titulo: "Em construção para o Premium",
       itens: [
         "Pergunte sobre a sua loja a uma IA (Claude, ChatGPT)",
         "Alertas de margem negativa e anúncio parado",
@@ -96,13 +96,15 @@ export function CartoesDePlanos() {
   return (
     <>
       {/* A promessa de manter o preço é verdade pelo jeito que a cobrança
-          funciona: a assinatura no Asaas guarda o valor do dia em que foi
-          criada, e um aumento de preço só vale para quem assina depois. Se
-          isso mudar, este texto muda junto. */}
+          funciona: a assinatura mensal no Asaas guarda o valor do dia em que
+          foi criada, e um aumento só vale para quem assina depois. Ela NÃO
+          vale para o anual (pagamento único, que se recontrata pelo preço do
+          dia) nem para a troca de plano (que usa a tabela vigente) — por isso
+          o texto diz "mensal" e "mesmo plano". */}
       <div className="mb-8 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 text-sm text-ink">
         <span className="font-semibold">Preço de lançamento:</span> até {maiorDesconto}% a menos
-        para os primeiros assinantes. Quem assina agora mantém este preço enquanto a assinatura
-        estiver ativa.
+        para quem assina agora. No plano mensal, você mantém este preço enquanto continuar no
+        mesmo plano.
       </div>
       <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
         {PLANOS.map((plano) => (
@@ -132,11 +134,12 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       <h3 className="text-xl font-semibold">{plano.nome}</h3>
       <p className="mt-1 text-sm text-muted">{plano.chamada}</p>
       <div className="mt-4 flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted">
-          <span className="sr-only">Depois do lançamento: </span>
-          <s>{formatarPreco(PRECOS_DEPOIS_DO_LANCAMENTO[plano.chave])}</s>
+        {/* O rótulo fica VISÍVEL: sem ele, o riscado se lê como um "de" que
+            já foi cobrado, e é exatamente isso que o CDC (art. 37) proíbe. */}
+        <span className="text-xs text-muted">
+          depois do lançamento: <s>{formatarPreco(PRECOS_DEPOIS_DO_LANCAMENTO[plano.chave])}</s>
         </span>
-        <span className="rounded-full bg-positive/10 px-2 py-0.5 text-xs font-semibold text-positive">
+        <span className="rounded-full border border-positive/40 bg-positive/10 px-2 py-0.5 text-xs font-semibold text-ink">
           −{descontoDeLancamento(plano.chave)}%
         </span>
       </div>

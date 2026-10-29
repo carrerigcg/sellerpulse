@@ -790,3 +790,36 @@ async def test_cnpj_alfanumerico_e_aceito(client, sem_plano, asaas_falso):
     )
     assert resp.status_code == 201
     assert asaas_falso.pedidos[0][2]["customerData"]["cpfCnpj"] == "12ABC34501DE35"
+
+
+async def test_no_teste_de_7_dias_a_assinatura_ja_aparece_como_recorrente(
+    client, pg_pool, sem_plano
+):
+    """Sem o id gravado ainda, o "Cancelar" não pode sumir da tela."""
+    user_id, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id)
+    await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje_do_vendedor())
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO aceites_de_termos (seller_id, versao) VALUES ($1, $2)",
+            seller_id,
+            VERSAO_DOS_TERMOS,
+        )
+    assinatura = client.get("/conta/acesso", headers=_auth(user_id)).json()["assinatura"]
+    assert assinatura["recorrente"] is True
+
+
+async def test_pagamento_atrasado_da_assinatura_antiga_nao_grava_o_id_antigo(pg_pool, sem_plano):
+    _, seller_id = sem_plano
+    hoje = hoje_do_vendedor()
+    await _checkout_criado(pg_pool, seller_id, plano="essencial")
+    await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje)
+
+    antigo = _pagamento(
+        "evt_velho", hoje - timedelta(days=32), tipo="PAYMENT_RECEIVED", assinatura="sub_velha"
+    )
+    await eventos.processa(pg_pool, antigo)
+    assert (await _assinatura(pg_pool, seller_id))["asaas_assinatura"] is None
+
+    await eventos.processa(pg_pool, _pagamento("evt_novo", hoje, assinatura="sub_nova"))
+    assert (await _assinatura(pg_pool, seller_id))["asaas_assinatura"] == "sub_nova"

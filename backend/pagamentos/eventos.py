@@ -139,7 +139,10 @@ async def _checkout_pago(conn, checkout: dict, hoje: date) -> str:
             pago_ate = GREATEST(assinaturas.pago_ate, EXCLUDED.pago_ate),
             acesso_ate = GREATEST(assinaturas.acesso_ate, EXCLUDED.acesso_ate),
             plano_no_proximo_ciclo = NULL,
-            cancelada_em = NULL
+            cancelada_em = NULL,
+            -- Começo da assinatura NOVA: é por ele que um pagamento atrasado da
+            -- antiga é reconhecido e não grava o id dela aqui.
+            desde = now()
         """,
         registro["seller_id"],
         registro["plano"],
@@ -206,15 +209,21 @@ async def _pagamento_confirmado(conn, pagamento: dict) -> str:
     novo_plano = linha["plano_no_proximo_ciclo"] if periodo_novo else None
 
     # O pagamento traz o id da assinatura que o checkout não trouxe: grava, se
-    # ainda faltar (e se não foi cancelada, para não ressuscitar a antiga).
+    # ainda faltar e se não foi cancelada. E só se o pagamento é da assinatura
+    # ATUAL: o `PAYMENT_RECEIVED` atrasado (até 32 dias, no cartão) de uma
+    # assinatura antiga, de quem cancelou e recontratou, vence antes do começo
+    # da nova, e gravaria o id antigo aqui — o cancelamento passaria a mirar
+    # numa assinatura que já não existe, e a nova seguiria cobrando.
     await conn.execute(
         """
         UPDATE assinaturas SET asaas_assinatura = $2
          WHERE seller_id = $1 AND asaas_assinatura IS NULL AND cancelada_em IS NULL
            AND $2::text IS NOT NULL
+           AND $3 >= (desde AT TIME ZONE 'America/Sao_Paulo')::date
         """,
         linha["seller_id"],
         _id_de(pagamento.get("subscription")),
+        vencimento,
     )
     await conn.execute(
         """
