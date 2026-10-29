@@ -105,6 +105,42 @@ def extrai_taxa_e_frete(bruto: dict) -> tuple[float, float]:
     return round(taxa, 2), round(frete, 2)
 
 
+# Identificadores do meio de pagamento do comprador que vêm em `payments[]`.
+# Nenhuma análise os usa (do `raw_json` só se lê `pack_id` e `shipping.id`), e
+# são o dado mais sensível da base. Saem antes de gravar, pela LGPD
+# (minimização, art. 6º, III). Os VALORES do pagamento ficam: é com eles que
+# se audita número. A migration 0014 aplicou o mesmo corte ao que já estava
+# guardado; mudar esta lista exige uma migration nova para o passado.
+# Ver docs/specs/2026-10-28-minimizacao-pagamentos-design.md.
+CAMPOS_DE_PAGAMENTO_DESCARTADOS = (
+    "card_id",
+    "authorization_code",
+    "payer_id",
+    "issuer_id",
+    "activation_uri",
+    "atm_transfer_reference",
+)
+
+
+def minimiza_pedido(bruto: dict) -> dict:
+    """O pedido como deve ser guardado: sem os identificadores de pagamento.
+
+    Devolve uma cópia; o `bruto` de quem chamou não muda.
+    """
+    pagamentos = bruto.get("payments")
+    if not isinstance(pagamentos, list):
+        return bruto
+    return {
+        **bruto,
+        "payments": [
+            {k: v for k, v in p.items() if k not in CAMPOS_DE_PAGAMENTO_DESCARTADOS}
+            if isinstance(p, dict)
+            else p
+            for p in pagamentos
+        ],
+    }
+
+
 def _id_do_envio(bruto: dict) -> int | None:
     """O envio do pedido, que e onde o frete do vendedor mora (`frete_pg.py`).
 
@@ -279,7 +315,7 @@ async def _persiste_pedido(
             taxa,
             frete,
             (bruto.get("buyer") or {}).get("id"),
-            json.dumps(bruto),
+            json.dumps(minimiza_pedido(bruto)),
             _id_do_envio(bruto),
         )
         # DELETE + INSERT em vez de upsert item a item: se o pedido perdeu
