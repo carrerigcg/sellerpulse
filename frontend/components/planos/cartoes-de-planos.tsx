@@ -1,9 +1,14 @@
+import Link from "next/link";
+
+import { WHATSAPP_DE_CONTATO, linkDeEmail, linkDeWhatsapp } from "@/lib/contato";
+import type { NomeDoPlano } from "@/lib/plano";
 import {
-  EMAIL_DE_CONTATO,
-  WHATSAPP_DE_CONTATO,
-  linkDeEmail,
-  linkDeWhatsapp,
-} from "@/lib/contato";
+  DIAS_DE_TESTE,
+  PLANO_COM_TESTE,
+  PRECOS_MENSAIS,
+  formatarPreco,
+  precoAnual,
+} from "@/lib/precos";
 
 /**
  * Os três planos, em cartões. Usado pela página `/planos` e pela seção de
@@ -15,15 +20,14 @@ import {
  * prometer o que o produto não entrega. O Exclusive é o recomendado e o mais
  * destacado, no centro (spec `docs/specs/2026-10-28-planos-e-acesso-design.md`).
  *
- * Preços decididos pelo dono em 2026-10-29, com entrada baixa de propósito
- * para trazer os primeiros clientes e feedback. `preco: null` volta a mostrar
- * "Sob consulta", e não um número que ninguém escolheu.
+ * Os preços moram em `lib/precos.ts`, que o backend confere contra o que ele
+ * cobra. "Assinar" leva à contratação (`/assinar`); o contato fica para quem
+ * quer tirar dúvida antes.
  */
 
 type Plano = {
+  chave: NomeDoPlano;
   nome: string;
-  /** Por mês, em reais. `null` = ainda não definido. */
-  preco: number | null;
   chamada: string;
   itens: string[];
   depois?: { titulo: string; itens: string[] };
@@ -32,8 +36,8 @@ type Plano = {
 
 const PLANOS: Plano[] = [
   {
+    chave: "essencial",
     nome: "Essencial",
-    preco: 49.92,
     chamada: "Para saber quanto sobra de cada venda.",
     itens: [
       "Resumo da loja",
@@ -46,8 +50,8 @@ const PLANOS: Plano[] = [
     ],
   },
   {
+    chave: "exclusive",
     nome: "Exclusive",
-    preco: 79.97,
     chamada: "O painel inteiro, para decidir com a loja toda à vista.",
     destaque: true,
     itens: [
@@ -63,8 +67,8 @@ const PLANOS: Plano[] = [
     ],
   },
   {
+    chave: "premium",
     nome: "Premium",
-    preco: 139.95,
     chamada: "Para quem quer o máximo do produto e alguém do lado.",
     itens: ["Tudo do Exclusive", "Gerente de conta dedicado"],
     depois: {
@@ -89,16 +93,9 @@ export function CartoesDePlanos() {
   );
 }
 
-// Com centavos: os preços são quebrados de propósito (decisão do dono,
-// 2026-10-29), e arredondar R$ 49,92 para R$ 50 mostraria outro preço.
-const brl = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 2,
-});
-
 function CartaoDoPlano({ plano }: { plano: Plano }) {
-  const mensagem = `Olá! Quero contratar o plano ${plano.nome} do SellerPulse.`;
+  const mensagem = `Olá! Tenho uma dúvida sobre o plano ${plano.nome} do SellerPulse.`;
+  const temTeste = plano.chave === PLANO_COM_TESTE;
   return (
     <section
       className={`relative flex flex-col rounded-2xl border p-6 ${
@@ -115,15 +112,19 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       <h3 className="text-xl font-semibold">{plano.nome}</h3>
       <p className="mt-1 text-sm text-muted">{plano.chamada}</p>
       <p className="mt-4">
-        {plano.preco === null ? (
-          <span className="text-lg font-semibold">Sob consulta</span>
-        ) : (
-          <>
-            <span className="text-3xl font-semibold tracking-tight">{brl.format(plano.preco)}</span>
-            <span className="text-sm text-muted">/mês</span>
-          </>
-        )}
+        <span className="text-3xl font-semibold tracking-tight">
+          {formatarPreco(PRECOS_MENSAIS[plano.chave])}
+        </span>
+        <span className="text-sm text-muted">/mês</span>
       </p>
+      <p className="mt-1 text-xs text-muted">
+        ou {formatarPreco(precoAnual(plano.chave))} por ano (2 meses grátis)
+      </p>
+      {temTeste && (
+        <p className="mt-2 inline-flex w-fit rounded-full bg-highlight-soft px-2.5 py-0.5 text-xs font-semibold text-ink">
+          {DIAS_DE_TESTE} dias grátis no mensal
+        </p>
+      )}
 
       <ul className="mt-5 flex-1 space-y-2 text-sm">
         {plano.itens.map((item) => (
@@ -150,31 +151,28 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       )}
 
       <div className="mt-6 flex flex-col gap-2">
-        {WHATSAPP_DE_CONTATO && (
-          <a
-            href={linkDeWhatsapp(WHATSAPP_DE_CONTATO, mensagem)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
-              plano.destaque
-                ? "bg-accent text-white hover:bg-accent-hover"
-                : "border border-line hover:bg-surface"
-            }`}
-          >
-            Quero o {plano.nome} pelo WhatsApp
-          </a>
-        )}
-        <a
-          href={linkDeEmail(`Quero o plano ${plano.nome}`)}
+        <Link
+          href={`/assinar?plano=${plano.chave}`}
           className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
-            plano.destaque && !WHATSAPP_DE_CONTATO
+            plano.destaque
               ? "bg-accent text-white hover:bg-accent-hover"
               : "border border-line hover:bg-surface"
           }`}
         >
-          {WHATSAPP_DE_CONTATO ? "Ou por e-mail" : `Quero o ${plano.nome}`}
+          {temTeste ? `Testar ${DIAS_DE_TESTE} dias grátis` : `Assinar o ${plano.nome}`}
+        </Link>
+        <a
+          href={
+            WHATSAPP_DE_CONTATO
+              ? linkDeWhatsapp(WHATSAPP_DE_CONTATO, mensagem)
+              : linkDeEmail(`Dúvida sobre o plano ${plano.nome}`)
+          }
+          target={WHATSAPP_DE_CONTATO ? "_blank" : undefined}
+          rel={WHATSAPP_DE_CONTATO ? "noopener noreferrer" : undefined}
+          className="text-center text-xs text-muted underline hover:text-accent"
+        >
+          Tirar dúvidas {WHATSAPP_DE_CONTATO ? "no WhatsApp" : "por e-mail"}
         </a>
-        <span className="sr-only">E-mail: {EMAIL_DE_CONTATO}</span>
       </div>
     </section>
   );

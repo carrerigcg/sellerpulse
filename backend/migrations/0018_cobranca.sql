@@ -15,6 +15,10 @@ alter table assinaturas
     add column ciclo                  text check (ciclo in ('mensal', 'anual')),
     add column asaas_cliente          text,
     add column asaas_assinatura       text unique,
+    -- Cancelou: a recorrencia acabou, e o acesso vai ate `pago_ate`, sem a
+    -- tolerancia. Um pagamento atrasado de periodo antigo que chegue depois
+    -- nao devolve a tolerancia a quem cancelou.
+    add column cancelada_em           timestamptz,
     -- Downgrade vale no proximo ciclo: guardado aqui ate o proximo pagamento.
     add column plano_no_proximo_ciclo text
         check (plano_no_proximo_ciclo in ('essencial', 'exclusive', 'premium'));

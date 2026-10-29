@@ -31,7 +31,6 @@ TOKEN_DO_WEBHOOK = "token-do-webhook-de-teste"
 HOJE = date(2026, 11, 2)
 
 
-
 @pytest.fixture(autouse=True)
 async def _eventos_limpos(pg_pool):
     """`eventos_do_gateway` não é de nenhum vendedor, então o teardown dos
@@ -127,11 +126,10 @@ def test_o_anual_custa_dez_mensais():
 def test_os_precos_da_vitrine_batem_com_os_do_backend():
     """A vitrine mostra um número; o checkout cobra outro. Isso não pode divergir."""
     raiz = pathlib.Path(__file__).resolve().parents[2]
-    cartoes = (raiz / "frontend/components/planos/cartoes-de-planos.tsx").read_text(
-        encoding="utf-8"
-    )
-    na_vitrine = dict(re.findall(r'nome: "(\w+)",\s*preco: ([\d.]+),', cartoes))
-    assert {nome.lower(): Decimal(preco) for nome, preco in na_vitrine.items()} == {
+    precos = (raiz / "frontend/lib/precos.ts").read_text(encoding="utf-8")
+    bloco = precos[precos.index("PRECOS_MENSAIS") : precos.index("};")]
+    na_vitrine = dict(re.findall(r"(\w+): ([\d.]+),", bloco))
+    assert {nome: Decimal(preco) for nome, preco in na_vitrine.items()} == {
         nome: plano.preco_mensal for nome, plano in PLANOS.items()
     }
 
@@ -568,5 +566,38 @@ async def test_cancelar_mantem_o_acesso_ate_o_fim_do_periodo_pago(
     resp = client.post("/conta/cancelar", headers=_auth(user_id))
     assert resp.status_code == 200
     assert asaas_falso.pedidos == [("DELETE", "/v3/subscriptions/sub_9", None)]
+    linha = await _assinatura(pg_pool, seller_id)
+    assert linha["acesso_ate"] == linha["pago_ate"]
+
+
+async def test_cancelada_aparece_e_nao_deixa_trocar_nem_cancelar_de_novo(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    await _assinante(pg_pool, seller_id)
+    client.post("/conta/cancelar", headers=_auth(user_id))
+
+    assinatura = client.get("/conta/acesso", headers=_auth(user_id)).json()["assinatura"]
+    assert (assinatura["cancelada"], assinatura["recorrente"]) == (True, False)
+    assert client.post("/conta/cancelar", headers=_auth(user_id)).status_code == 409
+    resp = client.post("/conta/plano", json={"plano": "premium"}, headers=_auth(user_id))
+    assert resp.status_code == 409
+
+
+async def test_pagamento_atrasado_nao_devolve_a_tolerancia_a_quem_cancelou(pg_pool, sem_plano):
+    _, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id)
+    await eventos.processa(pg_pool, _checkout_pago(), hoje=HOJE)
+    primeiro = HOJE + timedelta(days=7)
+    await eventos.processa(pg_pool, _pagamento("evt_p1", primeiro))
+    cancelamento = {
+        "id": "evt_del",
+        "event": "SUBSCRIPTION_DELETED",
+        "subscription": {"id": "sub_1"},
+    }
+    await eventos.processa(pg_pool, cancelamento)
+
+    await eventos.processa(pg_pool, _pagamento("evt_p1r", primeiro, tipo="PAYMENT_RECEIVED"))
+
     linha = await _assinatura(pg_pool, seller_id)
     assert linha["acesso_ate"] == linha["pago_ate"]

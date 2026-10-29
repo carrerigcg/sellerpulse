@@ -89,3 +89,70 @@ export async function aceitarTermos(versao: string): Promise<void> {
   }
   if (!resposta.ok) throw new Error("Não foi possível registrar o aceite. Tente de novo.");
 }
+
+/** O que o backend devolve ao recusar: o `codigo` decide a mensagem. */
+async function mensagemDeRecusa(resposta: Response, padrao: string): Promise<string> {
+  try {
+    const corpo = await resposta.json();
+    const detalhe = corpo?.detail;
+    if (typeof detalhe?.mensagem === "string") return detalhe.mensagem;
+    // 422 do FastAPI (campo inválido) vem como lista.
+    if (Array.isArray(detalhe)) return "Confira os dados do formulário.";
+  } catch {
+    // corpo que não é JSON: fica a mensagem padrão
+  }
+  return padrao;
+}
+
+export type Contratacao = {
+  plano: "essencial" | "exclusive" | "premium";
+  ciclo: "mensal" | "anual";
+  versao_dos_termos: string;
+  nome: string;
+  cpf_cnpj: string;
+  email: string;
+};
+
+/** Aceita os termos e abre o checkout do Asaas. Devolve o link para pagar. */
+export async function contratar(dados: Contratacao): Promise<string> {
+  const resposta = await fetch(`${BASE}/conta/checkout`, {
+    method: "POST",
+    headers: { ...(await autorizacao()), "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  if (!resposta.ok) {
+    throw new Error(await mensagemDeRecusa(resposta, "Não foi possível abrir o pagamento."));
+  }
+  return (await resposta.json()).link as string;
+}
+
+export async function trocarPlano(plano: Contratacao["plano"]): Promise<void> {
+  const resposta = await fetch(`${BASE}/conta/plano`, {
+    method: "POST",
+    headers: { ...(await autorizacao()), "Content-Type": "application/json" },
+    body: JSON.stringify({ plano }),
+  });
+  if (!resposta.ok) {
+    throw new Error(await mensagemDeRecusa(resposta, "Não foi possível trocar o plano."));
+  }
+}
+
+export async function cancelarAssinatura(): Promise<void> {
+  const resposta = await fetch(`${BASE}/conta/cancelar`, {
+    method: "POST",
+    headers: await autorizacao(),
+  });
+  if (!resposta.ok) {
+    throw new Error(await mensagemDeRecusa(resposta, "Não foi possível cancelar."));
+  }
+}
+
+/** O plano já chegou? Usado na volta do pagamento, enquanto o webhook não vem. */
+export async function temPlanoAtivo(): Promise<boolean> {
+  const resposta = await fetch(`${BASE}/conta/acesso`, {
+    headers: await autorizacao(),
+    cache: "no-store",
+  });
+  if (!resposta.ok) return false;
+  return (await resposta.json()).plano !== null;
+}

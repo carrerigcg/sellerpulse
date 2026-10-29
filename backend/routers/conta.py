@@ -50,7 +50,8 @@ async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_
         assinatura = await conn.fetchrow(
             """
             SELECT origem, ciclo, pago_ate, acesso_ate, plano_no_proximo_ciclo,
-                   asaas_assinatura IS NOT NULL AS recorrente
+                   cancelada_em IS NOT NULL AS cancelada,
+                   asaas_assinatura IS NOT NULL AND cancelada_em IS NULL AS recorrente
               FROM assinaturas WHERE seller_id = $1
             """,
             seller_id,
@@ -72,6 +73,7 @@ async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_
             "acesso_ate": _iso(assinatura["acesso_ate"]),
             "plano_no_proximo_ciclo": assinatura["plano_no_proximo_ciclo"],
             "recorrente": assinatura["recorrente"],
+            "cancelada": assinatura["cancelada"],
         },
     }
 
@@ -158,7 +160,10 @@ def _so_digitos_de_cpf_cnpj(valor: str) -> str:
 
 
 def _url_de_retorno() -> str:
-    return f"{os.environ['FRONTEND_URL'].rstrip('/')}/dashboard/assinatura"
+    # Fora do /dashboard de propósito: quem volta do pagamento ainda não tem
+    # plano (ele chega pelo webhook, segundos depois), e o layout do painel o
+    # mandaria para /planos. A página de retorno espera o plano aparecer.
+    return f"{os.environ['FRONTEND_URL'].rstrip('/')}/assinar/retorno"
 
 
 @router.post("/checkout", status_code=201)
@@ -225,10 +230,11 @@ class Troca(BaseModel):
 async def _assinatura_recorrente(pool, seller_id: uuid.UUID):
     async with pool.acquire() as conn:
         linha = await conn.fetchrow(
-            "SELECT plano, asaas_assinatura, pago_ate FROM assinaturas WHERE seller_id = $1",
+            "SELECT plano, asaas_assinatura, pago_ate, cancelada_em FROM assinaturas "
+            "WHERE seller_id = $1",
             seller_id,
         )
-    if linha is None or linha["asaas_assinatura"] is None:
+    if linha is None or linha["asaas_assinatura"] is None or linha["cancelada_em"] is not None:
         # Plano dado à mão ou anual: não há recorrência no Asaas para mexer.
         raise recusa(
             409, "sem-assinatura-recorrente", "Seu plano não tem cobrança mensal para alterar"
@@ -292,7 +298,7 @@ async def post_cancelar(acesso: Acesso = Depends(get_acesso)) -> dict:
         # O `SUBSCRIPTION_DELETED` que vier depois faz a mesma conta.
         await conn.execute(
             "UPDATE assinaturas SET acesso_ate = LEAST(acesso_ate, pago_ate), "
-            "plano_no_proximo_ciclo = NULL WHERE seller_id = $1",
+            "plano_no_proximo_ciclo = NULL, cancelada_em = now() WHERE seller_id = $1",
             acesso.seller_id,
         )
     return {"acesso_ate": _iso(linha["pago_ate"])}

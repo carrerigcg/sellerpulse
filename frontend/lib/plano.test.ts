@@ -15,6 +15,7 @@ const ESSENCIAL: Acesso = {
   dias_de_historico: 90,
   produtos_na_abc: 10,
   termos: { versao: "v1", aceito: true },
+  assinatura: null,
 };
 
 const EXCLUSIVE: Acesso = {

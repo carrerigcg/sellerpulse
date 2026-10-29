@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 
 import {
+  IconeAssinatura,
   IconeClientes,
   IconeConectar,
   IconeCustos,
@@ -49,6 +50,7 @@ export const GRUPOS_DASHBOARD: GrupoDeNavegacao[] = [
     itens: [
       { href: "/dashboard/custos", rotulo: "Custos", Icone: IconeCustos },
       { href: "/dashboard/conectar", rotulo: "Conectar conta", Icone: IconeConectar },
+      { href: "/dashboard/assinatura", rotulo: "Assinatura", Icone: IconeAssinatura },
     ],
   },
 ];

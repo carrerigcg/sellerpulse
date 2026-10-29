@@ -125,3 +125,16 @@ export function IconeExportar({ className = "" }: Props) {
     </svg>
   );
 }
+
+/** Cartão: a assinatura do SellerPulse. */
+export function IconeAssinatura({ className = "" }: Props) {
+  return (
+    <svg className={`${base} ${className}`} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="5.5" width="18" height="13" rx="2" />
+      <path d="M3 10h18" />
+      <path d="M7 15h4" />
+    </svg>
+  );
+}

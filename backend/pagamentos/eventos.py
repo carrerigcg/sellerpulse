@@ -110,7 +110,8 @@ async def _checkout_pago(conn, checkout: dict, hoje: date) -> str:
             asaas_assinatura = COALESCE(EXCLUDED.asaas_assinatura, assinaturas.asaas_assinatura),
             pago_ate = GREATEST(assinaturas.pago_ate, EXCLUDED.pago_ate),
             acesso_ate = GREATEST(assinaturas.acesso_ate, EXCLUDED.acesso_ate),
-            plano_no_proximo_ciclo = NULL
+            plano_no_proximo_ciclo = NULL,
+            cancelada_em = NULL
         """,
         registro["seller_id"],
         registro["plano"],
@@ -162,7 +163,9 @@ async def _pagamento_confirmado(conn, pagamento: dict) -> str:
         """
         UPDATE assinaturas SET
             pago_ate = GREATEST(pago_ate, $2),
-            acesso_ate = GREATEST(acesso_ate, $3),
+            -- Quem cancelou fica com o período pago, sem a tolerância.
+            acesso_ate = GREATEST(acesso_ate,
+                                  CASE WHEN cancelada_em IS NULL THEN $3 ELSE $2 END),
             plano = COALESCE($4, plano),
             plano_no_proximo_ciclo = CASE WHEN $4::text IS NULL
                                           THEN plano_no_proximo_ciclo END
@@ -181,7 +184,8 @@ async def _assinatura_encerrada(conn, assinatura: dict) -> str:
     # (decisão 5 da spec).
     resultado = await conn.execute(
         """
-        UPDATE assinaturas SET acesso_ate = LEAST(acesso_ate, pago_ate)
+        UPDATE assinaturas SET acesso_ate = LEAST(acesso_ate, pago_ate),
+                               cancelada_em = COALESCE(cancelada_em, now())
         WHERE asaas_assinatura = $1
         """,
         _id_de(assinatura),

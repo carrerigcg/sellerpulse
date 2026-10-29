@@ -23,6 +23,24 @@ export type Acesso = {
   dias_de_historico: number | null;
   produtos_na_abc: number | null;
   termos: { versao: string; aceito: boolean };
+  /**
+   * A assinatura, mesmo vencida: é na tela "Minha assinatura" que o vendedor
+   * descobre por que perdeu o acesso. `null` = nunca teve plano.
+   */
+  assinatura: {
+    /** `manual` = liberado pelo dono, sem cobrança no Asaas. */
+    origem: "manual" | "gateway";
+    ciclo: "mensal" | "anual" | null;
+    /** Fim do período pago (ISO). */
+    pago_ate: string | null;
+    /** Até quando o acesso vale, com a tolerância (ISO). `null` = sem prazo. */
+    acesso_ate: string | null;
+    plano_no_proximo_ciclo: NomeDoPlano | null;
+    /** Tem cobrança mensal no Asaas para trocar ou cancelar. */
+    recorrente: boolean;
+    /** Cancelou: o acesso vai até o fim do período pago, sem renovar. */
+    cancelada: boolean;
+  } | null;
 };
 
 export function libera(acesso: Acesso, recurso: Recurso): boolean {

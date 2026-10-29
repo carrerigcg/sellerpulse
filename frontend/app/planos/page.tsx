@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Planos · SellerPulse" };
  * redireciona) e quem clica em "Fazer upgrade" num cadeado. Os cartões são os
  * mesmos da seção de preços da vitrine (`components/planos/cartoes-de-planos`).
  *
- * Ainda sem checkout: o botão abre WhatsApp ou e-mail.
+ * "Assinar" leva à contratação (`/assinar`), que termina no checkout do Asaas.
  */
 
 export default function PlanosPage() {
@@ -24,8 +24,8 @@ export default function PlanosPage() {
 
         <h1 className="mt-10 text-3xl font-semibold tracking-tight">Escolha o seu plano</h1>
         <p className="mt-2 max-w-2xl text-muted">
-          Conecte a sua conta do Mercado Livre e veja quanto sobra de cada venda. Para contratar,
-          fale com a gente; o acesso é liberado assim que o plano estiver ativo.
+          Conecte a sua conta do Mercado Livre e veja quanto sobra de cada venda. O pagamento é
+          feito no Asaas, e o painel libera assim que ele confirmar.
         </p>
 
         <div className="mt-10">

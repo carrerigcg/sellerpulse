@@ -45,15 +45,17 @@ inadimplência e o cancelamento.
 | Exclusive | R$ 79,97 | R$ 799,70 |
 | Premium | R$ 139,95 | R$ 1.399,50 |
 
-Um lugar só no backend define esses valores (`backend/planos.py`). O front
-lê de lá pela API, e o checkout é montado com eles. O valor nunca vem do
-navegador.
+Quem cobra é `backend/planos.py`: o checkout é montado com esses valores, e
+o valor nunca vem do navegador. A vitrine mostra os mesmos números a partir de
+`frontend/lib/precos.ts`, sem depender do backend acordado para desenhar a
+landing. Um teste do backend lê esse arquivo e falha se os dois divergirem.
 
 ## Como
 
 ### O acesso passa a ter prazo
 
-`assinaturas` ganha `acesso_ate` (timestamptz, nulo = sem prazo). O vendedor
+`assinaturas` ganha `acesso_ate` (timestamptz, nulo = sem prazo) e
+`cancelada_em`. O vendedor
 tem acesso se tem linha em `assinaturas` e `acesso_ate` é nulo ou está no
 futuro. Os planos atribuídos à mão continuam sem prazo.
 
@@ -62,7 +64,9 @@ O prazo é o que torna a régua simples: **nenhum agendador desliga ninguém**.
 - Cada pagamento confirmado empurra `acesso_ate` para o fim do período pago
   mais os 7 dias de tolerância.
 - Se a próxima cobrança não for paga, o prazo simplesmente vence.
-- Cancelar põe `acesso_ate` no fim do período pago, sem a tolerância.
+- Cancelar põe `acesso_ate` no fim do período pago, sem a tolerância, e marca
+  `cancelada_em`. Um recebimento atrasado de um período antigo que chegue
+  depois não devolve a tolerância a quem cancelou.
 
 Também ganha: `ciclo` (`mensal | anual`), `asaas_cliente`, `asaas_assinatura`
 e `plano_no_proximo_ciclo`, este último para o downgrade.
