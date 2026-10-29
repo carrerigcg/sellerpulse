@@ -133,3 +133,20 @@ própria, e passa a ser quem atribui o plano.
 - Downgrade e cancelamento: o que acontece com o dado de quem sai de um plano.
   Fica para a spec do gateway. Até lá, nenhum dado é apagado por mudança de
   plano.
+
+## Pendências (da revisão de 2026-10-29)
+
+- **Custos no Essencial mostra a classe A/B/C de todos os produtos**, o que
+  enfraquece o cadeado da ABC. Decisão do Guilherme em aberto.
+- **Apagar a conta apaga a prova do aceite** (cascade a partir de `sellers`).
+  A recomendação é manter, porque atende à exclusão pedida pelo titular, e
+  registrar isso na spec de cancelamento.
+- **Latência:** `resolve_seller_id` e `le_plano_e_aceite` podem virar uma
+  consulta só, e as páginas podem buscar o acesso em paralelo com o que não
+  depende dele. O auditor de escala mediu que não é preciso para 100–300
+  vendedores; a latência real entre Render e Supabase não foi medida.
+- **Front sem o campo novo:** o Conectar lê `sincroniza_sob_demanda` do
+  status. O backend precisa estar no ar antes do front, senão o botão
+  "Sincronizar agora" some para todos.
+- `revoke truncate` em `anon`/`authenticated` vale para o schema inteiro, numa
+  mudança à parte.

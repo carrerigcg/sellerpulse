@@ -26,7 +26,11 @@ export function Cadeado({
   return (
     <section className="relative mt-6 overflow-hidden rounded-xl border border-line">
       {children && (
-        <div aria-hidden inert className="pointer-events-none select-none p-5 blur-sm">
+        <div
+          aria-hidden
+          inert
+          className="pointer-events-none max-h-96 select-none overflow-hidden p-5 blur-sm"
+        >
           {children}
         </div>
       )}
@@ -80,6 +84,22 @@ export function AvisoDeHistorico({ inicio }: { inicio: string }) {
       No Essencial, o histórico é de 3 meses: os números abaixo começam em {dia}/{mes}/{ano}.{" "}
       <Link href="/planos" className="font-medium text-accent underline hover:text-accent-hover">
         Ver o histórico completo no Exclusive
+      </Link>
+    </p>
+  );
+}
+
+/**
+ * No lugar da variação "vs. período anterior", quando o anterior não cabe no
+ * histórico do plano. É o "—" com cadeado: sem número, e dizendo o porquê.
+ */
+export function AvisoSemComparacao() {
+  return (
+    <p className="mt-3 flex flex-wrap items-center gap-x-1 text-xs text-muted">
+      <span aria-hidden>🔒</span>
+      Comparação com o período anterior: —. No Essencial, o histórico é de 3 meses.{" "}
+      <Link href="/planos" className="font-medium text-accent underline hover:text-accent-hover">
+        Comparar no Exclusive
       </Link>
     </p>
   );

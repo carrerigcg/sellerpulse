@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { destinoSemAcesso, historicoCortado, inicioDoHistorico, libera, type Acesso } from "./plano";
+import {
+  comparaComAnterior,
+  destinoSemAcesso,
+  historicoCortado,
+  inicioDoHistorico,
+  libera,
+  type Acesso,
+} from "./plano";
 
 const ESSENCIAL: Acesso = {
   plano: "essencial",
@@ -60,5 +67,21 @@ describe("libera", () => {
   it("o Essencial não libera clientes; o Exclusive libera", () => {
     expect(libera(ESSENCIAL, "clientes")).toBe(false);
     expect(libera(EXCLUSIVE, "clientes")).toBe(true);
+  });
+});
+
+describe("comparaComAnterior", () => {
+  it("não compara quando o anterior começa antes do histórico, mesmo em parte", () => {
+    // Período de 58 dias até 29/10: o anterior começaria em 03/07, antes de 31/07.
+    expect(comparaComAnterior(ESSENCIAL, "2026-07-03", "2026-10-29")).toBe(false);
+  });
+
+  it("compara quando o anterior cabe inteiro", () => {
+    // Resumo: 30 dias, anterior a partir de 29/08.
+    expect(comparaComAnterior(ESSENCIAL, "2026-08-29", "2026-10-29")).toBe(true);
+  });
+
+  it("sem resposta do acesso, compara como antes", () => {
+    expect(comparaComAnterior(null, "2020-01-01", "2026-10-29")).toBe(true);
   });
 });

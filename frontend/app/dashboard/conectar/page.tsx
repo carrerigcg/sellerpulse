@@ -234,7 +234,7 @@ function ConectarConteudo() {
                 // vira o convite, em vez de um clique que o servidor recusa.
                 <a
                   href="/planos"
-                  className="text-xs text-muted underline hover:text-accent"
+                  className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm text-muted transition hover:bg-surface hover:text-accent"
                 >
                   Atualização diária · sincronizar na hora no Exclusive
                 </a>

@@ -82,9 +82,16 @@ ROTAS_DO_PAINEL = [
     ("get", "/segmentation/rfm", JANELA),
     ("get", "/segmentation/cohort", JANELA),
     ("get", "/custos", JANELA),
+    ("put", "/custos/MLB1", None),
+    ("delete", "/custos/MLB1", None),
     ("post", "/ml/connect/start", None),
     ("post", "/ml/sync", None),
 ]
+
+
+def _chama(client, metodo, rota, params, user_id):
+    extra = {"json": {"custo_unitario": 10.0}} if metodo == "put" else {}
+    return getattr(client, metodo)(rota, params=params, headers=_auth(user_id), **extra)
 
 
 # ---------- sem plano: só demo ----------
@@ -93,7 +100,7 @@ ROTAS_DO_PAINEL = [
 @pytest.mark.parametrize(("metodo", "rota", "params"), ROTAS_DO_PAINEL)
 async def test_sem_plano_o_painel_recusa_com_402(client, seller_sem_plano, metodo, rota, params):
     user_id, _ = seller_sem_plano
-    resp = getattr(client, metodo)(rota, params=params, headers=_auth(user_id))
+    resp = _chama(client, metodo, rota, params, user_id)
     assert resp.status_code == 402
     assert resp.json()["detail"]["codigo"] == "sem-plano"
 
@@ -111,7 +118,7 @@ async def test_com_plano_e_sem_aceite_recusa_com_termos_pendentes(
 ):
     user_id, seller_id = test_seller
     await _no_plano(pg_pool, seller_id, "exclusive", aceita=False)
-    resp = getattr(client, metodo)(rota, params=params, headers=_auth(user_id))
+    resp = _chama(client, metodo, rota, params, user_id)
     assert resp.status_code == 403
     assert resp.json()["detail"]["codigo"] == "termos-pendentes"
 

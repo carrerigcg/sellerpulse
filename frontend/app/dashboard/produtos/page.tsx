@@ -193,7 +193,7 @@ export default async function ProdutosPage({
               titulo="Anúncios vistos que não vendem"
               descricao="Visitas e conversão de cada anúncio, para achar o que é visto e rejeitado e o que vende mas falta ser visto."
             >
-              {amostraAbc && <DesempenhoAnuncios abc={amostraAbc} filtroInicial={null} />}
+              {amostraAbc && <DesempenhoAnuncios abc={amostraAbc.slice(0, 8)} filtroInicial={null} />}
             </Cadeado>
           )}
 

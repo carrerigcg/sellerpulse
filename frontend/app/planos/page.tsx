@@ -116,7 +116,7 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
     <section
       className={`relative flex flex-col rounded-2xl border p-6 ${
         plano.destaque
-          ? "border-accent bg-accent-soft shadow-lg md:-my-3 md:py-9"
+          ? "order-first border-accent bg-accent-soft shadow-lg md:order-none md:-my-3 md:py-9"
           : "border-line bg-bg"
       }`}
     >

@@ -143,15 +143,6 @@ export class ApiError extends Error {
 }
 
 /**
- * O plano não cobre o que se pediu — por exemplo o período anterior da
- * comparação, inteiro antes do histórico do Essencial. Quem chama trata como
- * "indisponível no plano", nunca como zero.
- */
-export function foraDoPlano(e: unknown): boolean {
-  return e instanceof ApiError && e.codigo === "fora-do-plano";
-}
-
-/**
  * O que a tela diz quando a carga falha.
  *
  * Cinco telas repetiam este ternário, e uma já tinha divergido: Custos dizia

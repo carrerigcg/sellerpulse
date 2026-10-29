@@ -70,3 +70,13 @@ export const NOMES_DOS_PLANOS: Record<NomeDoPlano, string> = {
 export function podeUsar(acesso: Acesso | null, recurso: Recurso): boolean {
   return acesso === null || libera(acesso, recurso);
 }
+
+/**
+ * Dá para comparar com o período anterior? Só se ele couber INTEIRO no que o
+ * plano mostra. Um anterior cortado pelo histórico teria menos dias que o
+ * atual, e a variação sairia inflada ("+81%" com a venda estável): pior que
+ * não comparar.
+ */
+export function comparaComAnterior(acesso: Acesso | null, anteriorDe: string, hoje: string): boolean {
+  return acesso === null || !historicoCortado(acesso, anteriorDe, hoje);
+}

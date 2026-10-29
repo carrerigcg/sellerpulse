@@ -11,7 +11,6 @@ import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
 import {
   mensagemDeFalhaAoCarregar,
-  foraDoPlano,
   getAcesso,
   getCancelamentos,
   getFluxoFinanceiro,
@@ -23,8 +22,8 @@ import { COLUNAS_FLUXO } from "@/lib/colunas-export";
 
 import { coberturaDoFluxo, coberturaDoFrete } from "@/lib/cobertura";
 import { hojeNoFusoDoVendedor, periodoPadrao } from "@/lib/periodo";
-import { historicoCortado, inicioDoHistorico, podeUsar } from "@/lib/plano";
-import { AvisoDeHistorico } from "@/components/planos/cadeado";
+import { comparaComAnterior, historicoCortado, inicioDoHistorico, podeUsar } from "@/lib/plano";
+import { AvisoDeHistorico, AvisoSemComparacao } from "@/components/planos/cadeado";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 import { SemPedidosNoPeriodo } from "@/components/analytics/sem-pedidos-no-periodo";
 
@@ -57,19 +56,18 @@ export default async function FinanceiroPage({
   let cancelados: Cancelamentos | null = null;
   let erro: string | null = null;
 
+  const [antDe, antAte] = janelaAnterior(de, ate);
+  // O período anterior só entra se couber inteiro no histórico do plano. Sem
+  // ele, `anterior` fica vazio e o `KpiCard` omite a variação; o aviso abaixo
+  // dos cartões diz por quê. O vazio aqui é "sem base", nunca "vendeu zero".
+  const comparar = comparaComAnterior(acesso, antDe, hoje);
+
   try {
-    const [antDe, antAte] = janelaAnterior(de, ate);
     // A linha de cancelamentos é apoio: se a busca dela falhar, a tela segue
     // sem ela, em vez de cair inteira junto.
     [fluxo, anterior, cancelados] = await Promise.all([
       getFluxoFinanceiro(de, ate),
-      // O período anterior pode estar inteiro antes do histórico do plano.
-      // Aí não há base de comparação, e o `KpiCard` omite a variação: o
-      // vazio aqui é "sem base", nunca "vendeu zero".
-      getFluxoFinanceiro(antDe, antAte).catch((e: unknown) => {
-        if (foraDoPlano(e)) return [];
-        throw e;
-      }),
+      comparar ? getFluxoFinanceiro(antDe, antAte) : Promise.resolve([]),
       getCancelamentos(de, ate).catch(() => null),
     ]);
   } catch (e) {
@@ -150,6 +148,8 @@ export default async function FinanceiroPage({
               nota="receita − comissão do Mercado Livre − frete − custo dos produtos."
             />
           </div>
+
+          {!comparar && <AvisoSemComparacao />}
 
           <LinhaDeCancelamentos cancelamentos={cancelados} />
           {/* A regra de honestidade: a margem acima só está completa se
