@@ -71,6 +71,8 @@
 0013_rls_frete_real.sql	20261027204925	2026-10-27
 0014_minimiza_pagamentos.sql	20261029004326	2026-10-28
 0015_remove_update_de_sellers.sql	20261029013222	2026-10-28
+0016_planos_e_aceite.sql	20261029130655	2026-10-29
+0017_rls_planos_e_aceite.sql	20261029130659	2026-10-29
 
 # SO PARA O BANCO DE TESTE -- nunca vai para producao.
 # Prefixo `!`. O `auth.users` do Supabase e nativo; este arquivo e o stub que

@@ -5,12 +5,14 @@ import { ResumoDaLoja } from "@/components/resumo/resumo-da-loja";
 import {
   ApiError,
   getAbcPareto,
+  getAcesso,
   getCustos,
   getFluxoFinanceiro,
   getRfmScores,
   janelaAnterior,
 } from "@/lib/api";
 import { periodoDoResumo, periodoPadrao } from "@/lib/periodo";
+import { podeUsar } from "@/lib/plano";
 import { montaResumo } from "@/lib/resumo";
 
 import { DisparaDelta } from "./delta";
@@ -30,13 +32,19 @@ export default async function ResumoPage() {
   const periodo = periodoDoResumo();
   const periodoClientes = periodoPadrao();
   const [antDe, antAte] = janelaAnterior(periodo.de, periodo.ate);
+  const acesso = await getAcesso().catch(() => null);
 
   const [fluxo, anterior, abc, custos, rfm] = await Promise.allSettled([
     getFluxoFinanceiro(periodo.de, periodo.ate),
     getFluxoFinanceiro(antDe, antAte),
     getAbcPareto(periodo.de, periodo.ate),
     getCustos(periodo.de, periodo.ate),
-    getRfmScores(periodoClientes.de, periodoClientes.ate),
+    // Sem Clientes no plano, o RFM nem é pedido: a recusa do backend viraria
+    // "parte do resumo não carregou", um erro que não aconteceu. Lista vazia
+    // aqui é "não se aplica" — só some o cartão de clientes em risco.
+    podeUsar(acesso, "clientes")
+      ? getRfmScores(periodoClientes.de, periodoClientes.ate)
+      : Promise.resolve([]),
   ]);
 
   const resumo = montaResumo({

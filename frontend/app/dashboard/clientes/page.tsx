@@ -3,8 +3,11 @@ import { ExportButton } from "@/components/analytics/export-button";
 import { RfmChart } from "@/components/analytics/rfm-chart";
 import { RfmLegend } from "@/components/analytics/rfm-legend";
 import { SegmentBand } from "@/components/analytics/segment-band";
-import { mensagemDeFalhaAoCarregar, getRfmScores, type RfmLinha } from "@/lib/api";
+import { Cadeado } from "@/components/planos/cadeado";
+import { getAcesso, mensagemDeFalhaAoCarregar, getRfmScores, type RfmLinha } from "@/lib/api";
 import { COLUNAS_RFM } from "@/lib/colunas-export";
+import { getDemoRfmScores } from "@/lib/demo";
+import { podeUsar } from "@/lib/plano";
 import { periodoPadrao } from "@/lib/periodo";
 import { segmentoDaUrl } from "@/lib/segmento-da-url";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
@@ -29,6 +32,11 @@ export default async function ClientesPage({
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
   const filtroInicial = segmentoDaUrl(params.segmento);
+
+  const acesso = await getAcesso().catch(() => null);
+  if (!podeUsar(acesso, "clientes")) {
+    return <ClientesTrancado de={de} ate={ate} />;
+  }
 
   let rfm: RfmLinha[] = [];
   let erro: string | null = null;
@@ -80,13 +88,15 @@ export default async function ClientesPage({
                 <h2 className="text-sm font-semibold">Compradores</h2>
                 <p className="mt-0.5 text-xs text-muted">{rfm.length} compradores no período</p>
               </div>
-              <ExportButton
-                linhas={rfm}
-                colunas={COLUNAS_RFM}
-                tela="clientes"
-                de={de}
-                ate={ate}
-              />
+              {podeUsar(acesso, "exportar") && (
+                <ExportButton
+                  linhas={rfm}
+                  colunas={COLUNAS_RFM}
+                  tela="clientes"
+                  de={de}
+                  ate={ate}
+                />
+              )}
             </div>
             {/* `key` pelo filtro: o Next reaproveita o componente quando só a
                 query muda (a sidebar leva de volta a /clientes sem
@@ -96,6 +106,37 @@ export default async function ClientesPage({
           </section>
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * Clientes no plano que não os cobre: a amostra é da demonstração, nunca dos
+ * compradores do vendedor — o backend nem os manda (403 `fora-do-plano`).
+ */
+async function ClientesTrancado({ de, ate }: { de: string; ate: string }) {
+  const amostra = await getDemoRfmScores(de, ate).catch(() => null);
+  return (
+    <>
+      <CabecalhoDeTela
+        titulo="Clientes"
+        subtitulo="Quem compra de novo, quem está sumindo, e quanto isso vale."
+        de={de}
+        ate={ate}
+        tela="clientes"
+        temDados={false}
+      />
+      <Cadeado
+        titulo="Quem compra de novo, e quem está sumindo"
+        descricao="Cada comprador classificado por recência, frequência e valor, para você saber quem vale reconquistar antes que vá embora."
+      >
+        {amostra && amostra.length > 0 && (
+          <>
+            <SegmentBand rfm={amostra} />
+            <RfmChart dados={amostra} />
+          </>
+        )}
+      </Cadeado>
     </>
   );
 }

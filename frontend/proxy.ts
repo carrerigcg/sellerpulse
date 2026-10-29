@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Protege /dashboard: sem sessão Supabase válida, redireciona para /login.
+ * Protege /dashboard e /aceite: sem sessão Supabase válida, redireciona para /login.
  *
  * @supabase/ssr@0.12.7 exige getAll/setAll (não get/set/remove) e o
  * `setAll` do server client recebe um segundo argumento `headers` com
@@ -55,5 +55,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: ["/dashboard/:path*", "/aceite"],
 };
