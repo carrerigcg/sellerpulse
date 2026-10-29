@@ -1,24 +1,36 @@
 # backend/routers/conta.py
-"""O que o vendedor pode acessar, e o aceite dos Termos de Uso.
+"""O que o vendedor pode acessar, o aceite dos termos e a assinatura.
 
 `GET /conta/acesso` é o que o layout do painel pergunta antes de desenhar
 qualquer tela: sem plano vai para /planos, sem aceite para /aceite, e com os
 dois desenha o painel com os cadeados do plano. Responde sem exigir plano,
 porque é justamente quem não tem que precisa saber disso.
 
-Desenho em docs/specs/2026-10-28-planos-e-acesso-design.md.
+Contratar, trocar e cancelar falam com o Asaas (`backend/pagamentos/`).
+
+Desenho em docs/specs/2026-10-28-planos-e-acesso-design.md e
+docs/specs/2026-10-29-cobranca-asaas-design.md.
 """
 
 from __future__ import annotations
 
+import logging
+import os
+import re
 import uuid
+from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.db import get_pool
-from backend.deps import get_current_seller_id, le_plano_e_aceite, recusa
-from backend.planos import VERSAO_DOS_TERMOS
+from backend.deps import Acesso, get_acesso, get_current_seller_id, le_plano_e_aceite, recusa
+from backend.pagamentos import asaas
+from backend.pagamentos.eventos import referencia_do_vendedor
+from backend.planos import DIAS_DE_TESTE, PLANOS, PLANOS_COM_TESTE, VERSAO_DOS_TERMOS
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conta", tags=["conta"])
 
@@ -27,18 +39,45 @@ router = APIRouter(prefix="/conta", tags=["conta"])
 _MAX_USER_AGENT = 512
 _MAX_IP = 256
 
+NomeDoPlano = Literal["essencial", "exclusive", "premium"]
+
 
 @router.get("/acesso")
 async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
     pool = await get_pool()
     plano, aceitou = await le_plano_e_aceite(pool, seller_id)
+    async with pool.acquire() as conn:
+        assinatura = await conn.fetchrow(
+            """
+            SELECT origem, ciclo, pago_ate, acesso_ate, plano_no_proximo_ciclo,
+                   asaas_assinatura IS NOT NULL AS recorrente
+              FROM assinaturas WHERE seller_id = $1
+            """,
+            seller_id,
+        )
     return {
         "plano": plano.nome if plano else None,
         "recursos": sorted(plano.recursos) if plano else [],
         "dias_de_historico": plano.dias_de_historico if plano else None,
         "produtos_na_abc": plano.produtos_na_abc if plano else None,
         "termos": {"versao": VERSAO_DOS_TERMOS, "aceito": aceitou},
+        # O que a tela "Minha assinatura" mostra. Vem mesmo com o plano vencido:
+        # é ali que o vendedor descobre por que perdeu o acesso.
+        "assinatura": None
+        if assinatura is None
+        else {
+            "origem": assinatura["origem"],
+            "ciclo": assinatura["ciclo"],
+            "pago_ate": _iso(assinatura["pago_ate"]),
+            "acesso_ate": _iso(assinatura["acesso_ate"]),
+            "plano_no_proximo_ciclo": assinatura["plano_no_proximo_ciclo"],
+            "recorrente": assinatura["recorrente"],
+        },
     }
+
+
+def _iso(valor) -> str | None:
+    return valor.isoformat() if valor else None
 
 
 class Aceite(BaseModel):
@@ -59,18 +98,8 @@ def _ip_de(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
-@router.post("/aceite", status_code=201)
-async def post_aceite(
-    corpo: Aceite,
-    request: Request,
-    seller_id: uuid.UUID = Depends(get_current_seller_id),
-) -> dict:
-    pool = await get_pool()
-    plano, _ = await le_plano_e_aceite(pool, seller_id)
-    # Sem plano não há contrato para aceitar (decisão 1 da spec).
-    if plano is None:
-        raise recusa(402, "sem-plano", "Contrate um plano antes de aceitar os termos")
-    if corpo.versao != VERSAO_DOS_TERMOS:
+async def _grava_aceite(pool, seller_id: uuid.UUID, versao: str, request: Request) -> None:
+    if versao != VERSAO_DOS_TERMOS:
         raise recusa(409, "versao-desatualizada", "Os termos mudaram; recarregue a página")
     user_agent = (request.headers.get("user-agent") or "")[:_MAX_USER_AGENT] or None
     async with pool.acquire() as conn:
@@ -86,4 +115,184 @@ async def post_aceite(
             _ip_de(request),
             user_agent,
         )
+
+
+@router.post("/aceite", status_code=201)
+async def post_aceite(
+    corpo: Aceite,
+    request: Request,
+    seller_id: uuid.UUID = Depends(get_current_seller_id),
+) -> dict:
+    """Aceite de quem já tem plano (o dado à mão, ou a versão nova dos termos).
+
+    Quem contrata pelo checkout aceita lá, antes de pagar (`/conta/checkout`).
+    """
+    pool = await get_pool()
+    plano, _ = await le_plano_e_aceite(pool, seller_id)
+    # Sem plano não há contrato para aceitar (decisão 1 da spec de planos).
+    if plano is None:
+        raise recusa(402, "sem-plano", "Contrate um plano antes de aceitar os termos")
+    await _grava_aceite(pool, seller_id, corpo.versao, request)
     return {"versao": VERSAO_DOS_TERMOS, "aceito": True}
+
+
+# ---------- contratar ----------
+
+
+class Contratacao(BaseModel):
+    plano: NomeDoPlano
+    ciclo: Literal["mensal", "anual"]
+    versao_dos_termos: str
+    nome: str = Field(min_length=3, max_length=120)
+    cpf_cnpj: str = Field(min_length=11, max_length=18)
+    # Conferência leve: o Asaas valida de novo, e uma dependência a mais só
+    # para isso não se paga.
+    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _so_digitos_de_cpf_cnpj(valor: str) -> str:
+    digitos = re.sub(r"\D", "", valor)
+    if len(digitos) not in (11, 14):
+        raise recusa(422, "cpf-cnpj-invalido", "Informe um CPF (11 dígitos) ou CNPJ (14 dígitos)")
+    return digitos
+
+
+def _url_de_retorno() -> str:
+    return f"{os.environ['FRONTEND_URL'].rstrip('/')}/dashboard/assinatura"
+
+
+@router.post("/checkout", status_code=201)
+async def post_checkout(
+    corpo: Contratacao,
+    request: Request,
+    seller_id: uuid.UUID = Depends(get_current_seller_id),
+) -> dict:
+    """Aceite dos termos, depois o checkout do Asaas. Devolve o link para pagar.
+
+    O aceite vem ANTES do pagamento (decisão 2 da spec de cobrança). O valor
+    sai de `backend/planos.py`, nunca do corpo. O CPF/CNPJ vai para o Asaas e
+    não é guardado aqui.
+    """
+    if not asaas.configurado():
+        raise recusa(503, "cobranca-indisponivel", "A contratação está indisponível agora")
+    cpf_cnpj = _so_digitos_de_cpf_cnpj(corpo.cpf_cnpj)
+    pool = await get_pool()
+
+    plano_atual, _ = await le_plano_e_aceite(pool, seller_id)
+    if plano_atual is not None:
+        # Quem já tem plano troca por /conta/plano: um segundo checkout criaria
+        # uma segunda assinatura cobrando em paralelo.
+        raise recusa(409, "ja-tem-plano", "Você já tem um plano; troque pela sua assinatura")
+
+    await _grava_aceite(pool, seller_id, corpo.versao_dos_termos, request)
+
+    plano = PLANOS[corpo.plano]
+    recorrente = corpo.ciclo == "mensal"
+    teste = recorrente and corpo.plano in PLANOS_COM_TESTE
+    try:
+        checkout = await asaas.criar_checkout(
+            nome_do_item=f"SellerPulse {corpo.plano.capitalize()}",
+            valor=plano.preco(corpo.ciclo),
+            ciclo=corpo.ciclo,
+            recorrente=recorrente,
+            primeira_cobranca=date.today() + timedelta(days=DIAS_DE_TESTE) if teste else None,
+            cliente={"name": corpo.nome, "cpfCnpj": cpf_cnpj, "email": corpo.email},
+            referencia=referencia_do_vendedor(seller_id),
+            url_de_retorno=_url_de_retorno(),
+        )
+    except asaas.AsaasErro as erro:
+        _log.error("[asaas] checkout recusado: %s", erro)
+        raise recusa(502, "gateway-recusou", "Não foi possível abrir o pagamento agora") from erro
+
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO checkouts (id, seller_id, plano, ciclo) VALUES ($1, $2, $3, $4)",
+            checkout["id"],
+            seller_id,
+            corpo.plano,
+            corpo.ciclo,
+        )
+    return {"link": checkout["link"], "teste": teste}
+
+
+# ---------- trocar e cancelar ----------
+
+
+class Troca(BaseModel):
+    plano: NomeDoPlano
+
+
+async def _assinatura_recorrente(pool, seller_id: uuid.UUID):
+    async with pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            "SELECT plano, asaas_assinatura, pago_ate FROM assinaturas WHERE seller_id = $1",
+            seller_id,
+        )
+    if linha is None or linha["asaas_assinatura"] is None:
+        # Plano dado à mão ou anual: não há recorrência no Asaas para mexer.
+        raise recusa(
+            409, "sem-assinatura-recorrente", "Seu plano não tem cobrança mensal para alterar"
+        )
+    return linha
+
+
+@router.post("/plano")
+async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)) -> dict:
+    """Upgrade vale na hora; downgrade, no próximo ciclo (decisão 6 da spec).
+
+    Nos dois casos o valor novo vale a partir da próxima cobrança: a diferença
+    do mês corrente, no upgrade, fica por nossa conta.
+    """
+    pool = await get_pool()
+    linha = await _assinatura_recorrente(pool, acesso.seller_id)
+    novo = PLANOS[corpo.plano]
+    atual = PLANOS[linha["plano"]]
+    if novo.nome == atual.nome:
+        raise recusa(409, "mesmo-plano", "Esse já é o seu plano")
+
+    try:
+        await asaas.mudar_valor_da_assinatura(linha["asaas_assinatura"], novo.preco_mensal)
+    except asaas.AsaasErro as erro:
+        _log.error("[asaas] troca de plano recusada: %s", erro)
+        raise recusa(502, "gateway-recusou", "Não foi possível trocar o plano agora") from erro
+
+    upgrade = novo.preco_mensal > atual.preco_mensal
+    async with pool.acquire() as conn:
+        if upgrade:
+            await conn.execute(
+                "UPDATE assinaturas SET plano = $2, plano_no_proximo_ciclo = NULL "
+                "WHERE seller_id = $1",
+                acesso.seller_id,
+                novo.nome,
+            )
+        else:
+            await conn.execute(
+                "UPDATE assinaturas SET plano_no_proximo_ciclo = $2 WHERE seller_id = $1",
+                acesso.seller_id,
+                novo.nome,
+            )
+    return {
+        "plano": novo.nome if upgrade else atual.nome,
+        "no_proximo_ciclo": None if upgrade else novo.nome,
+    }
+
+
+@router.post("/cancelar")
+async def post_cancelar(acesso: Acesso = Depends(get_acesso)) -> dict:
+    """Encerra a recorrência. O acesso vale até o fim do período já pago."""
+    pool = await get_pool()
+    linha = await _assinatura_recorrente(pool, acesso.seller_id)
+    try:
+        await asaas.remover_assinatura(linha["asaas_assinatura"])
+    except asaas.AsaasErro as erro:
+        _log.error("[asaas] cancelamento recusado: %s", erro)
+        raise recusa(502, "gateway-recusou", "Não foi possível cancelar agora") from erro
+    async with pool.acquire() as conn:
+        # Não espera o webhook: quem cancelou precisa ver o prazo certo já.
+        # O `SUBSCRIPTION_DELETED` que vier depois faz a mesma conta.
+        await conn.execute(
+            "UPDATE assinaturas SET acesso_ate = LEAST(acesso_ate, pago_ate), "
+            "plano_no_proximo_ciclo = NULL WHERE seller_id = $1",
+            acesso.seller_id,
+        )
+    return {"acesso_ate": _iso(linha["pago_ate"])}

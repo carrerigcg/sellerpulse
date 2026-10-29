@@ -16,7 +16,7 @@ from backend.db import close_pool, get_pool
 from backend.demo_refresh import regenera_demo_se_vencida
 from backend.logging_setup import configura_logging
 from backend.ml.tokens import valida_chave_de_cifra
-from backend.routers import conta, custos, demo, metrics, ml, segmentation
+from backend.routers import conta, custos, demo, metrics, ml, pagamentos, segmentation
 from backend.worker.runner import loop as worker_loop
 from backend.worker.runner import worker_habilitado
 
@@ -177,6 +177,7 @@ app.include_router(custos.router)
 app.include_router(demo.router)
 app.include_router(metrics.router)
 app.include_router(ml.router)
+app.include_router(pagamentos.router)
 app.include_router(segmentation.router)
 
 

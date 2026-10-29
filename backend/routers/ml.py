@@ -252,13 +252,16 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
         # nao tem conta do ML conectada. Nao filtrar por `is_demo` de
         # proposito: o criterio que importa e "da pra sincronizar", e e esse.
         # Sem plano, nao sincroniza: e cota da API do ML gasta com conta que
-        # nao paga. O dado ingerido fica, e volta a atualizar com o plano.
+        # nao paga. Plano vencido conta como sem plano, pela mesma regra de
+        # `le_plano_e_aceite`. O dado ingerido fica, e volta a atualizar com o
+        # plano.
         sellers = await conn.fetch(
             """
             SELECT s.id, s.last_synced_at
               FROM sellers s
               JOIN assinaturas a ON a.seller_id = s.id
              WHERE s.ml_seller_id IS NOT NULL
+               AND (a.acesso_ate IS NULL OR a.acesso_ate > now())
             """
         )
 
