@@ -21,7 +21,12 @@ alter table assinaturas
     add column cancelada_em           timestamptz,
     -- Downgrade vale no proximo ciclo: guardado aqui ate o proximo pagamento.
     add column plano_no_proximo_ciclo text
-        check (plano_no_proximo_ciclo in ('essencial', 'exclusive', 'premium'));
+        check (plano_no_proximo_ciclo in ('essencial', 'exclusive', 'premium')),
+    -- O checkout que ativou a assinatura ATUAL. E o elo com o Asaas: o
+    -- pagamento e a assinatura trazem `checkoutSession` (medido no sandbox),
+    -- e um evento de um checkout ANTIGO (de quem cancelou e recontratou) nao
+    -- toca a linha da assinatura nova.
+    add column checkout_id            text;
 
 -- Cada checkout criado, e de quem ele e. O webhook do Asaas fala de checkout,
 -- cobranca e assinatura; e por esta tabela que um checkout pago vira o plano
@@ -32,7 +37,14 @@ create table checkouts (
     plano      text not null check (plano in ('essencial', 'exclusive', 'premium')),
     ciclo      text not null check (ciclo in ('mensal', 'anual')),
     criado_em  timestamptz not null default now(),
-    pago_em    timestamptz
+    -- Quando o plano foi ativado por este checkout. Uma vez so: e o que
+    -- impede um aviso repetido, ou a renovacao, de reativar e desfazer um
+    -- downgrade ou um cancelamento.
+    pago_em    timestamptz,
+    -- Os ids do Asaas, anotados por qualquer aviso que traga este checkout,
+    -- na ordem em que chegarem (a fila do Asaas nao garante ordem).
+    asaas_cliente     text,
+    asaas_assinatura  text
 );
 create index idx_checkouts_seller on checkouts (seller_id);
 

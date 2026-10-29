@@ -6,17 +6,20 @@ Regras que valem para todos:
 - **Idempotente pelo `id` do evento.** O Asaas entrega "pelo menos uma vez".
   O evento é gravado na MESMA transação em que é aplicado: se aplicar falha,
   nada fica gravado, e o reenvio do Asaas tenta de novo.
+- **O checkout é o elo.** Medido no sandbox (2026-10-29): o pagamento e a
+  assinatura trazem `checkoutSession` (o id do checkout que criamos), e o
+  `CHECKOUT_PAID` traz `customer: null`. E a fila chega FORA DE ORDEM mesmo no
+  envio sequencial: o pagamento e a assinatura chegaram antes do checkout pago.
+  Por isso todo aviso que traz o checkout anota nele o cliente e a assinatura,
+  e o primeiro que prova o pagamento ativa o plano — uma vez só (`pago_em`).
 - **O prazo só cresce com pagamento** (`GREATEST`). `PAYMENT_CONFIRMED` e
   `PAYMENT_RECEIVED` chegam os dois para a mesma cobrança, às vezes com 32
-  dias de diferença (cartão), e às vezes fora de ordem. Nenhum deles pode
-  encurtar o que o outro já deu.
+  dias de diferença (cartão). Nenhum deles pode encurtar o que o outro deu.
 - **Evento que não se sabe de quem é não derruba nada.** Vira aviso no log e
   resposta 200: o Asaas pausa a fila depois de 15 falhas seguidas, e uma fila
   pausada atrasa o pagamento de todo mundo.
 
-Os formatos de `checkout` e `payment` seguem a documentação. O que ela não
-diz (como o checkout pago aponta para a assinatura criada) está na lista "a
-confirmar no sandbox" da spec docs/specs/2026-10-29-cobranca-asaas-design.md.
+Desenho em docs/specs/2026-10-29-cobranca-asaas-design.md.
 """
 
 from __future__ import annotations
@@ -41,9 +44,9 @@ _PAGAMENTO_CONFIRMADO = frozenset({"PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"})
 _ASSINATURA_ENCERRADA = frozenset({"SUBSCRIPTION_DELETED", "SUBSCRIPTION_INACTIVATED"})
 _DINHEIRO_DEVOLVIDO = frozenset({"PAYMENT_REFUNDED", "PAYMENT_CHARGEBACK_REQUESTED"})
 
-# Dado pessoal de quem paga, que o Asaas pode repetir no payload. O CPF/CNPJ
-# não é guardado no SellerPulse (spec, "Contratar"), e o log de eventos não
-# pode virar a exceção: estas chaves saem antes de gravar, em qualquer nível.
+# Dado pessoal de quem paga, que o Asaas pode repetir no payload. Os dados de
+# cobrança não são guardados no SellerPulse (spec, "Contratar"), e o log de
+# eventos não pode virar a exceção: estas chaves saem antes de gravar.
 _CHAVES_PESSOAIS = frozenset(
     {"cpfCnpj", "customerData", "creditCard", "creditCardHolderInfo", "phone", "mobilePhone"}
 )
@@ -88,9 +91,9 @@ async def processa(pool: asyncpg.Pool, evento: dict, *, hoje: date | None = None
             return "repetido"
 
         if tipo == "CHECKOUT_PAID":
-            return await _checkout_pago(conn, evento.get("checkout") or {}, hoje)
+            return await _ativa_checkout(conn, _id_de(evento.get("checkout")), hoje)
         if tipo in _PAGAMENTO_CONFIRMADO:
-            return await _pagamento_confirmado(conn, evento.get("payment") or {})
+            return await _pagamento_confirmado(conn, evento.get("payment") or {}, hoje)
         if tipo == "SUBSCRIPTION_CREATED":
             return await _assinatura_criada(conn, evento.get("subscription") or {})
         if tipo in _ASSINATURA_ENCERRADA:
@@ -100,15 +103,60 @@ async def processa(pool: asyncpg.Pool, evento: dict, *, hoje: date | None = None
         return "ignorado"
 
 
-async def _checkout_pago(conn, checkout: dict, hoje: date) -> str:
-    checkout_id = checkout.get("id")
+async def _anota_ids(conn, checkout_id: str, cliente: str | None, assinatura: str | None) -> bool:
+    """Anota no checkout (e na assinatura que ele ativou) os ids do Asaas.
+
+    Chamado por qualquer aviso que traga o checkout, na ordem em que chegarem.
+    Só preenche o que falta (`COALESCE`). A linha de `assinaturas` só é tocada
+    se ela é a deste checkout: um aviso atrasado de um checkout ANTIGO não
+    grava o id de uma assinatura que já foi encerrada na assinatura nova.
+    Devolve se o checkout é nosso.
+    """
+    conhecido = await conn.fetchval(
+        """
+        UPDATE checkouts SET asaas_cliente = COALESCE(asaas_cliente, $2),
+                             asaas_assinatura = COALESCE(asaas_assinatura, $3)
+         WHERE id = $1 RETURNING true
+        """,
+        checkout_id,
+        cliente,
+        assinatura,
+    )
+    await conn.execute(
+        """
+        UPDATE assinaturas SET asaas_cliente = COALESCE(asaas_cliente, $2),
+                               asaas_assinatura = COALESCE(asaas_assinatura, $3)
+         WHERE checkout_id = $1 AND cancelada_em IS NULL
+        """,
+        checkout_id,
+        cliente,
+        assinatura,
+    )
+    return bool(conhecido)
+
+
+async def _ativa_checkout(conn, checkout_id: str | None, hoje: date) -> str:
+    """Ativa o plano comprado por um checkout nosso. Uma vez só por checkout.
+
+    O `pago_em IS NULL` é o que garante o "uma vez": o `CHECKOUT_PAID` e o
+    primeiro pagamento ativam, o que chegar antes; o outro, e as renovações
+    que também trazem o checkout, não reativam — reativar desfaria um
+    downgrade agendado ou um cancelamento.
+    """
     registro = await conn.fetchrow(
-        "UPDATE checkouts SET pago_em = now() WHERE id = $1 RETURNING seller_id, plano, ciclo",
+        """
+        UPDATE checkouts SET pago_em = now()
+         WHERE id = $1 AND pago_em IS NULL
+        RETURNING seller_id, plano, ciclo, asaas_cliente, asaas_assinatura
+        """,
         checkout_id,
     )
     if registro is None:
-        _log.warning("[asaas] checkout pago que nao foi criado aqui: %s", checkout_id)
-        return "checkout-desconhecido"
+        existe = await conn.fetchval("SELECT true FROM checkouts WHERE id = $1", checkout_id)
+        if not existe:
+            _log.warning("[asaas] checkout pago que nao foi criado aqui: %s", checkout_id)
+            return "checkout-desconhecido"
+        return "ja-ativado"
 
     # O teste de 7 dias: o cartão foi validado e a primeira cobrança é no 8º
     # dia. O período "pago" vai até lá; os pagamentos seguintes empurram.
@@ -119,35 +167,33 @@ async def _checkout_pago(conn, checkout: dict, hoje: date) -> str:
     else:
         pago_ate, acesso_ate = prazos_de_um_pagamento(hoje, registro["ciclo"])
 
-    # O `subscription` do checkout é a CONFIGURAÇÃO da assinatura (ciclo,
-    # vencimento), não ela: a documentação do evento mostra
-    # `{"cycle": ..., "nextDueDate": ...}`. O id chega depois, no
-    # `SUBSCRIPTION_CREATED` ou no primeiro pagamento. Por isso
-    # `asaas_assinatura` começa nulo — e zera numa recontratação, porque a
-    # assinatura anterior foi encerrada antes do checkout novo.
+    # Numa recontratação, a linha antiga é reaproveitada com a assinatura NOVA:
+    # os ids vêm do checkout novo (nulos se ainda não chegaram), nunca os da
+    # assinatura anterior, que foi encerrada antes deste checkout.
     await conn.execute(
         """
-        INSERT INTO assinaturas (seller_id, plano, origem, ciclo, asaas_cliente,
-                                 pago_ate, acesso_ate, desde)
-        VALUES ($1, $2, 'gateway', $3, $4, $5, $6, now())
+        INSERT INTO assinaturas (seller_id, plano, origem, ciclo, checkout_id, asaas_cliente,
+                                 asaas_assinatura, pago_ate, acesso_ate, desde)
+        VALUES ($1, $2, 'gateway', $3, $4, $5, $6, $7, $8, now())
         ON CONFLICT (seller_id) DO UPDATE SET
             plano = EXCLUDED.plano,
             origem = 'gateway',
             ciclo = EXCLUDED.ciclo,
-            asaas_cliente = COALESCE(EXCLUDED.asaas_cliente, assinaturas.asaas_cliente),
-            asaas_assinatura = NULL,
+            checkout_id = EXCLUDED.checkout_id,
+            asaas_cliente = EXCLUDED.asaas_cliente,
+            asaas_assinatura = EXCLUDED.asaas_assinatura,
             pago_ate = GREATEST(assinaturas.pago_ate, EXCLUDED.pago_ate),
             acesso_ate = GREATEST(assinaturas.acesso_ate, EXCLUDED.acesso_ate),
             plano_no_proximo_ciclo = NULL,
             cancelada_em = NULL,
-            -- Começo da assinatura NOVA: é por ele que um pagamento atrasado da
-            -- antiga é reconhecido e não grava o id dela aqui.
             desde = now()
         """,
         registro["seller_id"],
         registro["plano"],
         registro["ciclo"],
-        _id_de(checkout.get("customer")),
+        checkout_id,
+        registro["asaas_cliente"],
+        registro["asaas_assinatura"],
         pago_ate,
         acesso_ate,
     )
@@ -155,43 +201,57 @@ async def _checkout_pago(conn, checkout: dict, hoje: date) -> str:
 
 
 async def _assinatura_criada(conn, assinatura: dict) -> str:
-    """Liga o id da assinatura ao vendedor, pelo cliente do Asaas.
+    """Liga o id da assinatura ao vendedor, pelo checkout que a criou.
 
     É o que deixa cancelar durante o teste de 7 dias, antes de qualquer
-    pagamento trazer o id. Se chegar antes do checkout pago (fila fora de
-    ordem), não acha o cliente: o primeiro pagamento, ou a consulta ao Asaas
-    na hora de cancelar, cobrem.
+    pagamento trazer o id.
     """
+    checkout_id = assinatura.get("checkoutSession")
+    cliente = _id_de(assinatura.get("customer"))
+    if checkout_id:
+        conhecido = await _anota_ids(conn, checkout_id, cliente, _id_de(assinatura))
+        return "assinatura-ligada" if conhecido else "assinatura-sem-dono"
     resultado = await conn.execute(
         """
         UPDATE assinaturas SET asaas_assinatura = $1
          WHERE asaas_cliente = $2 AND asaas_assinatura IS NULL AND cancelada_em IS NULL
         """,
         _id_de(assinatura),
-        _id_de(assinatura.get("customer")),
+        cliente,
     )
     return "assinatura-ligada" if resultado.endswith(" 1") else "assinatura-sem-dono"
 
 
-async def _dono(conn, assinatura: str | None, cliente: str | None) -> asyncpg.Record | None:
-    """A linha de `assinaturas` do pagamento: pela assinatura, ou pelo cliente."""
-    if assinatura:
-        linha = await conn.fetchrow(
-            "SELECT * FROM assinaturas WHERE asaas_assinatura = $1 FOR UPDATE", assinatura
-        )
-        if linha is not None:
-            return linha
-    if cliente:
-        return await conn.fetchrow(
-            "SELECT * FROM assinaturas WHERE asaas_cliente = $1 FOR UPDATE", cliente
-        )
+async def _dono(
+    conn, assinatura: str | None, checkout_id: str | None, cliente: str | None
+) -> asyncpg.Record | None:
+    """A linha de `assinaturas` do aviso: pela assinatura, pelo checkout, ou pelo cliente."""
+    for coluna, valor in (
+        ("asaas_assinatura", assinatura),
+        ("checkout_id", checkout_id),
+        ("asaas_cliente", cliente),
+    ):
+        if valor:
+            linha = await conn.fetchrow(
+                f"SELECT * FROM assinaturas WHERE {coluna} = $1 FOR UPDATE",  # noqa: S608
+                valor,
+            )
+            if linha is not None:
+                return linha
     return None
 
 
-async def _pagamento_confirmado(conn, pagamento: dict) -> str:
-    linha = await _dono(
-        conn, _id_de(pagamento.get("subscription")), _id_de(pagamento.get("customer"))
-    )
+async def _pagamento_confirmado(conn, pagamento: dict, hoje: date) -> str:
+    assinatura = _id_de(pagamento.get("subscription"))
+    cliente = _id_de(pagamento.get("customer"))
+    checkout_id = pagamento.get("checkoutSession")
+
+    # O primeiro pagamento de um checkout nosso prova a compra: anota os ids e
+    # ativa o plano, mesmo que o `CHECKOUT_PAID` ainda não tenha chegado.
+    if checkout_id and await _anota_ids(conn, checkout_id, cliente, assinatura):
+        await _ativa_checkout(conn, checkout_id, hoje)
+
+    linha = await _dono(conn, assinatura, checkout_id, cliente)
     if linha is None:
         _log.warning("[asaas] pagamento %s sem assinatura conhecida", pagamento.get("id"))
         return "pagamento-sem-dono"
@@ -208,12 +268,11 @@ async def _pagamento_confirmado(conn, pagamento: dict) -> str:
     )
     novo_plano = linha["plano_no_proximo_ciclo"] if periodo_novo else None
 
-    # O pagamento traz o id da assinatura que o checkout não trouxe: grava, se
-    # ainda faltar e se não foi cancelada. E só se o pagamento é da assinatura
-    # ATUAL: o `PAYMENT_RECEIVED` atrasado (até 32 dias, no cartão) de uma
-    # assinatura antiga, de quem cancelou e recontratou, vence antes do começo
-    # da nova, e gravaria o id antigo aqui — o cancelamento passaria a mirar
-    # numa assinatura que já não existe, e a nova seguiria cobrando.
+    # Pagamento sem checkout (ou de assinatura criada fora dele) traz o id da
+    # assinatura que faltava: grava, se ainda faltar, se não foi cancelada, e
+    # se o pagamento é da assinatura ATUAL. O `PAYMENT_RECEIVED` atrasado (até
+    # 32 dias, no cartão) de uma assinatura antiga vence antes do começo da
+    # nova, e gravaria o id antigo aqui.
     await conn.execute(
         """
         UPDATE assinaturas SET asaas_assinatura = $2
@@ -222,7 +281,7 @@ async def _pagamento_confirmado(conn, pagamento: dict) -> str:
            AND $3 >= (desde AT TIME ZONE 'America/Sao_Paulo')::date
         """,
         linha["seller_id"],
-        _id_de(pagamento.get("subscription")),
+        assinatura,
         vencimento,
     )
     await conn.execute(
@@ -261,7 +320,10 @@ async def _assinatura_encerrada(conn, assinatura: dict) -> str:
 
 async def _dinheiro_devolvido(conn, pagamento: dict, tipo: str) -> str:
     linha = await _dono(
-        conn, _id_de(pagamento.get("subscription")), _id_de(pagamento.get("customer"))
+        conn,
+        _id_de(pagamento.get("subscription")),
+        pagamento.get("checkoutSession"),
+        _id_de(pagamento.get("customer")),
     )
     if linha is None:
         return "pagamento-sem-dono"

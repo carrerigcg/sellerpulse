@@ -279,38 +279,64 @@ async def _checkout_criado(pool, seller_id, plano="exclusive", ciclo="mensal", c
         )
 
 
+# Os avisos abaixo seguem o formato REAL, medido no sandbox (2026-10-29): o
+# `CHECKOUT_PAID` traz `customer: null` e `subscription` com a CONFIGURAÇÃO da
+# assinatura; o pagamento e a assinatura trazem `checkoutSession`, o id do
+# checkout que criamos.
+
+
 def _checkout_pago(evento_id="evt_chk", checkout_id="chk_1"):
     return {
         "id": evento_id,
         "event": "CHECKOUT_PAID",
-        # Formato da documentação ("Eventos para Checkout"): `subscription` é a
-        # CONFIGURAÇÃO da assinatura, e não o id dela.
         "checkout": {
             "id": checkout_id,
-            "customer": "cus_1",
-            "subscription": {"cycle": "MONTHLY", "nextDueDate": "2026-11-09T03:00:00+0000"},
+            "customer": None,
+            "status": "PAID",
+            "subscription": {
+                "cycle": "MONTHLY",
+                "endDate": None,
+                "nextDueDate": "2026-11-09T03:00:00+0000",
+            },
+            # Caso o Asaas repita dado pessoal: não pode ser gravado.
             "customerData": {"name": "Loja", "cpfCnpj": "12345678909", "email": "a@b.dev"},
+            "externalReference": "seller:x",
         },
     }
 
 
-def _assinatura_criada(evento_id="evt_sub", assinatura="sub_1", cliente="cus_1"):
+def _assinatura_criada(evento_id="evt_sub", assinatura="sub_1", cliente="cus_1", checkout="chk_1"):
     return {
         "id": evento_id,
         "event": "SUBSCRIPTION_CREATED",
-        "subscription": {"id": assinatura, "customer": cliente, "cycle": "MONTHLY"},
+        "subscription": {
+            "id": assinatura,
+            "customer": cliente,
+            "cycle": "MONTHLY",
+            "status": "ACTIVE",
+            "checkoutSession": checkout,
+        },
     }
 
 
-def _pagamento(evento_id, vencimento: date, tipo="PAYMENT_CONFIRMED", assinatura="sub_1"):
+def _pagamento(
+    evento_id,
+    vencimento: date,
+    tipo="PAYMENT_CONFIRMED",
+    assinatura="sub_1",
+    checkout="chk_1",
+    cliente="cus_1",
+):
     return {
         "id": evento_id,
         "event": tipo,
         "payment": {
             "id": f"pay_{evento_id}",
-            "customer": "cus_1",
+            "customer": cliente,
             "subscription": assinatura,
+            "checkoutSession": checkout,
             "dueDate": vencimento.isoformat(),
+            "status": "CONFIRMED",
         },
     }
 
@@ -328,8 +354,9 @@ async def test_checkout_pago_com_teste_libera_ate_o_oitavo_dia_mais_tolerancia(p
 
     linha = await _assinatura(pg_pool, seller_id)
     assert (linha["plano"], linha["origem"], linha["ciclo"]) == ("exclusive", "gateway", "mensal")
-    # O id da assinatura não vem no checkout pago: chega depois.
-    assert (linha["asaas_cliente"], linha["asaas_assinatura"]) == ("cus_1", None)
+    # O checkout pago não traz cliente nem assinatura: chegam nos outros avisos.
+    assert (linha["asaas_cliente"], linha["asaas_assinatura"]) == (None, None)
+    assert linha["checkout_id"] == "chk_1"
     assert linha["pago_ate"] == meia_noite_do_vendedor(HOJE + timedelta(days=7))
     assert linha["acesso_ate"] == meia_noite_do_vendedor(HOJE + timedelta(days=14))
 
@@ -622,25 +649,79 @@ async def test_subscription_created_liga_a_assinatura_pelo_cliente(pg_pool, sem_
     assert (await _assinatura(pg_pool, seller_id))["asaas_assinatura"] == "sub_1"
 
 
-async def test_pagamento_antes_do_checkout_pago_nao_estraga_o_prazo(pg_pool, sem_plano):
-    """Fila fora de ordem: o pagamento chega antes de se saber de quem é."""
+async def test_na_ordem_real_do_sandbox_o_pagamento_ativa_e_o_checkout_pago_nao_reativa(
+    pg_pool, sem_plano
+):
+    """A ordem medida no sandbox: pagamento, assinatura criada, e só então o
+    checkout pago. O pagamento de um checkout nosso já prova a compra."""
     _, seller_id = sem_plano
     await _checkout_criado(pg_pool, seller_id, plano="essencial")
-    assert await eventos.processa(pg_pool, _pagamento("evt_p0", HOJE)) == "pagamento-sem-dono"
 
-    await eventos.processa(pg_pool, _checkout_pago(), hoje=HOJE)
+    assert (
+        await eventos.processa(pg_pool, _pagamento("evt_p0", HOJE), hoje=HOJE) == "prazo-estendido"
+    )
+    assert await eventos.processa(pg_pool, _assinatura_criada()) == "assinatura-ligada"
+    assert await eventos.processa(pg_pool, _checkout_pago(), hoje=HOJE) == "ja-ativado"
 
     linha = await _assinatura(pg_pool, seller_id)
+    assert (linha["plano"], linha["origem"]) == ("essencial", "gateway")
+    assert (linha["asaas_cliente"], linha["asaas_assinatura"]) == ("cus_1", "sub_1")
     assert linha["pago_ate"] == meia_noite_do_vendedor(fim_do_periodo(HOJE, "mensal"))
+
+
+async def test_renovacao_com_o_mesmo_checkout_nao_desfaz_o_downgrade(pg_pool, sem_plano):
+    """As renovações também trazem o checkout: não podem reativar o plano comprado."""
+    _, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id, plano="premium")
+    await eventos.processa(pg_pool, _pagamento("evt_p1", HOJE), hoje=HOJE)
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET plano_no_proximo_ciclo = 'essencial' WHERE seller_id = $1",
+            seller_id,
+        )
+
+    proximo = fim_do_periodo(HOJE, "mensal")
+    await eventos.processa(pg_pool, _pagamento("evt_p2", proximo), hoje=proximo)
+
+    linha = await _assinatura(pg_pool, seller_id)
+    assert (linha["plano"], linha["plano_no_proximo_ciclo"]) == ("essencial", None)
 
 
 async def test_cancelar_no_teste_descobre_a_assinatura_no_asaas(
     client, pg_pool, sem_plano, asaas_falso
 ):
-    """No teste de 7 dias nenhum pagamento trouxe o id: pergunta ao Asaas."""
+    """No teste de 7 dias nenhum pagamento trouxe o id da assinatura, e o aviso
+    de assinatura criada se perdeu: com o cliente conhecido, pergunta ao Asaas."""
     user_id, seller_id = sem_plano
     await _checkout_criado(pg_pool, seller_id)
     await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje_do_vendedor())
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO aceites_de_termos (seller_id, versao) VALUES ($1, $2)",
+            seller_id,
+            VERSAO_DOS_TERMOS,
+        )
+        await conn.execute(
+            "UPDATE assinaturas SET asaas_cliente = 'cus_1' WHERE seller_id = $1", seller_id
+        )
+
+    resp = client.post("/conta/cancelar", headers=_auth(user_id))
+
+    assert resp.status_code == 200
+    assert ("DELETE", "/v3/subscriptions/sub_api", None) in asaas_falso.pedidos
+    linha = await _assinatura(pg_pool, seller_id)
+    assert linha["cancelada_em"] is not None
+    assert linha["acesso_ate"] == linha["pago_ate"]
+
+
+async def test_cancelar_no_teste_usa_a_assinatura_ligada_pelo_aviso(
+    client, pg_pool, sem_plano, asaas_falso
+):
+    """O caminho real do teste de 7 dias: o aviso de assinatura criada liga o id."""
+    user_id, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id)
+    await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje_do_vendedor())
+    await eventos.processa(pg_pool, _assinatura_criada())
     async with pg_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO aceites_de_termos (seller_id, versao) VALUES ($1, $2)",
@@ -651,10 +732,7 @@ async def test_cancelar_no_teste_descobre_a_assinatura_no_asaas(
     resp = client.post("/conta/cancelar", headers=_auth(user_id))
 
     assert resp.status_code == 200
-    assert ("DELETE", "/v3/subscriptions/sub_api", None) in asaas_falso.pedidos
-    linha = await _assinatura(pg_pool, seller_id)
-    assert linha["cancelada_em"] is not None
-    assert linha["acesso_ate"] == linha["pago_ate"]
+    assert asaas_falso.pedidos == [("DELETE", "/v3/subscriptions/sub_1", None)]
 
 
 async def test_inadimplente_consegue_cancelar(client, pg_pool, test_seller, asaas_falso):
@@ -780,8 +858,13 @@ async def test_pagamento_atrasado_da_assinatura_antiga_nao_grava_o_id_antigo(pg_
     await _checkout_criado(pg_pool, seller_id, plano="essencial")
     await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje)
 
+    # O pagamento da assinatura antiga traz o checkout ANTIGO.
     antigo = _pagamento(
-        "evt_velho", hoje - timedelta(days=32), tipo="PAYMENT_RECEIVED", assinatura="sub_velha"
+        "evt_velho",
+        hoje - timedelta(days=32),
+        tipo="PAYMENT_RECEIVED",
+        assinatura="sub_velha",
+        checkout="chk_velho",
     )
     await eventos.processa(pg_pool, antigo)
     assert (await _assinatura(pg_pool, seller_id))["asaas_assinatura"] is None
@@ -832,3 +915,13 @@ async def test_o_checkout_nao_recebe_nem_manda_dado_de_cliente(client, sem_plano
     corpo = asaas_falso.pedidos[0][2]
     assert "customerData" not in corpo
     assert "52998224725" not in json.dumps(corpo)
+
+
+async def test_estorno_acha_o_vendedor_pelo_checkout_quando_os_ids_nao_chegaram(pg_pool, sem_plano):
+    """Só o checkout pago chegou (sem cliente nem assinatura); o estorno traz o checkout."""
+    _, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id, plano="premium", ciclo="anual")
+    await eventos.processa(pg_pool, _checkout_pago(), hoje=HOJE)
+
+    estorno = _pagamento("evt_r", HOJE, tipo="PAYMENT_REFUNDED", assinatura=None, cliente=None)
+    assert await eventos.processa(pg_pool, estorno) == "acesso-encurtado"
