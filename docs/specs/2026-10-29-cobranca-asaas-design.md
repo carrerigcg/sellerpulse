@@ -158,35 +158,45 @@ endereço nem de passagem (minimização, LGPD art. 6º, III).
 
 Sem `ASAAS_API_KEY`, contratar responde 503, e não um erro genérico.
 
-## A confirmar no sandbox, antes do merge
+## Testado no sandbox (2026-10-29)
 
-Já resolvido pela documentação, na revisão de 2026-10-29:
+Fluxo ponta a ponta, com o backend de teste exposto por túnel e pagamentos de
+teste feitos na página do Asaas:
 
-- **O `checkout.subscription` do `CHECKOUT_PAID` é a configuração da
-  assinatura, e não o id.** O id vem do `SUBSCRIPTION_CREATED`, do primeiro
-  pagamento, ou de uma consulta ao Asaas
-  (`GET /subscriptions?customer=...&status=ACTIVE`) na hora de cancelar ou
-  trocar. É isso que permite cancelar durante o teste de 7 dias.
-- **`imageBase64` é obrigatório** em cada item do checkout. Vai o quadrado da
-  marca (`backend/pagamentos/marca.png`).
+| caso | resultado |
+| --- | --- |
+| Essencial mensal, cobrança na hora | plano liberado pelo pagamento; prazo de 1 mês + tolerância |
+| Exclusive mensal, 7 dias grátis | `CHECKOUT_PAID` chega só com o cartão validado; primeira cobrança pendente no 8º dia; plano liberado até o fim do teste |
+| Upgrade no teste (Exclusive → Premium) | plano trocado na hora; assinatura no Asaas passa a 139,90; a cobrança já gerada fica em 79,90 (decisão 6) |
+| Cancelar no teste | assinatura removida no Asaas e a cobrança pendente some; `SUBSCRIPTION_DELETED` chega; acesso até o fim do teste |
+| Essencial anual, pagamento único | o pagamento (sem assinatura) libera o plano por 12 meses + tolerância |
 
-Medido no sandbox (2026-10-29):
+O que o sandbox mostrou, e mudou o código:
 
+- **O checkout é o elo.** O pagamento e a assinatura trazem `checkoutSession`
+  (o id do checkout criado por nós). O `CHECKOUT_PAID` traz `customer: null` e
+  `subscription` com a CONFIGURAÇÃO da assinatura, não o id.
+- **A fila chega fora de ordem**, mesmo no envio sequencial: o pagamento e a
+  assinatura criada chegaram antes do checkout pago. Por isso, todo aviso que
+  traz o checkout anota nele o cliente e a assinatura, e o primeiro que prova
+  o pagamento ativa o plano, uma vez só (`checkouts.pago_em`).
 - **URLs de retorno com `localhost` são recusadas**; HTTPS público é aceito,
-  com ou sem `?checkout=ok`. Teste local precisa de uma URL pública de retorno.
-- **Sem `customerData`, o checkout recorrente é aceito** e a página do Asaas
-  coleta os dados. Com `customerData`, ele exige endereço completo e telefone.
-- **Checkout com Pix exige uma chave Pix cadastrada na conta Asaas.** Vale
-  para o sandbox e para a conta de produção.
+  com ou sem `?checkout=ok`.
+- **Sem `customerData`, a página do Asaas coleta os dados** de cobrança. Com
+  ele, o Asaas exige endereço completo e telefone.
+- **Checkout com Pix exige uma chave Pix** cadastrada na conta Asaas. Vale
+  também para a conta de produção.
+- **`imageBase64` é obrigatório** em cada item do checkout.
+- **O `externalReference` do checkout não chega** ao pagamento nem à
+  assinatura (vem nulo neles). Não é usado para nada além de auditoria.
 
-A documentação não responde estes pontos, e o código só se fecha depois de
-vê-los num evento de verdade:
+Não testado no sandbox:
 
-- Se o `externalReference` do checkout chega ao cliente e à assinatura.
-- Se o checkout anual (`DETACHED`) reaproveita o cliente do Asaas quando a
-  mesma pessoa tem duas contas (a busca por `asaas_cliente` não é única).
-- Se o checkout com teste (primeira cobrança no 8º dia) dispara
-  `CHECKOUT_PAID` quando o cartão é validado, sem cobrança.
+- Pagamento do anual por Pix: pagar o QR no sandbox exige uma segunda conta.
+  O caminho do código é o mesmo do cartão (pagamento sem assinatura).
+- Renovação mensal de verdade (o sandbox não avança o calendário), estorno e
+  contestação: cobertos só pelos testes automatizados.
+- Inadimplência: o vencimento da tolerância é coberto pelos testes.
 
 ## Riscos
 
