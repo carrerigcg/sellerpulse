@@ -118,7 +118,9 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
     ],
   },
   custos: {
-    versao: 1,
+    // v2 em 2026-10-28: o slide 2 dizia que o custo só valia daqui para
+    // frente; passou a existir a opção de aplicar às vendas sem custo.
+    versao: 2,
     slides: [
       {
         titulo: "Por que informar o custo",
@@ -126,9 +128,9 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
           "O Mercado Livre não sabe quanto o produto custa para você. Sem esse número, a margem de contribuição fica maior do que a real.",
       },
       {
-        titulo: "O custo vale daqui para frente",
+        titulo: "E as vendas que já aconteceram",
         texto:
-          "O que você digita vale a partir de hoje. Vendas que já aconteceram ficam com o custo que valia na época — ou sem custo, se não havia nenhum. Por isso o aviso de cobertura nas outras telas sobe aos poucos, com as próximas vendas.",
+          "Com a opção acima da tabela ligada, o custo salvo também vale para as vendas anteriores que estão sem custo. Um período em que você já informou um custo nunca muda: se o fornecedor subir o preço, a margem dos meses passados continua a mesma.",
       },
       {
         titulo: "Por onde começar",

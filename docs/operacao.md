@@ -73,7 +73,11 @@ cascade leva o resto) e o usuário em `auth.users`.
    `diff --strip-trailing-cr "$TEMP/x.bak" arquivo`. A árvore é CRLF: sem o
    `--strip-trailing-cr`, um `sed -i` aparece como o arquivo inteiro mudado, e
    você não sabe se a mutação pegou.
-4. Rode só o teste que deveria cair, e leia o motivo da falha.
+4. Rode só o teste que deveria cair, e leia o motivo da falha. Ele precisa ser
+   o teste daquela regra, e a falha precisa ser de asserção. Uma mutação que
+   quebra o próprio código (um parâmetro SQL que fica sem uso, um `import`
+   fora de lugar) derruba vários testes por **erro**, e isso parece "pegou"
+   sem provar nada. Aconteceu duas vezes em 2026-10-28.
 5. Restaure **da cópia** e confira com `diff -q`.
 
 **Nunca restaure com `git checkout -- arquivo`:** isso volta ao último commit

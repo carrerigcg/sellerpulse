@@ -49,6 +49,9 @@ class CustoInformado(BaseModel):
     """Corpo do PUT. Note o que NÃO tem: `seller_id`."""
 
     custo_unitario: float = Field(ge=0, le=MAX_CUSTO_UNITARIO)
+    # Falso por padrão: um cliente antigo, que não manda o campo, continua
+    # gravando "a partir de hoje", como antes. Quem liga é a opção da tela.
+    retroativo: bool = False
 
 
 @router.get("")
@@ -80,11 +83,15 @@ async def put_custo(
     """Grava o custo com vigência a partir de hoje.
 
     Dois PUT no mesmo dia geram uma linha só; num dia diferente, acrescentam
-    um período novo e o anterior continua valendo para o passado.
+    um período novo e o anterior continua valendo para o passado. Com
+    `retroativo`, o valor também cobre as vendas que estão sem custo — só
+    elas (ver `gravar_custo`).
     """
     pool = await get_pool()
     await _garante_item_do_vendedor(pool, seller_id, item_id)
-    vigencia = await gravar_custo(pool, seller_id, item_id, corpo.custo_unitario)
+    vigencia = await gravar_custo(
+        pool, seller_id, item_id, corpo.custo_unitario, retroativo=corpo.retroativo
+    )
     return {
         "sku": item_id,
         "custo_unitario": corpo.custo_unitario,

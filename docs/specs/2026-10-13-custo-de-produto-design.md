@@ -30,7 +30,7 @@ A varredura de concorrentes de 2026-10-13 confirmou o caminho. A AvantPro Contro
 - **Impostos.** A AvantPro inclui; nós não, nesta versão. Regime tributário (Simples, Lucro Presumido, MEI), substituição tributária e alíquota por categoria são um projeto próprio, e errar imposto é pior que não mostrar.
 - **Custos fixos** (aluguel, salários, anúncios). Margem de contribuição é sobre custo variável; lucro líquido é outra métrica e outra tela.
 - **Importação por planilha.** Decidido: tabela editável primeiro. A planilha entra quando alguém com centenas de produtos reclamar — ver seção 9.
-- **Edição de histórico pela tela.** O banco guarda a linha do tempo; a tela, nesta versão, só escreve "o custo passou a ser X a partir de hoje".
+- **Edição de histórico pela tela.** O banco guarda a linha do tempo; a tela, nesta versão, só escreve "o custo passou a ser X a partir de hoje". *(2026-10-28: a tela passou a poder preencher também as vendas anteriores sem custo, sem reescrever período informado. Ver `2026-10-28-custo-retroativo-design.md`. A edição período por período continua fora.)*
 - **Custo por variação** (cor, tamanho). O ML tem variações sob o mesmo `item_id`; tratamos no nível do `item_id`.
 - **Renomear a métrica.** Continua "margem de contribuição". Ver seção 1.
 
