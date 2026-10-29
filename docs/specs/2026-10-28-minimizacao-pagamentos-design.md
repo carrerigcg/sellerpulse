@@ -1,6 +1,9 @@
 # Minimização dos dados de pagamento dos pedidos
 
-Estado: em implementação (branch `feat/minimiza-pagamentos`).
+Estado: no ar desde 2026-10-28 (#32). A `0014` foi aplicada em produção antes
+do merge (1.288 pedidos limpos). Com o deploy no ar, a contagem de pedidos com
+identificador seguia em 0: o worker antigo não regravou nada no meio-tempo, e
+não foi preciso rodar o `UPDATE` de novo.
 
 ## Por quê
 
@@ -45,3 +48,7 @@ ML, pelo número do pedido.
 - A exclusão de conta pelo próprio usuário.
 - Revisar os outros blocos do payload (`context`, `feedback`, `mediations`).
   Eles não trazem identificador de pagamento; fica para outra rodada.
+- A ingestão legada em SQLite (`src/`), que é congelada e não usa a Supabase.
+- Pendências opcionais dos revisores: teste da migration com dois pagamentos
+  (a ordem foi conferida à mão) e um elemento de `payments[]` que não seja
+  objeto, que aborta a migration. Em produção não havia nenhum.
