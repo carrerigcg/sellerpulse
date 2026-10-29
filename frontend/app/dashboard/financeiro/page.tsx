@@ -11,6 +11,8 @@ import { KpiCard } from "@/components/analytics/kpi-card";
 import { ExportButton } from "@/components/analytics/export-button";
 import {
   mensagemDeFalhaAoCarregar,
+  foraDoPlano,
+  getAcesso,
   getCancelamentos,
   getFluxoFinanceiro,
   janelaAnterior,
@@ -20,7 +22,9 @@ import type { Cancelamentos } from "@/lib/cancelamentos";
 import { COLUNAS_FLUXO } from "@/lib/colunas-export";
 
 import { coberturaDoFluxo, coberturaDoFrete } from "@/lib/cobertura";
-import { periodoPadrao } from "@/lib/periodo";
+import { hojeNoFusoDoVendedor, periodoPadrao } from "@/lib/periodo";
+import { historicoCortado, inicioDoHistorico, podeUsar } from "@/lib/plano";
+import { AvisoDeHistorico } from "@/components/planos/cadeado";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 import { SemPedidosNoPeriodo } from "@/components/analytics/sem-pedidos-no-periodo";
 
@@ -44,6 +48,10 @@ export default async function FinanceiroPage({
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
+  const acesso = await getAcesso().catch(() => null);
+  const hoje = hojeNoFusoDoVendedor();
+  const inicio = acesso && historicoCortado(acesso, de, hoje) ? inicioDoHistorico(acesso, hoje) : null;
+
   let fluxo: FluxoDia[] = [];
   let anterior: FluxoDia[] = [];
   let cancelados: Cancelamentos | null = null;
@@ -55,7 +63,13 @@ export default async function FinanceiroPage({
     // sem ela, em vez de cair inteira junto.
     [fluxo, anterior, cancelados] = await Promise.all([
       getFluxoFinanceiro(de, ate),
-      getFluxoFinanceiro(antDe, antAte),
+      // O período anterior pode estar inteiro antes do histórico do plano.
+      // Aí não há base de comparação, e o `KpiCard` omite a variação: o
+      // vazio aqui é "sem base", nunca "vendeu zero".
+      getFluxoFinanceiro(antDe, antAte).catch((e: unknown) => {
+        if (foraDoPlano(e)) return [];
+        throw e;
+      }),
       getCancelamentos(de, ate).catch(() => null),
     ]);
   } catch (e) {
@@ -86,6 +100,8 @@ export default async function FinanceiroPage({
         <SemPedidosNoPeriodo mensagem="Nenhum pedido pago neste período." />
       ) : (
         <>
+          {inicio && <AvisoDeHistorico inicio={inicio} />}
+
           {/* Um cartão por parcela da conta que existe no período, para ela
               fechar na tela: receita − comissão − frete − custo dos produtos
               = margem. Frete e custo de produto só aparecem quando há algum. */}
@@ -152,13 +168,15 @@ export default async function FinanceiroPage({
                   {fluxo.length} dias com pedidos pagos
                 </p>
               </div>
-              <ExportButton
-                linhas={fluxo}
-                colunas={COLUNAS_FLUXO}
-                tela="executive"
-                de={de}
-                ate={ate}
-              />
+              {podeUsar(acesso, "exportar") && (
+                <ExportButton
+                  linhas={fluxo}
+                  colunas={COLUNAS_FLUXO}
+                  tela="executive"
+                  de={de}
+                  ate={ate}
+                />
+              )}
             </div>
             <FlowChart dias={fluxo} />
           </section>

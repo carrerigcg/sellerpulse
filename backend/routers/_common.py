@@ -9,11 +9,13 @@ um SaaS, qualquer entrada malformada do cliente precisa virar 400 — nunca
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 
-from backend.analytics._common import _parse_boundary
+from backend.analytics._common import _TZ_VENDEDOR, _parse_boundary
+from backend.deps import recusa_fora_do_plano
+from backend.planos import Plano
 
 # Teto da duração da janela. Derivado do que o produto de fato serve: a
 # ingestão faz backfill de 6 meses (JANELAS_BACKFILL * DIAS_POR_JANELA =
@@ -89,3 +91,44 @@ def validate_n(n: int) -> int:
     if n > MAX_N:
         raise HTTPException(status_code=400, detail=f"n deve ser no máximo {MAX_N}; pedido: {n}")
     return n
+
+
+def limita_ao_historico(
+    plano: Plano, date_from: str, date_to: str, *, agora: datetime | None = None
+) -> tuple[str, str, str | None]:
+    """Corta a janela no histórico que o plano enxerga.
+
+    Devolve `(date_from, date_to, cortado_desde)`. `cortado_desde` é a data do
+    limite quando a janela foi cortada, e None quando coube inteira: é o que
+    deixa a tela dizer "histórico de 3 meses" em vez de mostrar menos venda
+    como se fosse a verdade.
+
+    Uma janela INTEIRA antes do limite (o período anterior da comparação, por
+    exemplo) é recusada, e não devolvida vazia: vazio diria "não vendeu nada
+    ali", e o que é verdade é "o seu plano não mostra ali". Ausência não é zero.
+
+    O limite é a meia-noite, no fuso do vendedor, de `dias_de_historico` dias
+    atrás. A janela padrão das telas (`periodoPadrao`: de hoje-90 até hoje,
+    exclusivo) cabe inteira em 90 dias.
+    """
+    if plano.dias_de_historico is None:
+        return date_from, date_to, None
+    agora = agora or datetime.now(UTC)
+    hoje = agora.astimezone(_TZ_VENDEDOR).date()
+    limite = hoje - timedelta(days=plano.dias_de_historico)
+    limite_iso = limite.isoformat()
+    if _parse_boundary(date_to) <= _parse_boundary(limite_iso):
+        raise recusa_fora_do_plano()
+    if _parse_boundary(date_from) < _parse_boundary(limite_iso):
+        return limite_iso, date_to, limite_iso
+    return date_from, date_to, None
+
+
+# Cabeçalho, e não campo no corpo, para não mudar o formato das respostas que
+# o front e o MCP já consomem.
+CABECALHO_HISTORICO = "X-Historico-Desde"
+
+
+def marca_historico_cortado(response: Response, cortado_desde: str | None) -> None:
+    if cortado_desde is not None:
+        response.headers[CABECALHO_HISTORICO] = cortado_desde

@@ -16,7 +16,7 @@ from backend.db import close_pool, get_pool
 from backend.demo_refresh import regenera_demo_se_vencida
 from backend.logging_setup import configura_logging
 from backend.ml.tokens import valida_chave_de_cifra
-from backend.routers import custos, demo, metrics, ml, segmentation
+from backend.routers import conta, custos, demo, metrics, ml, segmentation
 from backend.worker.runner import loop as worker_loop
 from backend.worker.runner import worker_habilitado
 
@@ -172,6 +172,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(conta.router)
 app.include_router(custos.router)
 app.include_router(demo.router)
 app.include_router(metrics.router)

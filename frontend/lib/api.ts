@@ -1,5 +1,8 @@
+import { cache } from "react";
+
 import type { Cancelamentos } from "@/lib/cancelamentos";
 import { comReceitaSemFrete, type FluxoDiaDaApi } from "@/lib/frete";
+import type { Acesso } from "@/lib/plano";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -128,9 +131,24 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     mensagem: string,
+    /**
+     * O `detail.codigo` que o backend manda nas recusas de plano
+     * (`sem-plano`, `termos-pendentes`, `fora-do-plano`). `null` nos outros
+     * erros.
+     */
+    public codigo: string | null = null,
   ) {
     super(mensagem);
   }
+}
+
+/**
+ * O plano não cobre o que se pediu — por exemplo o período anterior da
+ * comparação, inteiro antes do histórico do Essencial. Quem chama trata como
+ * "indisponível no plano", nunca como zero.
+ */
+export function foraDoPlano(e: unknown): boolean {
+  return e instanceof ApiError && e.codigo === "fora-do-plano";
 }
 
 /**
@@ -148,6 +166,13 @@ export function mensagemDeFalhaAoCarregar(e: unknown, oQue = "os dados"): string
 }
 
 async function buscar<T>(caminho: string, params: Record<string, string>): Promise<T> {
+  return (await buscarComCabecalhos<T>(caminho, params)).dados;
+}
+
+async function buscarComCabecalhos<T>(
+  caminho: string,
+  params: Record<string, string>,
+): Promise<{ dados: T; cabecalhos: Headers }> {
   const supabase = await createClient();
   const {
     data: { session },
@@ -164,10 +189,25 @@ async function buscar<T>(caminho: string, params: Record<string, string>): Promi
   });
 
   if (!resposta.ok) {
-    throw new ApiError(resposta.status, `Falha ao buscar ${caminho}`);
+    throw new ApiError(resposta.status, `Falha ao buscar ${caminho}`, await codigoDoErro(resposta));
   }
-  return resposta.json();
+  return { dados: await resposta.json(), cabecalhos: resposta.headers };
 }
+
+async function codigoDoErro(resposta: Response): Promise<string | null> {
+  try {
+    const corpo = await resposta.json();
+    return typeof corpo?.detail?.codigo === "string" ? corpo.detail.codigo : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * O que o vendedor pode acessar. `cache` porque o layout e cada página
+ * perguntam a mesma coisa no mesmo render: uma ida ao backend, não várias.
+ */
+export const getAcesso = cache(() => buscar<Acesso>("/conta/acesso", {}));
 
 export function getCancelamentos(dateFrom: string, dateTo: string) {
   return buscar<Cancelamentos>("/metrics/cancelamentos", { date_from: dateFrom, date_to: dateTo });
@@ -181,10 +221,32 @@ export function getFluxoFinanceiro(dateFrom: string, dateTo: string) {
 }
 
 export function getAbcPareto(dateFrom: string, dateTo: string) {
-  return buscar<AbcLinha[]>("/segmentation/abc", {
+  return getAbcComCorte(dateFrom, dateTo).then((r) => r.linhas);
+}
+
+/**
+ * A curva ABC e quantos produtos o plano deixou de fora (`X-Produtos-Ocultos`).
+ *
+ * No plano sem desempenho dos anúncios, o backend não manda as colunas de
+ * visita. Aqui elas viram `null`, "não medido", que é o que todas as telas já
+ * sabem mostrar como `—`. Deixá-las `undefined` passaria por `!== null` como
+ * se houvesse visita colhida.
+ */
+export async function getAbcComCorte(
+  dateFrom: string,
+  dateTo: string,
+): Promise<{ linhas: AbcLinha[]; ocultos: number }> {
+  const { dados, cabecalhos } = await buscarComCabecalhos<AbcLinha[]>("/segmentation/abc", {
     date_from: dateFrom,
     date_to: dateTo,
   });
+  const linhas = dados.map((linha) => ({
+    ...linha,
+    unidades_com_visita: linha.unidades_com_visita ?? linha.unidades,
+    visitas: linha.visitas ?? null,
+    conversao: linha.conversao ?? null,
+  }));
+  return { linhas, ocultos: Number(cabecalhos.get("X-Produtos-Ocultos") ?? 0) };
 }
 
 /** Uma linha da tela de Custos: produto vendido na janela + custo vigente hoje. */

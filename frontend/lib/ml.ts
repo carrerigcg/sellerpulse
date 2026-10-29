@@ -26,6 +26,8 @@ export type StatusSync = {
   apelido: string | null;
   ultima_sincronizacao: string | null;
   historico_completo: boolean;
+  /** O plano deixa sincronizar fora da diária agendada? */
+  sincroniza_sob_demanda: boolean;
   job: StatusJob | null;
 };
 
@@ -73,4 +75,17 @@ export async function desconectar(): Promise<void> {
     headers: await autorizacao(),
   });
   if (!resposta.ok) throw new Error("Não foi possível desconectar");
+}
+
+/** Registra o aceite da versão dos termos que a tela mostrou. */
+export async function aceitarTermos(versao: string): Promise<void> {
+  const resposta = await fetch(`${BASE}/conta/aceite`, {
+    method: "POST",
+    headers: { ...(await autorizacao()), "Content-Type": "application/json" },
+    body: JSON.stringify({ versao }),
+  });
+  if (resposta.status === 409) {
+    throw new Error("Os termos mudaram enquanto a página estava aberta. Recarregue e leia de novo.");
+  }
+  if (!resposta.ok) throw new Error("Não foi possível registrar o aceite. Tente de novo.");
 }

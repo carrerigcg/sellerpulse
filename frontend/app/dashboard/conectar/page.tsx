@@ -219,15 +219,26 @@ function ConectarConteudo() {
                   : "Ainda não sincronizado"}
               </p>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={sincronizarAgora}
-                disabled={sincronizando || jobAtivo}
-                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
-              >
-                {sincronizando ? "Enviando…" : "Sincronizar agora"}
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {status.sincroniza_sob_demanda ? (
+                <button
+                  type="button"
+                  onClick={sincronizarAgora}
+                  disabled={sincronizando || jobAtivo}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
+                >
+                  {sincronizando ? "Enviando…" : "Sincronizar agora"}
+                </button>
+              ) : (
+                // No Essencial a atualização é só a diária agendada: o botão
+                // vira o convite, em vez de um clique que o servidor recusa.
+                <a
+                  href="/planos"
+                  className="text-xs text-muted underline hover:text-accent"
+                >
+                  Atualização diária · sincronizar na hora no Exclusive
+                </a>
+              )}
               <button
                 type="button"
                 onClick={desconectarConta}

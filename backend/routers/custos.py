@@ -5,7 +5,7 @@ PRIMEIRO ENDPOINT DE ESCRITA DE DADO DO VENDEDOR NO SISTEMA. Até aqui, tudo
 que entrava no banco vinha da ingestão do Mercado Livre; aqui quem escreve é
 o cliente, pela rede. Daí as três travas abaixo, que não existiam antes:
 
-1. `seller_id` vem SEMPRE de `get_current_seller_id` (JWT validado), nunca do
+1. `seller_id` vem SEMPRE de `get_acesso` (JWT validado), nunca do
    corpo nem da query. Não há parâmetro para sobrescrevê-lo — não é que ele
    seja ignorado, é que não existe.
 2. `item_id` é validado contra os itens daquele vendedor. Sem isso, um PUT
@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 
 from backend.analytics.custos_pg import (
@@ -31,8 +31,8 @@ from backend.analytics.custos_pg import (
     remover_custo,
 )
 from backend.db import get_pool
-from backend.deps import get_current_seller_id
-from backend.routers._common import validate_window
+from backend.deps import Acesso, get_acesso
+from backend.routers._common import limita_ao_historico, marca_historico_cortado, validate_window
 
 router = APIRouter(prefix="/custos", tags=["custos"])
 
@@ -58,12 +58,15 @@ class CustoInformado(BaseModel):
 async def get_custos(
     date_from: str,
     date_to: str,
-    seller_id: uuid.UUID = Depends(get_current_seller_id),
+    response: Response,
+    acesso: Acesso = Depends(get_acesso),
 ) -> list[dict]:
     """Produtos vendidos na janela, com classe ABC e o custo vigente hoje."""
     date_from, date_to = validate_window(date_from, date_to)
+    date_from, date_to, cortado = limita_ao_historico(acesso.plano, date_from, date_to)
+    marca_historico_cortado(response, cortado)
     pool = await get_pool()
-    df = await listar_custos(pool, seller_id, date_from, date_to)
+    df = await listar_custos(pool, acesso.seller_id, date_from, date_to)
     return df.to_dict(orient="records")
 
 
@@ -78,7 +81,7 @@ async def _garante_item_do_vendedor(pool, seller_id: uuid.UUID, item_id: str) ->
 async def put_custo(
     item_id: str,
     corpo: CustoInformado,
-    seller_id: uuid.UUID = Depends(get_current_seller_id),
+    acesso: Acesso = Depends(get_acesso),
 ) -> dict:
     """Grava o custo com vigência a partir de hoje.
 
@@ -87,6 +90,7 @@ async def put_custo(
     `retroativo`, o valor também cobre as vendas que estão sem custo — só
     elas (ver `gravar_custo`).
     """
+    seller_id = acesso.seller_id
     pool = await get_pool()
     await _garante_item_do_vendedor(pool, seller_id, item_id)
     vigencia = await gravar_custo(
@@ -102,7 +106,7 @@ async def put_custo(
 @router.delete("/{item_id}")
 async def delete_custo(
     item_id: str,
-    seller_id: uuid.UUID = Depends(get_current_seller_id),
+    acesso: Acesso = Depends(get_acesso),
 ) -> dict:
     """Remove a vigência de HOJE — desfaz um erro de digitação do dia.
 
@@ -110,6 +114,7 @@ async def delete_custo(
     ontem. Se não havia nada gravado hoje, devolve `removido: false` em vez de
     404 — pedir para apagar o que já não existe não é erro do cliente.
     """
+    seller_id = acesso.seller_id
     pool = await get_pool()
     await _garante_item_do_vendedor(pool, seller_id, item_id)
     removido = await remover_custo(pool, seller_id, item_id)

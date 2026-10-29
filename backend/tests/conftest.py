@@ -7,6 +7,8 @@ import uuid
 import asyncpg
 import pytest
 
+from backend.planos import VERSAO_DOS_TERMOS
+
 TEST_DATABASE_URL = os.environ.get(
     "TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/sellerpulse_test"
 )
@@ -82,9 +84,30 @@ async def pg_pool():
     await pool.close()
 
 
+async def da_plano(conn, seller_id, plano: str = "exclusive", *, aceita: bool = True) -> None:
+    """Põe o seller num plano e, por padrão, com os termos vigentes aceitos."""
+    await conn.execute(
+        "INSERT INTO assinaturas (seller_id, plano, origem) VALUES ($1, $2, 'manual') "
+        "ON CONFLICT (seller_id) DO UPDATE SET plano = EXCLUDED.plano",
+        seller_id,
+        plano,
+    )
+    if aceita:
+        await conn.execute(
+            "INSERT INTO aceites_de_termos (seller_id, versao) VALUES ($1, $2) "
+            "ON CONFLICT DO NOTHING",
+            seller_id,
+            VERSAO_DOS_TERMOS,
+        )
+
+
 @pytest.fixture
 async def test_seller(pg_pool):
     """Cria um auth.users + sellers de teste, devolve (user_id, seller_id).
+
+    Nasce no Exclusive e com os termos aceitos: é o produto inteiro, como era
+    antes de existirem planos, e é o que os testes de cada tela assumem. Quem
+    testa o Essencial ou a falta de plano usa `da_plano` ou cria o seu.
 
     O DELETE no teardown cascateia pra sellers e todas as tabelas analíticas
     (FK com ON DELETE CASCADE), então cada teste começa limpo.
@@ -97,6 +120,7 @@ async def test_seller(pg_pool):
         seller_id = await conn.fetchval(
             "INSERT INTO sellers (user_id) VALUES ($1) RETURNING id", user_id
         )
+        await da_plano(conn, seller_id)
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
         await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
@@ -113,6 +137,7 @@ async def outro_seller(pg_pool):
         seller_id = await conn.fetchval(
             "INSERT INTO sellers (user_id) VALUES ($1) RETURNING id", user_id
         )
+        await da_plano(conn, seller_id)
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
         await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)

@@ -21,10 +21,17 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 
 from backend.db import get_pool
-from backend.deps import get_current_seller_id
+from backend.deps import (
+    Acesso,
+    get_acesso,
+    get_current_seller_id,
+    le_plano_e_aceite,
+    recusa_fora_do_plano,
+)
 from backend.jobs import queue
 from backend.ml import oauth
 from backend.ml.tokens import PostgresTokenStore
+from backend.planos import Recurso
 from src.ml_client import MLClient
 from src.session_auth import OAuthError, exchange_code_for_tokens, sanitize_oauth_error
 
@@ -38,8 +45,9 @@ def _destino(caminho: str) -> str:
 
 
 @router.post("/connect/start")
-async def connect_start(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict[str, str]:
-    url, _state = oauth.url_de_consentimento(str(seller_id))
+async def connect_start(acesso: Acesso = Depends(get_acesso)) -> dict[str, str]:
+    # Conectar exige plano e aceite: sem eles, o vendedor só vê a demo.
+    url, _state = oauth.url_de_consentimento(str(acesso.seller_id))
     return {"url": url}
 
 
@@ -57,6 +65,12 @@ async def callback(
         seller_id = uuid.UUID(oauth.valida_state(state or ""))
     except (oauth.StateInvalido, ValueError):
         return RedirectResponse(_destino("/dashboard/conectar?erro=state"))
+
+    # O state so e emitido para quem tem acesso, mas vale por alguns minutos:
+    # quem perdeu o plano nesse meio-tempo nao termina a conexao.
+    plano, aceitou = await le_plano_e_aceite(await get_pool(), seller_id)
+    if plano is None or not aceitou:
+        return RedirectResponse(_destino("/dashboard"))
 
     # `requests` e sincrono: sem to_thread, estas duas chamadas travariam o
     # event loop que atende todo o resto da API.
@@ -138,7 +152,7 @@ _MOTIVOS = frozenset({"manual", "login"})
 @router.post("/sync")
 async def sync(
     motivo: str = "manual",
-    seller_id: uuid.UUID = Depends(get_current_seller_id),
+    acesso: Acesso = Depends(get_acesso),
 ) -> dict:
     """Enfileira um delta. QUEM DECIDE SE VALE A PENA E O SERVIDOR.
 
@@ -148,6 +162,14 @@ async def sync(
     """
     if motivo not in _MOTIVOS:
         raise HTTPException(status_code=400, detail=f"motivo invalido: {motivo!r}")
+    seller_id = acesso.seller_id
+
+    # Sem sincronizacao sob demanda, o plano fica so com a diaria agendada. O
+    # login nao e erro (o front o dispara sozinho); o botao e.
+    if not acesso.plano.libera(Recurso.SYNC_SOB_DEMANDA):
+        if motivo == "login":
+            return {"enfileirado": False, "motivo": "plano"}
+        raise recusa_fora_do_plano()
 
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -229,8 +251,15 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
         # `ml_seller_id IS NOT NULL` ja exclui o seller de demonstracao, que
         # nao tem conta do ML conectada. Nao filtrar por `is_demo` de
         # proposito: o criterio que importa e "da pra sincronizar", e e esse.
+        # Sem plano, nao sincroniza: e cota da API do ML gasta com conta que
+        # nao paga. O dado ingerido fica, e volta a atualizar com o plano.
         sellers = await conn.fetch(
-            "SELECT id, last_synced_at FROM sellers WHERE ml_seller_id IS NOT NULL"
+            """
+            SELECT s.id, s.last_synced_at
+              FROM sellers s
+              JOIN assinaturas a ON a.seller_id = s.id
+             WHERE s.ml_seller_id IS NOT NULL
+            """
         )
 
     agora = datetime.now(UTC)
@@ -266,6 +295,7 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
 @router.get("/sync/status")
 async def sync_status(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
     pool = await get_pool()
+    plano, _ = await le_plano_e_aceite(pool, seller_id)
     async with pool.acquire() as conn:
         seller = await conn.fetchrow(
             "SELECT ml_seller_id, ml_nickname, last_synced_at FROM sellers WHERE id = $1",
@@ -311,4 +341,6 @@ async def sync_status(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> 
         # posterior conclui — e a tela diz "sincronizado" sobre historico
         # incompleto, sem nada indicando.
         "historico_completo": bool(historico_completo),
+        # O botao "Sincronizar agora" so aparece para quem o plano deixa usar.
+        "sincroniza_sob_demanda": plano is not None and plano.libera(Recurso.SYNC_SOB_DEMANDA),
     }
