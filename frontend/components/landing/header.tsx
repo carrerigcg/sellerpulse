@@ -21,6 +21,13 @@ export function LandingHeader({ loggedIn }: { loggedIn: boolean }) {
           <Wordmark className="text-lg" />
         </Link>
         <nav className="flex items-center gap-4 sm:gap-6">
+          {/* Âncora da seção de preços na própria vitrine. */}
+          <Link
+            href="/#precos"
+            className="text-sm font-medium text-muted transition hover:text-ink"
+          >
+            Preços
+          </Link>
           <Link
             href="/demo"
             className="text-sm font-medium text-muted transition hover:text-ink"
