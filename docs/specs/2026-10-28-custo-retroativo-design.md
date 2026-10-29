@@ -1,6 +1,7 @@
 # Custo de produto retroativo
 
-Estado: em implementação (branch `feat/custo-retroativo`).
+Estado: mergeada em `90f2ced` (#31) em 2026-10-28. Revisores: código "não bloqueia";
+interface bloqueou um texto contraditório da tela, corrigido no mesmo PR.
 
 ## Por quê
 
@@ -38,7 +39,11 @@ mês depois de conectada, tem **zero** custos informados.
    hoje para aquele produto, inclusive o retroativo. A data de criação de cada
    linha (`criado_em`) diz o que foi gravado hoje. Assim, um erro de digitação
    com a opção ligada não fica preso no histórico.
-6. **Sem a opção ligada, o comportamento é o de antes:** vale a partir de hoje.
+6. **Sem a opção ligada, o custo vale a partir de hoje** e, se houver um início
+   do histórico gravado **hoje** para o produto, ele sai: "hoje" reflete a
+   última escolha. Sem isso, quem salvou 300 com a opção ligada, desligou e
+   salvou 30 ficaria com o 300 preso no passado (achado do revisor-de-codigo).
+   Um início gravado em outro dia não é tocado.
 
 ## Limitação aceita
 
