@@ -32,6 +32,7 @@ from backend.analytics.custos_pg import (
 )
 from backend.db import get_pool
 from backend.deps import Acesso, get_acesso
+from backend.planos import Recurso
 from backend.routers._common import limita_ao_historico, marca_historico_cortado, validate_window
 
 router = APIRouter(prefix="/custos", tags=["custos"])
@@ -67,6 +68,11 @@ async def get_custos(
     marca_historico_cortado(response, cortado)
     pool = await get_pool()
     df = await listar_custos(pool, acesso.seller_id, date_from, date_to)
+    # A lista de Custos tem todos os produtos vendidos, porque é onde o custo
+    # de cada um se informa. A classe A/B/C de todos eles é a curva ABC
+    # inteira, que o plano sem a ABC completa não cobre: ela sai daqui.
+    if not acesso.plano.libera(Recurso.ABC_COMPLETA):
+        df = df.drop(columns=["classe"])
     return df.to_dict(orient="records")
 
 

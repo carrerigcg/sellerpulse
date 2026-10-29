@@ -443,3 +443,19 @@ async def test_status_diz_se_o_plano_sincroniza_sob_demanda(client, pg_pool, tes
     await _no_plano(pg_pool, seller_id, "essencial")
     status = client.get("/ml/sync/status", headers=_auth(user_id)).json()
     assert status["sincroniza_sob_demanda"] is False
+
+
+async def test_custos_no_essencial_nao_mostra_a_classe_abc(client, pg_pool, test_seller):
+    """A lista de Custos tem todos os produtos; a classe de todos é a ABC inteira."""
+    user_id, seller_id = test_seller
+    await _doze_produtos(pg_pool, seller_id)
+    params = {"date_from": _dia(30), "date_to": _dia(0)}
+
+    completa = client.get("/custos", params=params, headers=_auth(user_id)).json()
+    await _no_plano(pg_pool, seller_id, "essencial")
+    resp = client.get("/custos", params=params, headers=_auth(user_id))
+
+    assert "classe" in completa[0]
+    assert resp.status_code == 200
+    assert len(resp.json()) == 12
+    assert all("classe" not in linha for linha in resp.json())

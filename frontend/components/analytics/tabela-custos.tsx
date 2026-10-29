@@ -52,6 +52,8 @@ export function TabelaCustos({
 }) {
   // Estado por SKU. Um `useState` por linha exigiria um componente por linha;
   // um mapa só mantém o componente simples e a linha independente.
+  // Sem classe na resposta (plano sem a curva ABC completa), a coluna some.
+  const comClasse = linhas.some((l) => l.classe !== undefined);
   const [estados, setEstados] = useState<Record<string, Estado>>({});
   const [erros, setErros] = useState<Record<string, string>>({});
   const [valores, setValores] = useState<Record<string, number | null>>(() =>
@@ -126,7 +128,7 @@ export function TabelaCustos({
       <table className="w-full min-w-[42rem] text-left text-sm">
         <thead className="text-xs text-muted">
           <tr className="border-b border-line">
-            <th className="py-2 pr-3 font-medium">Classe</th>
+            {comClasse && <th className="py-2 pr-3 font-medium">Classe</th>}
             <th className="py-2 pr-3 font-medium">Produto</th>
             <th className="py-2 pr-3 text-right font-medium">Receita</th>
             <th className="py-2 pr-3 text-right font-medium">Unidades</th>
@@ -138,9 +140,13 @@ export function TabelaCustos({
             const estado = estados[linha.sku] ?? "parado";
             return (
               <tr key={linha.sku} className="border-b border-line/60 last:border-0">
-                <td className="py-2.5 pr-3">
-                  <span className={abcClassBadgeClass(linha.classe)}>{linha.classe}</span>
-                </td>
+                {comClasse && (
+                  <td className="py-2.5 pr-3">
+                    {linha.classe && (
+                      <span className={abcClassBadgeClass(linha.classe)}>{linha.classe}</span>
+                    )}
+                  </td>
+                )}
                 <td className="py-2.5 pr-3">
                   <span className="block max-w-[22rem] truncate" title={linha.titulo}>
                     {linha.titulo}

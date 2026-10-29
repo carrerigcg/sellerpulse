@@ -5,7 +5,7 @@
  * errado é pior do que nenhum link.
  */
 export const EMAIL_DE_CONTATO = "carreri.gcg@gmail.com";
-export const WHATSAPP_DE_CONTATO: string | null = null;
+export const WHATSAPP_DE_CONTATO: string | null = "5511992344633";
 
 export function linkDeEmail(assunto: string): string {
   return `mailto:${EMAIL_DE_CONTATO}?subject=${encodeURIComponent(assunto)}`;

@@ -244,7 +244,8 @@ export async function getAbcComCorte(
 export type CustoLinha = {
   sku: string;
   titulo: string;
-  classe: ClasseAbc;
+  /** Ausente no plano sem a curva ABC completa (o backend não manda). */
+  classe?: ClasseAbc;
   receita: number;
   unidades: number;
   /**
