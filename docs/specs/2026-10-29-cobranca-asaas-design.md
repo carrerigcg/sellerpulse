@@ -1,7 +1,23 @@
 # Cobrança pelo Asaas
 
-Estado: spec aprovada, em implementação. Merge só depois do teste ponta a ponta
-no sandbox do Asaas.
+Estado: implementada, testada no sandbox e revisada (2026-10-29), na branch
+`feat/cobranca-asaas`. Falta só o que é de produção, nesta ordem:
+
+1. **Guilherme:** Render no plano pago (o gratuito hiberna e o Asaas pausa os
+   avisos depois de 15 falhas).
+2. **Guilherme:** conta de produção no Asaas, com chave Pix e chave de API
+   `$aact_prod_`; apagar o webhook "SellerPulse teste" do sandbox.
+3. **Com o ok dele:** aplicar a 0018 em produção (`apply_migration`, arquivo
+   inteiro) e conferir RLS ligada e sem policy em `checkouts` e
+   `eventos_do_gateway`; registrar no `APLICADAS.tsv`. Seguro antes do
+   merge: o código da `main` ignora as colunas novas.
+4. **Guilherme, no Render:** `ASAAS_API_KEY` (produção), `ASAAS_BASE_URL` =
+   `https://api.asaas.com/v3`, `ASAAS_WEBHOOK_TOKEN` (gerado na hora).
+5. **Guilherme, no Asaas de produção:** webhook para
+   `https://sellerpulse-049j.onrender.com/pagamentos/webhook`, envio
+   sequencial, com os eventos da seção "Webhook".
+6. PR, CI verde, merge (o conflito em `cartoes-de-planos.tsx` com a `main`
+   fica com a versão da branch), e conferir o deploy no Render e na Vercel.
 
 ## Por quê
 
