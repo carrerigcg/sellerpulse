@@ -4,6 +4,14 @@ import {
   linkDeEmail,
   linkDeWhatsapp,
 } from "@/lib/contato";
+import type { NomeDoPlano } from "@/lib/plano";
+import {
+  PRECOS_DEPOIS_DO_LANCAMENTO,
+  PRECOS_MENSAIS,
+  descontoDeLancamento,
+  economiaMensal,
+  formatarPreco,
+} from "@/lib/precos";
 
 /**
  * Os três planos, em cartões. Usado pela página `/planos` e pela seção de
@@ -15,15 +23,18 @@ import {
  * prometer o que o produto não entrega. O Exclusive é o recomendado e o mais
  * destacado, no centro (spec `docs/specs/2026-10-28-planos-e-acesso-design.md`).
  *
- * Preços decididos pelo dono em 2026-10-29, com entrada baixa de propósito
- * para trazer os primeiros clientes e feedback. `preco: null` volta a mostrar
- * "Sob consulta", e não um número que ninguém escolheu.
+ * Os preços moram em `lib/precos.ts`. Promoção de lançamento: o preço de
+ * depois aparece riscado, como âncora, com o desconto e a economia em reais.
+ * O riscado é dito na tela como o preço DEPOIS do lançamento, nunca como um
+ * "de" que já foi cobrado (CDC, art. 37).
+ *
+ * Enquanto a cobrança pelo Asaas não está no ar, o botão leva ao WhatsApp ou
+ * ao e-mail.
  */
 
 type Plano = {
+  chave: NomeDoPlano;
   nome: string;
-  /** Por mês, em reais. `null` = ainda não definido. */
-  preco: number | null;
   chamada: string;
   itens: string[];
   depois?: { titulo: string; itens: string[] };
@@ -32,8 +43,8 @@ type Plano = {
 
 const PLANOS: Plano[] = [
   {
+    chave: "essencial",
     nome: "Essencial",
-    preco: 49.9,
     chamada: "Para saber quanto sobra de cada venda.",
     itens: [
       "Resumo da loja",
@@ -46,8 +57,8 @@ const PLANOS: Plano[] = [
     ],
   },
   {
+    chave: "exclusive",
     nome: "Exclusive",
-    preco: 79.9,
     chamada: "O painel inteiro, para decidir com a loja toda à vista.",
     destaque: true,
     itens: [
@@ -63,12 +74,12 @@ const PLANOS: Plano[] = [
     ],
   },
   {
+    chave: "premium",
     nome: "Premium",
-    preco: 139.9,
     chamada: "Para quem quer o máximo do produto e alguém do lado.",
     itens: ["Tudo do Exclusive", "Gerente de conta dedicado"],
     depois: {
-      titulo: "Chegando antes do lançamento",
+      titulo: "Em construção para o Premium",
       itens: [
         "Pergunte sobre a sua loja a uma IA (Claude, ChatGPT)",
         "Alertas de margem negativa e anúncio parado",
@@ -80,22 +91,21 @@ const PLANOS: Plano[] = [
 ];
 
 export function CartoesDePlanos() {
+  const maiorDesconto = Math.max(...PLANOS.map((p) => descontoDeLancamento(p.chave)));
   return (
-    <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
-      {PLANOS.map((plano) => (
-        <CartaoDoPlano key={plano.nome} plano={plano} />
-      ))}
-    </div>
+    <>
+      <div className="mb-8 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 text-sm text-ink">
+        <span className="font-semibold">Preço de lançamento:</span> até {maiorDesconto}% a menos
+        para quem assina agora.
+      </div>
+      <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
+        {PLANOS.map((plano) => (
+          <CartaoDoPlano key={plano.nome} plano={plano} />
+        ))}
+      </div>
+    </>
   );
 }
-
-// Com centavos: os preços são quebrados de propósito (decisão do dono,
-// 2026-10-29), e arredondar R$ 49,92 para R$ 50 mostraria outro preço.
-const brl = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 2,
-});
 
 function CartaoDoPlano({ plano }: { plano: Plano }) {
   const mensagem = `Olá! Quero contratar o plano ${plano.nome} do SellerPulse.`;
@@ -114,15 +124,24 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       )}
       <h3 className="text-xl font-semibold">{plano.nome}</h3>
       <p className="mt-1 text-sm text-muted">{plano.chamada}</p>
-      <p className="mt-4">
-        {plano.preco === null ? (
-          <span className="text-lg font-semibold">Sob consulta</span>
-        ) : (
-          <>
-            <span className="text-3xl font-semibold tracking-tight">{brl.format(plano.preco)}</span>
-            <span className="text-sm text-muted">/mês</span>
-          </>
-        )}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {/* O rótulo fica VISÍVEL: sem ele, o riscado se lê como um "de" que
+            já foi cobrado, e é exatamente isso que o CDC (art. 37) proíbe. */}
+        <span className="text-xs text-muted">
+          depois do lançamento: <s>{formatarPreco(PRECOS_DEPOIS_DO_LANCAMENTO[plano.chave])}</s>
+        </span>
+        <span className="rounded-full border border-positive/40 bg-positive/10 px-2 py-0.5 text-xs font-semibold text-ink">
+          −{descontoDeLancamento(plano.chave)}%
+        </span>
+      </div>
+      <p>
+        <span className="text-3xl font-semibold tracking-tight">
+          {formatarPreco(PRECOS_MENSAIS[plano.chave])}
+        </span>
+        <span className="text-sm text-muted">/mês</span>
+      </p>
+      <p className="mt-1 text-xs text-muted">
+        Preço de lançamento: {formatarPreco(economiaMensal(plano.chave))} a menos por mês
       </p>
 
       <ul className="mt-5 flex-1 space-y-2 text-sm">
