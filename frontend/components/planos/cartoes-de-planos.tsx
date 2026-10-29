@@ -5,7 +5,10 @@ import type { NomeDoPlano } from "@/lib/plano";
 import {
   DIAS_DE_TESTE,
   PLANO_COM_TESTE,
+  PRECOS_DEPOIS_DO_LANCAMENTO,
   PRECOS_MENSAIS,
+  descontoDeLancamento,
+  economiaMensal,
   formatarPreco,
   precoAnual,
 } from "@/lib/precos";
@@ -23,6 +26,11 @@ import {
  * Os preços moram em `lib/precos.ts`, que o backend confere contra o que ele
  * cobra. "Assinar" leva à contratação (`/assinar`); o contato fica para quem
  * quer tirar dúvida antes.
+ *
+ * Promoção de lançamento: o preço de depois aparece riscado, como ÂNCORA, ao
+ * lado do de agora, com o desconto e a economia em reais. O riscado é dito
+ * como o preço depois do lançamento, nunca como um "de" que já foi cobrado
+ * (ver `PRECOS_DEPOIS_DO_LANCAMENTO`).
  */
 
 type Plano = {
@@ -84,12 +92,24 @@ const PLANOS: Plano[] = [
 ];
 
 export function CartoesDePlanos() {
+  const maiorDesconto = Math.max(...PLANOS.map((p) => descontoDeLancamento(p.chave)));
   return (
-    <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
-      {PLANOS.map((plano) => (
-        <CartaoDoPlano key={plano.nome} plano={plano} />
-      ))}
-    </div>
+    <>
+      {/* A promessa de manter o preço é verdade pelo jeito que a cobrança
+          funciona: a assinatura no Asaas guarda o valor do dia em que foi
+          criada, e um aumento de preço só vale para quem assina depois. Se
+          isso mudar, este texto muda junto. */}
+      <div className="mb-8 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 text-sm text-ink">
+        <span className="font-semibold">Preço de lançamento:</span> até {maiorDesconto}% a menos
+        para os primeiros assinantes. Quem assina agora mantém este preço enquanto a assinatura
+        estiver ativa.
+      </div>
+      <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
+        {PLANOS.map((plano) => (
+          <CartaoDoPlano key={plano.nome} plano={plano} />
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -111,17 +131,29 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       )}
       <h3 className="text-xl font-semibold">{plano.nome}</h3>
       <p className="mt-1 text-sm text-muted">{plano.chamada}</p>
-      <p className="mt-4">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted">
+          <span className="sr-only">Depois do lançamento: </span>
+          <s>{formatarPreco(PRECOS_DEPOIS_DO_LANCAMENTO[plano.chave])}</s>
+        </span>
+        <span className="rounded-full bg-positive/10 px-2 py-0.5 text-xs font-semibold text-positive">
+          −{descontoDeLancamento(plano.chave)}%
+        </span>
+      </div>
+      <p>
         <span className="text-3xl font-semibold tracking-tight">
           {formatarPreco(PRECOS_MENSAIS[plano.chave])}
         </span>
         <span className="text-sm text-muted">/mês</span>
       </p>
       <p className="mt-1 text-xs text-muted">
+        Preço de lançamento: {formatarPreco(economiaMensal(plano.chave))} a menos por mês
+      </p>
+      <p className="mt-1 text-xs text-muted">
         ou {formatarPreco(precoAnual(plano.chave))} por ano (2 meses grátis)
       </p>
       {temTeste && (
-        <p className="mt-2 inline-flex w-fit rounded-full bg-highlight-soft px-2.5 py-0.5 text-xs font-semibold text-ink">
+        <p className="mt-2 inline-flex w-fit rounded-full border border-accent px-2.5 py-0.5 text-xs font-semibold text-accent">
           {DIAS_DE_TESTE} dias grátis no mensal
         </p>
       )}
@@ -169,7 +201,7 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
           }
           target={WHATSAPP_DE_CONTATO ? "_blank" : undefined}
           rel={WHATSAPP_DE_CONTATO ? "noopener noreferrer" : undefined}
-          className="text-center text-xs text-muted underline hover:text-accent"
+          className="inline-flex min-h-11 items-center justify-center text-xs text-muted underline hover:text-accent"
         >
           Tirar dúvidas {WHATSAPP_DE_CONTATO ? "no WhatsApp" : "por e-mail"}
         </a>

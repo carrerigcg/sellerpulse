@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import { contratar } from "@/lib/ml";
 import { NOMES_DOS_PLANOS, type NomeDoPlano } from "@/lib/plano";
 import {
   DIAS_DE_TESTE,
   PLANO_COM_TESTE,
+  PRECOS_DEPOIS_DO_LANCAMENTO,
   PRECOS_MENSAIS,
   formatarPreco,
   precoAnual,
@@ -43,6 +44,16 @@ export function FormularioDeAssinatura({
   const [erro, setErro] = useState<string | null>(null);
 
   const comTeste = ciclo === "mensal" && plano === PLANO_COM_TESTE;
+
+  // Quem volta do Asaas pelo "voltar" do navegador pode receber esta página
+  // restaurada da memória, com o botão travado em "Abrindo o pagamento…".
+  useEffect(() => {
+    function aoVoltar(evento: PageTransitionEvent) {
+      if (evento.persisted) setEnviando(false);
+    }
+    window.addEventListener("pageshow", aoVoltar);
+    return () => window.removeEventListener("pageshow", aoVoltar);
+  }, []);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
@@ -89,7 +100,8 @@ export function FormularioDeAssinatura({
                 <span className="font-medium">{NOMES_DOS_PLANOS[p]}</span>
               </span>
               <span className="mt-1 text-xs text-muted">
-                {formatarPreco(PRECOS_MENSAIS[p])}/mês
+                <s className="mr-1">{formatarPreco(PRECOS_DEPOIS_DO_LANCAMENTO[p])}</s>
+                <span className="font-medium text-ink">{formatarPreco(PRECOS_MENSAIS[p])}</span>/mês
               </span>
             </label>
           ))}
@@ -149,11 +161,12 @@ export function FormularioDeAssinatura({
       <fieldset className="space-y-3">
         <legend className="text-sm font-semibold">Dados para a cobrança</legend>
         <Campo rotulo="Nome ou razão social" valor={nome} muda={setNome} autoComplete="name" />
+        {/* Sem `inputMode="numeric"`: o CNPJ novo tem letras, e o teclado
+            numérico do celular não deixaria digitá-las. */}
         <Campo
           rotulo="CPF ou CNPJ"
           valor={documento}
           muda={setDocumento}
-          inputMode="numeric"
           ajuda="Exigido pelo Asaas para emitir a cobrança. Não fica guardado no SellerPulse."
         />
         <Campo
@@ -168,6 +181,7 @@ export function FormularioDeAssinatura({
       <label className="flex items-start gap-3 text-sm">
         <input
           type="checkbox"
+          required
           checked={aceito}
           onChange={(e) => setAceito(e.target.checked)}
           className="mt-0.5 h-4 w-4 accent-accent"
@@ -183,7 +197,9 @@ export function FormularioDeAssinatura({
 
       <button
         type="submit"
-        disabled={!aceito || enviando || !nome || !documento || !emailDeCobranca}
+        // Habilitado mesmo com campo vazio: com o botão desabilitado, o navegador
+        // nunca diz o que falta. O `required` dos campos faz isso.
+        disabled={enviando}
         className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
       >
         {enviando
@@ -203,7 +219,6 @@ function Campo({
   tipo = "text",
   ajuda,
   autoComplete,
-  inputMode,
 }: {
   rotulo: string;
   valor: string;
@@ -211,8 +226,8 @@ function Campo({
   tipo?: string;
   ajuda?: string;
   autoComplete?: string;
-  inputMode?: "numeric";
 }) {
+  const idDaAjuda = useId();
   return (
     <label className="block text-sm">
       <span className="font-medium">{rotulo}</span>
@@ -222,10 +237,14 @@ function Campo({
         onChange={(e) => muda(e.target.value)}
         required
         autoComplete={autoComplete}
-        inputMode={inputMode}
-        className="mt-1 block w-full rounded-lg border border-line bg-bg px-3 py-2 outline-none focus:border-accent"
+        aria-describedby={ajuda ? idDaAjuda : undefined}
+        className="mt-1 block w-full rounded-lg border border-line bg-bg px-3 py-2 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
       />
-      {ajuda && <span className="mt-1 block text-xs text-muted">{ajuda}</span>}
+      {ajuda && (
+        <span id={idDaAjuda} className="mt-1 block text-xs text-muted">
+          {ajuda}
+        </span>
+      )}
     </label>
   );
 }

@@ -30,7 +30,7 @@ export default async function AssinarPage({ searchParams }: PageProps<"/assinar"
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect(`/login?proximo=${encodeURIComponent(`/assinar?plano=${plano}`)}`);
 
   const acesso = await getAcesso().catch(() => null);
   if (acesso?.plano) redirect("/dashboard/assinatura");
@@ -38,9 +38,14 @@ export default async function AssinarPage({ searchParams }: PageProps<"/assinar"
   return (
     <main className="min-h-screen bg-bg px-4 py-10 text-ink sm:px-6">
       <div className="mx-auto max-w-2xl">
-        <Link href="/" aria-label="Página inicial">
-          <Wordmark />
-        </Link>
+        <div className="flex items-center justify-between gap-4">
+          <Link href="/" aria-label="Página inicial">
+            <Wordmark />
+          </Link>
+          <Link href="/planos" className="text-sm text-muted underline hover:text-accent">
+            Ver os planos
+          </Link>
+        </div>
         <h1 className="mt-10 text-2xl font-semibold tracking-tight">Assinar o SellerPulse</h1>
         <p className="mt-2 text-muted">
           O pagamento é feito na página do Asaas, nosso parceiro de cobrança. Os dados do seu

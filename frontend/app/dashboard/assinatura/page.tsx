@@ -1,5 +1,5 @@
 import { getAcesso } from "@/lib/api";
-import { NOMES_DOS_PLANOS } from "@/lib/plano";
+import { NOMES_DOS_PLANOS, diaDe, ultimoDia } from "@/lib/plano";
 import { PRECOS_MENSAIS, formatarPreco, precoAnual } from "@/lib/precos";
 
 import { AcoesDaAssinatura } from "./acoes";
@@ -11,17 +11,6 @@ import { CabecalhoSimples } from "./cabecalho";
  * Plano dado à mão (origem `manual`) não tem cobrança no Asaas para mexer: a
  * tela diz isso em vez de mostrar botões que o backend recusaria.
  */
-const data = new Intl.DateTimeFormat("pt-BR", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  timeZone: "America/Sao_Paulo",
-});
-
-function formataData(iso: string | null): string | null {
-  return iso ? data.format(new Date(iso)) : null;
-}
-
 export default async function AssinaturaPage() {
   const acesso = await getAcesso().catch(() => null);
 
@@ -38,9 +27,15 @@ export default async function AssinaturaPage() {
 
   const assinatura = acesso.assinatura;
   const plano = acesso.plano;
-  const pagoAte = formataData(assinatura?.pago_ate ?? null);
-  const acessoAte = formataData(assinatura?.acesso_ate ?? null);
+  // `pago_ate` e `acesso_ate` são a meia-noite em que o prazo ACABA. A próxima
+  // cobrança cai nesse dia; "pago até" e "vale até" são o dia anterior.
   const cancelada = assinatura?.cancelada === true;
+  const proximaCobranca =
+    assinatura?.recorrente && assinatura.pago_ate ? diaDe(assinatura.pago_ate) : null;
+  const pagoAte =
+    !assinatura?.recorrente && assinatura?.pago_ate ? ultimoDia(assinatura.pago_ate) : null;
+  const acessoAte = assinatura?.acesso_ate ? ultimoDia(assinatura.acesso_ate) : null;
+  const proximoPlano = assinatura?.plano_no_proximo_ciclo ?? null;
 
   return (
     <>
@@ -61,14 +56,18 @@ export default async function AssinaturaPage() {
               <dd className="font-medium">
                 {assinatura.ciclo === "anual"
                   ? `${formatarPreco(precoAnual(plano))} por ano`
-                  : `${formatarPreco(PRECOS_MENSAIS[plano])} por mês, no cartão`}
+                  : `${formatarPreco(PRECOS_MENSAIS[proximoPlano ?? plano])} por mês, no cartão`}
               </dd>
             </div>
-            {pagoAte && (
+            {proximaCobranca && (
               <div>
-                <dt className="text-muted">
-                  {assinatura.recorrente ? "Próxima cobrança" : "Pago até"}
-                </dt>
+                <dt className="text-muted">Próxima cobrança</dt>
+                <dd className="font-medium">{proximaCobranca}</dd>
+              </div>
+            )}
+            {pagoAte && !cancelada && (
+              <div>
+                <dt className="text-muted">Pago até</dt>
                 <dd className="font-medium">{pagoAte}</dd>
               </div>
             )}
@@ -92,7 +91,7 @@ export default async function AssinaturaPage() {
       </section>
 
       {assinatura?.origem === "gateway" && assinatura.recorrente && (
-        <AcoesDaAssinatura plano={plano} />
+        <AcoesDaAssinatura plano={plano} proximoPlano={proximoPlano} />
       )}
       {assinatura?.origem === "gateway" && assinatura.ciclo === "anual" && (
         <p className="mt-6 text-sm text-muted">

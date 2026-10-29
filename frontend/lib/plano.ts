@@ -47,9 +47,18 @@ export function libera(acesso: Acesso, recurso: Recurso): boolean {
   return acesso.recursos.includes(recurso);
 }
 
-/** Para onde o layout do painel manda quem ainda não pode entrar nele. */
-export function destinoSemAcesso(acesso: Acesso): "/planos" | "/aceite" | null {
-  if (acesso.plano === null) return "/planos";
+/**
+ * Para onde o layout do painel manda quem ainda não pode entrar nele.
+ *
+ * Quem TEVE plano e ele venceu vai para os planos com o motivo, para a página
+ * dizer o que aconteceu em vez de só oferecer planos.
+ */
+export function destinoSemAcesso(
+  acesso: Acesso,
+): "/planos" | "/planos?motivo=vencido" | "/aceite" | null {
+  if (acesso.plano === null) {
+    return acesso.assinatura?.acesso_ate ? "/planos?motivo=vencido" : "/planos";
+  }
   if (!acesso.termos.aceito) return "/aceite";
   return null;
 }
@@ -97,4 +106,28 @@ export function podeUsar(acesso: Acesso | null, recurso: Recurso): boolean {
  */
 export function comparaComAnterior(acesso: Acesso | null, anteriorDe: string, hoje: string): boolean {
   return acesso === null || !historicoCortado(acesso, anteriorDe, hoje);
+}
+
+const diaDoVendedor = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  timeZone: "America/Sao_Paulo",
+});
+
+/**
+ * O último dia coberto por um prazo, para escrever "até 28/11".
+ *
+ * O backend guarda o prazo como a meia-noite em que ele ACABA (o começo do
+ * dia seguinte ao último dia pago). Formatar esse instante diria "até 29/11"
+ * para quem tem acesso só até o fim de 28/11 — a mesma armadilha do seletor
+ * "Até", agora numa frase sobre o que o cliente pagou.
+ */
+export function ultimoDia(prazoIso: string): string {
+  return diaDoVendedor.format(new Date(new Date(prazoIso).getTime() - 1));
+}
+
+/** O dia de um instante, no fuso do vendedor (ex.: a data da próxima cobrança). */
+export function diaDe(iso: string): string {
+  return diaDoVendedor.format(new Date(iso));
 }

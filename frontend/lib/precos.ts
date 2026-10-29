@@ -17,6 +17,32 @@ export const PRECOS_MENSAIS: Record<NomeDoPlano, number> = {
   premium: 139.95,
 };
 
+/**
+ * O preço depois do lançamento, que a vitrine mostra RISCADO ao lado do
+ * preço de agora (decisão do dono, 2026-10-29).
+ *
+ * Ele é apresentado como o preço que vem depois do lançamento, e não como um
+ * "de" que já foi cobrado: anunciar um preço anterior que nunca existiu é
+ * propaganda enganosa pelo CDC (art. 37), e o Procon autua. Por isso, este
+ * número precisa ser mesmo o preço futuro.
+ */
+export const PRECOS_DEPOIS_DO_LANCAMENTO: Record<NomeDoPlano, number> = {
+  essencial: 59.9,
+  exclusive: 108.92,
+  premium: 179.59,
+};
+
+/** Desconto do lançamento, em pontos percentuais inteiros (ex.: 17 para "−17%"). */
+export function descontoDeLancamento(plano: NomeDoPlano): number {
+  const depois = PRECOS_DEPOIS_DO_LANCAMENTO[plano];
+  return Math.round((100 * (depois - PRECOS_MENSAIS[plano])) / depois);
+}
+
+/** Quanto o assinante deixa de pagar por mês, no preço de lançamento. */
+export function economiaMensal(plano: NomeDoPlano): number {
+  return Math.round((PRECOS_DEPOIS_DO_LANCAMENTO[plano] - PRECOS_MENSAIS[plano]) * 100) / 100;
+}
+
 /** Paga 10, leva 12. */
 export const MESES_PAGOS_NO_ANUAL = 10;
 

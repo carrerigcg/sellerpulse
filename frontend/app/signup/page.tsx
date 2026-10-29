@@ -11,6 +11,7 @@ import {
   PrimaryButton,
   TextField,
 } from "@/components/auth-ui";
+import { destinoDepoisDoLogin } from "@/lib/proximo";
 import { createClient } from "@/lib/supabase/client";
 
 const MIN_SENHA = 6;
@@ -50,7 +51,7 @@ export default function SignupPage() {
       return;
     }
 
-    router.push("/dashboard");
+    router.push(destinoDepoisDoLogin());
     router.refresh();
   }
 

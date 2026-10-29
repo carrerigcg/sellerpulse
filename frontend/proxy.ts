@@ -48,6 +48,10 @@ export async function proxy(request: NextRequest) {
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    // Para onde a pessoa ia: o login devolve para lá (`lib/proximo.ts`), em
+    // vez de largar no painel quem tinha clicado em "Assinar".
+    url.search = "";
+    url.searchParams.set("proximo", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 

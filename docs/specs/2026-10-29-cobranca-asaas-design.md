@@ -45,6 +45,21 @@ inadimplência e o cancelamento.
 | Exclusive | R$ 79,97 | R$ 799,70 |
 | Premium | R$ 139,95 | R$ 1.399,50 |
 
+### Promoção de lançamento (2026-10-29)
+
+Os preços acima são de lançamento. A vitrine mostra riscado o preço de depois
+do lançamento (R$ 59,90 / 108,92 / 179,59), com o desconto ("−17%", "−27%",
+"−22%") e a economia por mês.
+
+- **O riscado é dito como o preço depois do lançamento, nunca como um "de"
+  que já foi cobrado.** Anunciar um preço anterior que nunca existiu é
+  propaganda enganosa (CDC, art. 37). Por isso, esses números têm que ser
+  mesmo o preço futuro.
+- **"Quem assina agora mantém este preço enquanto a assinatura estiver
+  ativa"** é uma promessa ao cliente. Ela é verdade pelo jeito que a cobrança
+  funciona: a assinatura no Asaas guarda o valor do dia em que foi criada.
+  Subir o preço depois vale só para quem assina depois.
+
 Quem cobra é `backend/planos.py`: o checkout é montado com esses valores, e
 o valor nunca vem do navegador. A vitrine mostra os mesmos números a partir de
 `frontend/lib/precos.ts`, sem depender do backend acordado para desenhar a
@@ -136,11 +151,22 @@ Sem `ASAAS_API_KEY`, contratar responde 503, e não um erro genérico.
 
 ## A confirmar no sandbox, antes do merge
 
+Já resolvido pela documentação, na revisão de 2026-10-29:
+
+- **O `checkout.subscription` do `CHECKOUT_PAID` é a configuração da
+  assinatura, e não o id.** O id vem do `SUBSCRIPTION_CREATED`, do primeiro
+  pagamento, ou de uma consulta ao Asaas
+  (`GET /subscriptions?customer=...&status=ACTIVE`) na hora de cancelar ou
+  trocar. É isso que permite cancelar durante o teste de 7 dias.
+- **`imageBase64` é obrigatório** em cada item do checkout. Vai o quadrado da
+  marca (`backend/pagamentos/marca.png`).
+
 A documentação não responde estes pontos, e o código só se fecha depois de
 vê-los num evento de verdade:
 
-- Como o `CHECKOUT_PAID` se liga à assinatura e ao cliente criados, e se o
-  `externalReference` do checkout chega até eles.
+- Se o `externalReference` do checkout chega ao cliente e à assinatura.
+- Se o checkout anual (`DETACHED`) reaproveita o cliente do Asaas quando a
+  mesma pessoa tem duas contas (a busca por `asaas_cliente` não é única).
 - Se o checkout com teste (primeira cobrança no 8º dia) dispara
   `CHECKOUT_PAID` quando o cartão é validado, sem cobrança.
 - Se o checkout coleta o CPF sozinho quando `customerData` não vai.
@@ -153,10 +179,28 @@ vê-los num evento de verdade:
 - **Fila pausada:** eventos com mais de 14 dias são descartados. O log do
   webhook precisa avisar quando um evento falhar.
 
+## Decisões da revisão (2026-10-29)
+
+- **Recontratar encerra a assinatura antiga no Asaas antes** de abrir o
+  checkout novo. Se o Asaas recusar, o checkout não abre. Cancelar não exige
+  plano ativo: o inadimplente é quem mais precisa parar a cobrança.
+- **Escolher o plano atual com um downgrade agendado desfaz o downgrade.**
+- **O payload dos eventos é gravado sem dado pessoal** (CPF/CNPJ, dados do
+  cliente, cartão).
+- **A RLS das tabelas novas é ligada na própria 0018**, para não haver janela
+  aberta entre duas migrations.
+- **Datas na tela:** o prazo é a meia-noite em que ele ACABA. "Pago até" e
+  "vale até" mostram o dia anterior; "próxima cobrança" mostra o próprio dia.
+- **CNPJ alfanumérico aceito** (Receita, julho de 2026).
+- **Login devolve a pessoa para onde ela ia** (`?proximo=`, só caminho do
+  próprio site).
+
 ## Fora desta spec
 
 - Pix Automático no mensal (fase 2).
 - Cobrar a diferença proporcional do upgrade (decisão 6).
 - Nota fiscal.
+- O link entre login e cadastro não carrega o `?proximo=`: quem troca de uma
+  tela para a outra volta ao painel, e não à contratação.
 - Atualizar a Política de Privacidade: o CPF/CNPJ passa pelo SellerPulse a
   caminho do Asaas, e o Asaas entra como fornecedor (`docs/legal/`).

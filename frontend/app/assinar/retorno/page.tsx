@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { Wordmark } from "@/components/brand";
+import { WHATSAPP_DE_CONTATO, linkDeEmail, linkDeWhatsapp } from "@/lib/contato";
 import { temPlanoAtivo } from "@/lib/ml";
 
 /**
@@ -84,20 +85,32 @@ function Conteudo() {
   return (
     <section className="mt-10" aria-live="polite">
       <h1 className="text-2xl font-semibold tracking-tight">
-        {esgotou ? "Ainda confirmando o pagamento" : "Confirmando o seu pagamento…"}
+        {esgotou ? "Ainda confirmando a sua assinatura" : "Confirmando a sua assinatura…"}
       </h1>
       <p className="mt-2 text-muted">
         {esgotou
-          ? "O Asaas ainda não nos avisou. Isso costuma levar poucos minutos; você pode abrir o painel daqui a pouco, ou falar com a gente se demorar."
+          ? "O Asaas ainda não nos avisou. Isso costuma levar poucos minutos; tente abrir o painel daqui a pouco."
           : "Assim que o Asaas confirmar, o seu painel abre sozinho. Costuma levar alguns segundos."}
       </p>
       {esgotou && (
-        <Link
-          href="/dashboard"
-          className="mt-6 inline-flex rounded-lg border border-line px-4 py-2 text-sm font-medium hover:bg-surface"
-        >
-          Abrir o painel
-        </Link>
+        <div className="mt-6 flex flex-wrap items-center gap-4">
+          <Link
+            href="/dashboard"
+            className="inline-flex rounded-lg border border-line px-4 py-2 text-sm font-medium hover:bg-surface"
+          >
+            Abrir o painel
+          </Link>
+          <a
+            href={
+              WHATSAPP_DE_CONTATO
+                ? linkDeWhatsapp(WHATSAPP_DE_CONTATO, "Assinei o SellerPulse e o painel não abriu.")
+                : linkDeEmail("Assinei e o painel não abriu")
+            }
+            className="text-sm text-muted underline hover:text-accent"
+          >
+            Falar com a gente
+          </a>
+        </div>
       )}
     </section>
   );
