@@ -1,0 +1,17 @@
+-- backend/migrations/0015_remove_update_de_sellers.sql
+-- SO roda no Supabase -- a policy que ela apaga nasceu na 0002, que depende de
+-- auth.uid(). Mesma convencao da 0005, que fez o mesmo com oauth_tokens.
+--
+-- A `sellers_update_own` deixava qualquer usuario logado dar PATCH na propria
+-- linha de `sellers` pela API REST do Supabase (a chave anon vai no frontend),
+-- sem `with check` e sem limite de coluna. Dava para reescrever o que so o
+-- backend deve gravar: `last_synced_at` (empurrado para o futuro, o delta nunca
+-- mais traz pedido; zerado, vira backfill de seis meses a cada sincronizacao),
+-- `ml_seller_id` (desconecta a conta, ou ocupa o id de outro vendedor antes de
+-- ele conectar) e `is_demo` (a trava das rotas publicas e do refresh da demo).
+--
+-- Nenhum caminho legitimo usa a policy: o backend entra pelo papel `postgres`,
+-- que nao passa por RLS, e o frontend usa o Supabase so para autenticar. RLS
+-- ligada sem policy de UPDATE nega a escrita; a de leitura (`sellers_select_own`)
+-- fica, e continua sendo o que deixa o vendedor ver a propria linha.
+drop policy if exists "sellers_update_own" on sellers;
