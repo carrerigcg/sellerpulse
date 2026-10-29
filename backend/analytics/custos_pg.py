@@ -99,6 +99,15 @@ _GRAVA_INICIO_DO_HISTORICO = f"""
      WHERE (product_costs.criado_em AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date = $5
 """
 
+# Salvar com a opção desligada tira o início do histórico gravado HOJE: quem
+# salvou 300 com a opção ligada, desligou e salvou 30 não pode ficar com o
+# 300 preso no passado. "Hoje" reflete a última escolha; outro dia, não muda.
+_TIRA_INICIO_GRAVADO_HOJE = f"""
+    DELETE FROM product_costs
+     WHERE seller_id = $1 AND item_id = $2 AND vigente_desde = $3
+       AND (criado_em AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date = $4
+"""
+
 # "Desfazer o que foi digitado hoje": a vigência de hoje e, se tiver sido
 # gravado hoje, o início do histórico. Um retroativo de outro dia fica.
 _REMOVE_CUSTO_DO_DIA = f"""
@@ -186,6 +195,14 @@ async def gravar_custo(
                 item_id,
                 VIGENCIA_DO_HISTORICO,
                 custo_unitario,
+                hoje_do_vendedor(),
+            )
+        else:
+            await conn.execute(
+                _TIRA_INICIO_GRAVADO_HOJE,
+                seller_id,
+                item_id,
+                VIGENCIA_DO_HISTORICO,
                 hoje_do_vendedor(),
             )
     return vigencia

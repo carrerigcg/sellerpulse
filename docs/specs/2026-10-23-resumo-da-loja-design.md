@@ -240,7 +240,7 @@ Link ao fim do bloco: "Ver o financeiro completo" → `{base}/financeiro?de&ate`
 
 | tarefa | frase | apoio | botão → destino |
 | --- | --- | --- | --- |
-| custos | {n} produto(s) que você vendeu {está\|estão} sem custo informado | Com o custo informado, as próximas vendas já descontam o produto. | "Informar custos" (demo: "Ver custos") → `{base}/custos?de&ate` |
+| custos | {n} produto(s) que você vendeu {está\|estão} sem custo informado | Com o custo informado, a margem desconta o produto — e você escolhe se vale também para as vendas passadas. | "Informar custos" (demo: "Ver custos") → `{base}/custos?de&ate` |
 | vistos e rejeitados | {n} {anúncio recebe\|anúncios recebem} mais visitas que a média da sua loja, mas {vende\|vendem} menos | Muita gente entra e não compra — vale revisar preço, foto, título ou frete. | "Ver os que vendem menos" → `{base}/produtos?de&ate&diagnostico=visto-e-rejeitado#desempenho-anuncios` |
 | clientes | {n} {cliente que já comprou\|clientes que já compraram} bem com você não {compra\|compram} há {d} dias ou mais | Nos últimos 3 meses, {gastou\|gastaram} {R$ x} com você. | "Ver quais clientes" → `{base}/clientes?de&ate&segmento=em-risco#compradores` (janela de 90 dias) |
 | nenhuma, anúncios avaliados | Nada pedindo atenção agora. | — | — |

@@ -295,7 +295,7 @@ describe("montaTarefas", () => {
       {
         chave: "custos",
         frase: "2 produtos que você vendeu estão sem custo informado",
-        apoio: "Com o custo informado, as próximas vendas já descontam o produto.",
+        apoio: "Com o custo informado, a margem desconta o produto — e você escolhe se vale também para as vendas passadas.",
         botao: "Informar custos",
         href: "/dashboard/custos?de=2026-09-23&ate=2026-10-23",
       },

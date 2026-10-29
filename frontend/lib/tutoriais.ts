@@ -130,7 +130,7 @@ export const TUTORIAIS: Record<ChaveDeTutorial, Tutorial> = {
       {
         titulo: "E as vendas que já aconteceram",
         texto:
-          "Com a opção do topo ligada, o custo salvo também vale para as vendas anteriores que estão sem custo. Um período em que você já informou um custo nunca muda: se o fornecedor subir o preço, a margem dos meses passados continua a mesma.",
+          "Com a opção acima da tabela ligada, o custo salvo também vale para as vendas anteriores que estão sem custo. Um período em que você já informou um custo nunca muda: se o fornecedor subir o preço, a margem dos meses passados continua a mesma.",
       },
       {
         titulo: "Por onde começar",

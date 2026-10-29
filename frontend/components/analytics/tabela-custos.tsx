@@ -105,11 +105,17 @@ export function TabelaCustos({
             type="checkbox"
             checked={retroativo}
             onChange={(e) => setRetroativo(e.target.checked)}
+            // Nome curto (só o título) e a explicação como descrição: dentro
+            // do <label>, o leitor de tela leria as duas linhas como nome.
+            aria-labelledby="titulo-retroativo"
+            aria-describedby="explica-retroativo"
             className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
           />
           <span>
-            <span className="font-medium">Aplicar também às vendas anteriores sem custo</span>
-            <span className="block text-xs text-muted">
+            <span id="titulo-retroativo" className="font-medium">
+              Aplicar também às vendas anteriores sem custo
+            </span>
+            <span id="explica-retroativo" className="block text-xs text-muted">
               O custo salvo passa a valer para as vendas que ainda não têm custo. Um período em que você
               já informou um custo nunca é alterado.
             </span>

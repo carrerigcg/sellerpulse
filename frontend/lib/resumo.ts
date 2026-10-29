@@ -284,15 +284,16 @@ export function montaTarefas(entrada: {
 
   // Pelo custo vazio HOJE, que é a conta da tela de Custos — o número do
   // cartão tem que bater com o que ele vê ao clicar. Contar pela venda
-  // passada (`produtosSemCusto`) daria outro número: custo informado hoje
-  // não volta para trás, e o apoio diz isso para o efeito não parecer sumido.
+  // passada (`produtosSemCusto`) daria outro número: o custo informado hoje
+  // só cobre o passado se o vendedor escolher (opção da tela de Custos), e o
+  // apoio diz isso para o efeito não parecer sumido.
   if (custos) {
     const n = custos.filter((l) => l.custo_unitario === null).length;
     if (n > 0) {
       tarefas.push({
         chave: "custos",
         frase: `${n} ${plural(n, "produto", "produtos")} que você vendeu ${plural(n, "está", "estão")} sem custo informado`,
-        apoio: "Com o custo informado, as próximas vendas já descontam o produto.",
+        apoio: "Com o custo informado, a margem desconta o produto — e você escolhe se vale também para as vendas passadas.",
         botao: links.base === "/demo" ? "Ver custos" : "Informar custos",
         href: link(`${links.base}/custos`, links.periodo),
       });

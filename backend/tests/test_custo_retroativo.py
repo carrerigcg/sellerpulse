@@ -160,3 +160,30 @@ async def test_retroativo_isola_por_seller(pg_pool, test_seller, outro_seller):
     await gravar_custo(pg_pool, sid, "MLB1", 30.0, retroativo=True)
 
     assert await _vigencias(pg_pool, sid) == {VIGENCIA_DO_HISTORICO: 30.0, HOJE: 30.0}
+
+
+async def test_desligar_a_opcao_no_mesmo_dia_tira_o_retroativo_de_hoje(pg_pool, test_seller):
+    """Salvou 300 com a opção ligada, desligou e salvou 30: o 300 não pode ficar
+    preso no histórico. "Hoje" reflete a última escolha do vendedor.
+
+    Achado do revisor-de-codigo na revisão do PR #31.
+    """
+    _, sid = test_seller
+    antiga = HOJE - timedelta(days=60)
+    await _pedido(pg_pool, sid, 1, _as_13h(antiga), [("MLB1", 1, 100.0)])
+
+    await gravar_custo(pg_pool, sid, "MLB1", 300.0, retroativo=True)
+    await gravar_custo(pg_pool, sid, "MLB1", 30.0, retroativo=False)
+
+    assert await _vigencias(pg_pool, sid) == {HOJE: 30.0}
+    assert await _custo_do_dia(pg_pool, sid, antiga) == 0.0
+
+
+async def test_desligar_a_opcao_nao_tira_retroativo_de_outro_dia(pg_pool, test_seller):
+    _, sid = test_seller
+    await gravar_custo(pg_pool, sid, "MLB1", 30.0, retroativo=True)
+    await _envelhece(pg_pool, sid, VIGENCIA_DO_HISTORICO)
+
+    await gravar_custo(pg_pool, sid, "MLB1", 45.0, retroativo=False)
+
+    assert await _vigencias(pg_pool, sid) == {VIGENCIA_DO_HISTORICO: 30.0, HOJE: 45.0}

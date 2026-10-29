@@ -164,7 +164,7 @@ que antecederam esta feature.
 | # | título | texto | fonte |
 | --- | --- | --- | --- |
 | 1 | Por que informar o custo | O Mercado Livre não sabe quanto o produto custa para você. Sem esse número, a margem de contribuição fica maior do que a real. | docstring de `app/dashboard/custos/page.tsx` |
-| 2 | E as vendas que já aconteceram | Com a opção do topo ligada, o custo salvo também vale para as vendas anteriores que estão sem custo. Um período em que você já informou um custo nunca muda: se o fornecedor subir o preço, a margem dos meses passados continua a mesma. | `gravar_custo` e `VIGENCIA_DO_HISTORICO` em `backend/analytics/custos_pg.py`; `docs/specs/2026-10-28-custo-retroativo-design.md`. Reescrito em 2026-10-28 (antes: "O custo vale daqui para frente") |
+| 2 | E as vendas que já aconteceram | Com a opção acima da tabela ligada, o custo salvo também vale para as vendas anteriores que estão sem custo. Um período em que você já informou um custo nunca muda: se o fornecedor subir o preço, a margem dos meses passados continua a mesma. | `gravar_custo` e `VIGENCIA_DO_HISTORICO` em `backend/analytics/custos_pg.py`; `docs/specs/2026-10-28-custo-retroativo-design.md`. Reescrito em 2026-10-28 (antes: "O custo vale daqui para frente") |
 | 3 | Por onde começar | Comece pelos produtos que mais faturam: são eles que mais mexem na margem. | — (orientação, não afirmação sobre o produto) |
 
 ### Custos — demo

@@ -13,9 +13,11 @@ import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
  * uma margem errada para mais.
  *
  * A janela serve para escolher QUAIS produtos aparecem (os vendidos no
- * período) e com que receita, não para escolher a vigência: o que se digita
- * aqui passa a valer de hoje em diante. Editar o passado é outra tela, e por
- * ora não existe.
+ * período) e com que receita, não para escolher a vigência. O alcance do
+ * custo no tempo é a opção da própria tabela: de hoje em diante, ou também
+ * nas vendas anteriores sem custo — nunca reescrevendo período informado
+ * (docs/specs/2026-10-28-custo-retroativo-design.md). Por isso os textos
+ * desta página não prometem nem um nem outro: quem diz é a opção.
  */
 
 export default async function CustosPage({ searchParams }: PageProps<"/dashboard/custos">) {
@@ -64,7 +66,7 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
             </h2>
             <p className="mt-0.5 text-xs text-muted">
               {cobertura.completa
-                ? "Todos os produtos do período têm custo informado. A margem passa a descontá-lo nas vendas de hoje em diante."
+                ? "Todos os produtos do período têm custo informado."
                 : `Isso cobre ${cobertura.pct}% da receita do período. O que falta aparece como receita sem custo nas outras telas.`}
             </p>
           </section>
@@ -73,9 +75,8 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
             <h2 className="text-sm font-semibold">Produtos vendidos no período</h2>
             <p className="mt-0.5 text-xs text-muted">
               Em ordem de receita, que é a ordem em que informar o custo muda mais a conta. O valor
-              salva sozinho ao sair do campo e passa a valer de hoje em diante — a margem dos meses
-              já fechados não muda. Campo vazio significa &ldquo;não informado&rdquo;, que é
-              diferente de zero.
+              salva sozinho ao sair do campo. Campo vazio significa &ldquo;não informado&rdquo;, que
+              é diferente de zero.
             </p>
             <div className="mt-4">
               <TabelaCustos linhas={linhas} />
