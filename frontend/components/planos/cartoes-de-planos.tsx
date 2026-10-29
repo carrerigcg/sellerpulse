@@ -15,8 +15,9 @@ import {
  * prometer o que o produto não entrega. O Exclusive é o recomendado e o mais
  * destacado, no centro (spec `docs/specs/2026-10-28-planos-e-acesso-design.md`).
  *
- * `preco` fica `null` até o preço ser decidido: o cartão diz "Sob consulta",
- * e não um número que ninguém escolheu.
+ * Preços decididos pelo dono em 2026-10-29, com entrada baixa de propósito
+ * para trazer os primeiros clientes e feedback. `preco: null` volta a mostrar
+ * "Sob consulta", e não um número que ninguém escolheu.
  */
 
 type Plano = {
@@ -32,7 +33,7 @@ type Plano = {
 const PLANOS: Plano[] = [
   {
     nome: "Essencial",
-    preco: null,
+    preco: 49.92,
     chamada: "Para saber quanto sobra de cada venda.",
     itens: [
       "Resumo da loja",
@@ -46,7 +47,7 @@ const PLANOS: Plano[] = [
   },
   {
     nome: "Exclusive",
-    preco: null,
+    preco: 79.97,
     chamada: "O painel inteiro, para decidir com a loja toda à vista.",
     destaque: true,
     itens: [
@@ -63,7 +64,7 @@ const PLANOS: Plano[] = [
   },
   {
     nome: "Premium",
-    preco: null,
+    preco: 139.95,
     chamada: "Para quem quer o máximo do produto e alguém do lado.",
     itens: ["Tudo do Exclusive", "Gerente de conta dedicado"],
     depois: {
@@ -88,10 +89,12 @@ export function CartoesDePlanos() {
   );
 }
 
+// Com centavos: os preços são quebrados de propósito (decisão do dono,
+// 2026-10-29), e arredondar R$ 49,92 para R$ 50 mostraria outro preço.
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
 });
 
 function CartaoDoPlano({ plano }: { plano: Plano }) {
