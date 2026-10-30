@@ -6,15 +6,13 @@ import { Wordmark } from "@/components/brand";
 import { ResumoDosTermos } from "@/components/planos/resumo-dos-termos";
 import { getAcesso } from "@/lib/api";
 import { WHATSAPP_DE_CONTATO, linkDeWhatsapp } from "@/lib/contato";
-import { NOMES_DOS_PLANOS, type NomeDoPlano } from "@/lib/plano";
+import { NOMES_DOS_PLANOS, PLANOS_A_VENDA } from "@/lib/plano";
 import { createClient } from "@/lib/supabase/server";
 import { AVISO_DE_VENDAS_FECHADAS, mensagemParaSaberDaAbertura } from "@/lib/vendas";
 
 import { FormularioDeAssinatura } from "./formulario";
 
 export const metadata: Metadata = { title: "Assinar · SellerPulse" };
-
-const PLANOS_VALIDOS: NomeDoPlano[] = ["essencial", "exclusive", "premium"];
 
 /**
  * Contratar: escolhe o ciclo, aceita os termos, e vai pagar no Asaas.
@@ -26,7 +24,7 @@ const PLANOS_VALIDOS: NomeDoPlano[] = ["essencial", "exclusive", "premium"];
  */
 export default async function AssinarPage({ searchParams }: PageProps<"/assinar">) {
   const params = await searchParams;
-  const plano = PLANOS_VALIDOS.find((p) => p === params.plano) ?? "exclusive";
+  const plano = PLANOS_A_VENDA.find((p) => p === params.plano) ?? "exclusive";
 
   const supabase = await createClient();
   const {

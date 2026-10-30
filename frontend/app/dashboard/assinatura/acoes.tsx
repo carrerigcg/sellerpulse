@@ -4,10 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { cancelarAssinatura, trocarPlano } from "@/lib/ml";
-import { NOMES_DOS_PLANOS, type NomeDoPlano } from "@/lib/plano";
+import { NOMES_DOS_PLANOS, PLANOS_A_VENDA, type NomeDoPlano } from "@/lib/plano";
 import { PRECOS_MENSAIS, formatarPreco } from "@/lib/precos";
-
-const PLANOS: NomeDoPlano[] = ["essencial", "exclusive", "premium"];
 
 /**
  * Trocar e cancelar. Só strings atravessam a fronteira do servidor.
@@ -29,6 +27,8 @@ export function AcoesDaAssinatura({
   const [aviso, setAviso] = useState<string | null>(null);
   // O que está esperando confirmação: um plano, ou o cancelamento.
   const [confirmando, setConfirmando] = useState<NomeDoPlano | "cancelar" | null>(null);
+
+  const opcoes = PLANOS_A_VENDA.filter((p) => p !== plano && p !== proximoPlano);
 
   async function executa(acao: () => Promise<void>, feito: string) {
     setOcupado(true);
@@ -67,10 +67,12 @@ export function AcoesDaAssinatura({
         </section>
       )}
 
+      {/* Exclusive com downgrade agendado: não sobra plano, e "Manter" já está acima. */}
+      {opcoes.length > 0 && (
       <section className="mt-6 rounded-xl border border-line p-5">
         <h2 className="text-sm font-semibold">Trocar de plano</h2>
         <ul className="mt-3 space-y-4">
-          {PLANOS.filter((p) => p !== plano && p !== proximoPlano).map((p) => {
+          {opcoes.map((p) => {
             const upgrade = PRECOS_MENSAIS[p] > PRECOS_MENSAIS[plano];
             const efeito = upgrade
               ? `Libera na hora. A partir da próxima cobrança, ${formatarPreco(PRECOS_MENSAIS[p])} por mês.`
@@ -126,6 +128,7 @@ export function AcoesDaAssinatura({
           })}
         </ul>
       </section>
+      )}
 
       <section className="mt-6 rounded-xl border border-line p-5">
         <h2 className="text-sm font-semibold">Cancelar</h2>

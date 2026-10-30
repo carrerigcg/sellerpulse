@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { fraseDoHistorico, type Acesso } from "@/lib/plano";
+
 /**
  * O que o plano não cobre, à vista e trancado.
  *
@@ -77,14 +79,19 @@ function IconeCadeado() {
 }
 
 /** Aviso de que o período pedido começa antes do que o plano mostra. */
-export function AvisoDeHistorico({ inicio }: { inicio: string }) {
+export function AvisoDeHistorico({ inicio, acesso }: { inicio: string; acesso: Acesso }) {
   const [ano, mes, dia] = inicio.split("-");
   return (
     <p className="mt-4 rounded-lg bg-highlight-soft px-3 py-2 text-xs leading-relaxed text-ink">
-      No Essencial, o histórico é de 3 meses: os números abaixo começam em {dia}/{mes}/{ano}.{" "}
-      <Link href="/planos" className="font-medium text-accent underline hover:text-accent-hover">
-        Ver o histórico completo no Exclusive
-      </Link>
+      {fraseDoHistorico(acesso)}: os números abaixo começam em {dia}/{mes}/{ano}.
+      {acesso.plano === "essencial" && (
+        <>
+          {" "}
+          <Link href="/planos" className="font-medium text-accent underline hover:text-accent-hover">
+            Ver 6 meses no Exclusive
+          </Link>
+        </>
+      )}
     </p>
   );
 }
@@ -93,14 +100,16 @@ export function AvisoDeHistorico({ inicio }: { inicio: string }) {
  * No lugar da variação "vs. período anterior", quando o anterior não cabe no
  * histórico do plano. É o "—" com cadeado: sem número, e dizendo o porquê.
  */
-export function AvisoSemComparacao() {
+export function AvisoSemComparacao({ acesso }: { acesso: Acesso }) {
   return (
     <p className="mt-3 flex flex-wrap items-center gap-x-1 text-xs text-muted">
       <span aria-hidden>🔒</span>
-      Comparação com o período anterior: —. No Essencial, o histórico é de 3 meses.{" "}
-      <Link href="/planos" className="font-medium text-accent underline hover:text-accent-hover">
-        Comparar no Exclusive
-      </Link>
+      Comparação com o período anterior: —. {fraseDoHistorico(acesso)}.
+      {acesso.plano === "essencial" && (
+        <Link href="/planos" className="font-medium text-accent underline hover:text-accent-hover">
+          Comparar no Exclusive
+        </Link>
+      )}
     </p>
   );
 }

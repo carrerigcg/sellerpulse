@@ -151,6 +151,10 @@ export class ApiError extends Error {
  * vez de escondida numa cópia que ninguém compara com as outras.
  */
 export function mensagemDeFalhaAoCarregar(e: unknown, oQue = "os dados"): string {
+  // Limite do plano não é pane: culpar o backend esconderia o que a pessoa pode fazer.
+  if (e instanceof ApiError && e.codigo === "fora-do-plano") {
+    return "Este período está fora do histórico do seu plano. Escolha datas mais recentes.";
+  }
   return e instanceof ApiError && e.status === 401
     ? "Sua sessão expirou. Entre de novo."
     : `Não foi possível carregar ${oQue}. O backend está no ar?`;

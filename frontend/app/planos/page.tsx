@@ -12,7 +12,7 @@ import { CancelarCobranca } from "./cancelar-cobranca";
 export const metadata: Metadata = { title: "Planos · SellerPulse" };
 
 /**
- * Os três planos. É para cá que vai quem não tem plano (o layout do painel
+ * Os planos à venda. É para cá que vai quem não tem plano (o layout do painel
  * redireciona) e quem clica em "Fazer upgrade" num cadeado. Os cartões são os
  * mesmos da seção de preços da vitrine (`components/planos/cartoes-de-planos`).
  *

@@ -16,6 +16,9 @@ export type Recurso =
 
 export type NomeDoPlano = "essencial" | "exclusive" | "premium";
 
+/** O que se pode contratar ou escolher numa troca. O backend recusa os demais. */
+export const PLANOS_A_VENDA: NomeDoPlano[] = ["essencial", "exclusive"];
+
 export type Acesso = {
   plano: NomeDoPlano | null;
   recursos: Recurso[];
@@ -95,6 +98,12 @@ export const NOMES_DOS_PLANOS: Record<NomeDoPlano, string> = {
   exclusive: "Exclusive",
   premium: "Premium",
 };
+
+/** "No Exclusive, o histórico é de 6 meses". Só faz sentido em plano com corte. */
+export function fraseDoHistorico(acesso: Acesso): string {
+  const nome = acesso.plano ? NOMES_DOS_PLANOS[acesso.plano] : "seu plano";
+  return `No ${nome}, o histórico é de ${Math.round((acesso.dias_de_historico ?? 0) / 30)} meses`;
+}
 
 /**
  * Pode desenhar o recurso aberto? Sem resposta do acesso (backend fora do

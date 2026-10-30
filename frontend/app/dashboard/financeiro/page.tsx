@@ -98,7 +98,7 @@ export default async function FinanceiroPage({
         <SemPedidosNoPeriodo mensagem="Nenhum pedido pago neste período." />
       ) : (
         <>
-          {inicio && <AvisoDeHistorico inicio={inicio} />}
+          {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
 
           {/* Um cartão por parcela da conta que existe no período, para ela
               fechar na tela: receita − comissão − frete − custo dos produtos
@@ -149,7 +149,7 @@ export default async function FinanceiroPage({
             />
           </div>
 
-          {!comparar && <AvisoSemComparacao />}
+          {!comparar && acesso && <AvisoSemComparacao acesso={acesso} />}
 
           <LinhaDeCancelamentos cancelamentos={cancelados} />
           {/* A regra de honestidade: a margem acima só está completa se
@@ -173,7 +173,7 @@ export default async function FinanceiroPage({
                   linhas={fluxo}
                   colunas={COLUNAS_FLUXO}
                   tela="executive"
-                  de={de}
+                  de={inicio ?? de}
                   ate={ate}
                 />
               )}

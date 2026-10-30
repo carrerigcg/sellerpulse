@@ -1,7 +1,9 @@
 import { TabelaCustos } from "@/components/analytics/tabela-custos";
-import { mensagemDeFalhaAoCarregar, getCustos, type CustoLinha } from "@/lib/api";
+import { AvisoDeHistorico } from "@/components/planos/cadeado";
+import { getAcesso, mensagemDeFalhaAoCarregar, getCustos, type CustoLinha } from "@/lib/api";
 import { coberturaInformada } from "@/lib/cobertura";
-import { periodoPadrao } from "@/lib/periodo";
+import { hojeNoFusoDoVendedor, periodoPadrao } from "@/lib/periodo";
+import { historicoCortado, inicioDoHistorico } from "@/lib/plano";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
@@ -25,6 +27,10 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
   const padrao = periodoPadrao();
   const de = typeof params.de === "string" ? params.de : padrao.de;
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
+
+  const acesso = await getAcesso().catch(() => null);
+  const hoje = hojeNoFusoDoVendedor();
+  const inicio = acesso && historicoCortado(acesso, de, hoje) ? inicioDoHistorico(acesso, hoje) : null;
 
   let linhas: CustoLinha[] = [];
   let erro: string | null = null;
@@ -59,6 +65,8 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
         </p>
       ) : (
         <>
+          {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
+
           <section className="mt-6 rounded-xl border border-line bg-surface p-5">
             <h2 className="text-sm font-semibold">
               {comCusto} de {linhas.length}{" "}

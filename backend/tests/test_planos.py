@@ -177,8 +177,9 @@ async def test_essencial_recusa_clientes_e_cohort(client, pg_pool, test_seller, 
 
 
 @pytest.mark.parametrize("rota", ["/segmentation/rfm", "/segmentation/cohort"])
-async def test_exclusive_libera_clientes_e_cohort(client, test_seller, rota):
-    user_id, _ = test_seller
+async def test_exclusive_libera_clientes_e_cohort(client, pg_pool, test_seller, rota):
+    user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "exclusive")
     resp = client.get(
         rota, params={"date_from": _dia(30), "date_to": _dia(0)}, headers=_auth(user_id)
     )
@@ -216,6 +217,7 @@ async def test_essencial_ve_so_os_10_primeiros_da_abc_sem_visitas(client, pg_poo
 
 async def test_exclusive_ve_a_abc_inteira_com_visitas(client, pg_pool, test_seller):
     user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "exclusive")
     await _doze_produtos(pg_pool, seller_id)
     resp = client.get(
         "/segmentation/abc",
@@ -274,16 +276,30 @@ async def test_essencial_a_janela_padrao_de_90_dias_cabe_inteira(client, pg_pool
     assert CABECALHO_HISTORICO not in resp.headers
 
 
-async def test_exclusive_nao_corta_historico(client, pg_pool, test_seller):
+async def test_exclusive_corta_a_janela_em_seis_meses(client, pg_pool, test_seller):
     user_id, seller_id = test_seller
-    await _order(pg_pool, seller_id, 1, f"{_dia(100)}T12:00:00-03:00", 500.0)
+    await _no_plano(pg_pool, seller_id, "exclusive")
+    await _order(pg_pool, seller_id, 1, f"{_dia(170)}T12:00:00-03:00", 500.0)
+    await _order(pg_pool, seller_id, 2, f"{_dia(190)}T12:00:00-03:00", 900.0)
     resp = client.get(
         "/metrics/fluxo-financeiro",
-        params={"date_from": _dia(120), "date_to": _dia(0)},
+        params={"date_from": _dia(200), "date_to": _dia(0)},
+        headers=_auth(user_id),
+    )
+    assert resp.headers[CABECALHO_HISTORICO] == _dia(180)
+    assert sum(linha["receita_bruta"] for linha in resp.json()) == pytest.approx(500.0)
+
+
+async def test_premium_nao_corta_historico(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _order(pg_pool, seller_id, 1, f"{_dia(190)}T12:00:00-03:00", 900.0)
+    resp = client.get(
+        "/metrics/fluxo-financeiro",
+        params={"date_from": _dia(200), "date_to": _dia(0)},
         headers=_auth(user_id),
     )
     assert CABECALHO_HISTORICO not in resp.headers
-    assert sum(linha["receita_bruta"] for linha in resp.json()) == pytest.approx(500.0)
+    assert sum(linha["receita_bruta"] for linha in resp.json()) == pytest.approx(900.0)
 
 
 def test_o_limite_do_historico_e_contado_no_dia_do_vendedor():
@@ -304,7 +320,7 @@ def test_janela_que_termina_no_limite_e_recusada():
 
 
 def test_plano_sem_limite_nao_mexe_na_janela():
-    assert limita_ao_historico(EXCLUSIVE, "2020-01-01", "2026-10-28") == (
+    assert limita_ao_historico(PLANOS["premium"], "2020-01-01", "2026-10-28") == (
         "2020-01-01",
         "2026-10-28",
         None,
@@ -383,11 +399,12 @@ async def test_acesso_do_essencial_lista_o_que_ele_libera(client, pg_pool, test_
     assert corpo["termos"]["aceito"] is True
 
 
-async def test_acesso_do_exclusive_libera_tudo(client, test_seller):
-    user_id, _ = test_seller
+async def test_acesso_do_exclusive_libera_tudo(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "exclusive")
     corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
     assert "clientes" in corpo["recursos"]
-    assert corpo["dias_de_historico"] is None
+    assert corpo["dias_de_historico"] == 180
 
 
 async def test_aceite_sem_plano_e_recusado(client, pg_pool, seller_sem_plano):
@@ -438,6 +455,7 @@ async def test_aceite_grava_a_prova_e_libera_o_painel(client, pg_pool, test_sell
 
 async def test_status_diz_se_o_plano_sincroniza_sob_demanda(client, pg_pool, test_seller):
     user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "exclusive")
     status = client.get("/ml/sync/status", headers=_auth(user_id)).json()
     assert status["sincroniza_sob_demanda"] is True
     await _no_plano(pg_pool, seller_id, "essencial")

@@ -105,7 +105,7 @@ async def da_plano(conn, seller_id, plano: str = "exclusive", *, aceita: bool = 
 async def test_seller(pg_pool):
     """Cria um auth.users + sellers de teste, devolve (user_id, seller_id).
 
-    Nasce no Exclusive e com os termos aceitos: é o produto inteiro, como era
+    Nasce no Premium e com os termos aceitos: é o produto inteiro, como era
     antes de existirem planos, e é o que os testes de cada tela assumem. Quem
     testa o Essencial ou a falta de plano usa `da_plano` ou cria o seu.
 
@@ -120,7 +120,9 @@ async def test_seller(pg_pool):
         seller_id = await conn.fetchval(
             "INSERT INTO sellers (user_id) VALUES ($1) RETURNING id", user_id
         )
-        await da_plano(conn, seller_id)
+        # Premium, o único sem corte: as datas fixas dos testes sairiam da janela de 180
+        # dias do Exclusive com a passagem do tempo, e o CI cairia sem nada ter mudado.
+        await da_plano(conn, seller_id, "premium")
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
         await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)

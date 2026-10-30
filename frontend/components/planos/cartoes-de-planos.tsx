@@ -19,14 +19,14 @@ import {
 } from "@/lib/vendas";
 
 /**
- * Os três planos, em cartões. Usado pela página `/planos` e pela seção de
+ * Os planos à venda, em cartões. Usado pela página `/planos` e pela seção de
  * preços da vitrine: um só lugar, para as duas nunca prometerem coisas
  * diferentes.
  *
  * O que cada plano libera de verdade é decidido no backend
  * (`backend/planos.py`). Esta lista descreve aquilo; mudar uma sem a outra é
  * prometer o que o produto não entrega. O Exclusive é o recomendado e o mais
- * destacado, no centro (spec `docs/specs/2026-10-28-planos-e-acesso-design.md`).
+ * destacado (spec `docs/specs/2026-10-28-planos-e-acesso-design.md`).
  *
  * Os preços moram em `lib/precos.ts`, que o backend confere contra o que ele
  * cobra. "Assinar" leva à contratação (`/assinar`); o contato fica para quem
@@ -44,7 +44,6 @@ type Plano = {
   nome: string;
   chamada: string;
   itens: string[];
-  depois?: { titulo: string; itens: string[] };
   destaque?: boolean;
 };
 
@@ -80,21 +79,6 @@ const PLANOS: Plano[] = [
       "Suporte prioritário",
     ],
   },
-  {
-    chave: "premium",
-    nome: "Premium",
-    chamada: "Para quem quer o máximo do produto e alguém do lado.",
-    itens: ["Tudo do Exclusive", "Gerente de conta dedicado"],
-    depois: {
-      titulo: "Em construção para o Premium",
-      itens: [
-        "Pergunte sobre a sua loja a uma IA (Claude, ChatGPT)",
-        "Alertas de margem negativa e anúncio parado",
-        "Várias contas do Mercado Livre num painel só",
-        "Histórico de 12 meses",
-      ],
-    },
-  },
 ];
 
 export function CartoesDePlanos() {
@@ -116,7 +100,7 @@ export function CartoesDePlanos() {
         {vendasAbertas ? " para quem assina agora" : " para quem assinar na abertura"}. No plano
         mensal, você mantém este preço enquanto continuar no mesmo plano.
       </div>
-      <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
+      <div className="grid gap-6 md:grid-cols-2 md:items-stretch">
         {PLANOS.map((plano) => (
           <CartaoDoPlano key={plano.nome} plano={plano} vendasAbertas={vendasAbertas} />
         ))}
@@ -181,19 +165,6 @@ function CartaoDoPlano({ plano, vendasAbertas }: { plano: Plano; vendasAbertas: 
           </li>
         ))}
       </ul>
-
-      {plano.depois && (
-        <div className="mt-5 border-t border-line pt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            {plano.depois.titulo}
-          </p>
-          <ul className="mt-2 space-y-1.5 text-sm text-muted">
-            {plano.depois.itens.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <div className="mt-6 flex flex-col gap-2">
         {vendasAbertas ? (

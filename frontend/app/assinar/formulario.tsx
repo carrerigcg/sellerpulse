@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { contratar } from "@/lib/ml";
-import { NOMES_DOS_PLANOS, type NomeDoPlano } from "@/lib/plano";
+import { NOMES_DOS_PLANOS, PLANOS_A_VENDA, type NomeDoPlano } from "@/lib/plano";
 import {
   DIAS_DE_TESTE,
   PLANO_COM_TESTE,
@@ -14,8 +14,6 @@ import {
 } from "@/lib/precos";
 
 type Ciclo = "mensal" | "anual";
-
-const PLANOS: NomeDoPlano[] = ["essencial", "exclusive", "premium"];
 
 /**
  * O formulário da contratação. Só strings atravessam a fronteira do servidor;
@@ -72,8 +70,8 @@ export function FormularioDeAssinatura({
     <form onSubmit={enviar} className="mt-6 space-y-6">
       <fieldset>
         <legend className="text-sm font-semibold">Plano</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          {PLANOS.map((p) => (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {PLANOS_A_VENDA.map((p) => (
             <label
               key={p}
               className={`flex cursor-pointer flex-col rounded-lg border px-3 py-2 text-sm ${
