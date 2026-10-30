@@ -23,6 +23,8 @@ export type Acesso = {
   dias_de_historico: number | null;
   produtos_na_abc: number | null;
   termos: { versao: string; aceito: boolean };
+  /** Se a contratação nova está aberta. O backend é quem recusa o checkout. */
+  vendas_abertas: boolean;
   /**
    * A assinatura, mesmo vencida: é na tela "Minha assinatura" que o vendedor
    * descobre por que perdeu o acesso. `null` = nunca teve plano.
