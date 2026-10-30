@@ -57,8 +57,6 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
         temDados={temDados}
       />
 
-      {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
-
       {erro ? (
         <p className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">{erro}</p>
       ) : !temDados ? (
@@ -67,6 +65,8 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
         </p>
       ) : (
         <>
+          {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
+
           <section className="mt-6 rounded-xl border border-line bg-surface p-5">
             <h2 className="text-sm font-semibold">
               {comCusto} de {linhas.length}{" "}

@@ -22,6 +22,11 @@ Premium custa mais sem entregar as funções anunciadas, então não pode ser ve
 - **Clientes, Custos e Exportar passam a avisar o corte.** Clientes e Exportar nunca
   precisaram, porque o Essencial não chega a elas, e o CSV sairia cortado em silêncio.
 
+- **Checkout de Premium aberto antes do merge é honrado:** quem pagou recebe o que comprou.
+  Medido em produção em 2026-10-30: nenhum aberto.
+- **Janela inteira fora do plano diz o limite**, em vez de culpar o backend, e o nome do
+  CSV leva o período que o arquivo cobre.
+
 ## Fora desta spec
 
 - O lançamento do Premium (etapa 11).

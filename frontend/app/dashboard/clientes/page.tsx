@@ -97,7 +97,7 @@ export default async function ClientesPage({
                   linhas={rfm}
                   colunas={COLUNAS_RFM}
                   tela="clientes"
-                  de={de}
+                  de={inicio ?? de}
                   ate={ate}
                 />
               )}

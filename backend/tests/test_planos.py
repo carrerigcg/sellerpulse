@@ -177,8 +177,9 @@ async def test_essencial_recusa_clientes_e_cohort(client, pg_pool, test_seller, 
 
 
 @pytest.mark.parametrize("rota", ["/segmentation/rfm", "/segmentation/cohort"])
-async def test_exclusive_libera_clientes_e_cohort(client, test_seller, rota):
-    user_id, _ = test_seller
+async def test_exclusive_libera_clientes_e_cohort(client, pg_pool, test_seller, rota):
+    user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "exclusive")
     resp = client.get(
         rota, params={"date_from": _dia(30), "date_to": _dia(0)}, headers=_auth(user_id)
     )
@@ -216,6 +217,7 @@ async def test_essencial_ve_so_os_10_primeiros_da_abc_sem_visitas(client, pg_poo
 
 async def test_exclusive_ve_a_abc_inteira_com_visitas(client, pg_pool, test_seller):
     user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "exclusive")
     await _doze_produtos(pg_pool, seller_id)
     resp = client.get(
         "/segmentation/abc",
@@ -453,6 +455,7 @@ async def test_aceite_grava_a_prova_e_libera_o_painel(client, pg_pool, test_sell
 
 async def test_status_diz_se_o_plano_sincroniza_sob_demanda(client, pg_pool, test_seller):
     user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "exclusive")
     status = client.get("/ml/sync/status", headers=_auth(user_id)).json()
     assert status["sincroniza_sob_demanda"] is True
     await _no_plano(pg_pool, seller_id, "essencial")

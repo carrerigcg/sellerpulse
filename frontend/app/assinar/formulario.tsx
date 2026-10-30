@@ -70,7 +70,7 @@ export function FormularioDeAssinatura({
     <form onSubmit={enviar} className="mt-6 space-y-6">
       <fieldset>
         <legend className="text-sm font-semibold">Plano</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {PLANOS_A_VENDA.map((p) => (
             <label
               key={p}

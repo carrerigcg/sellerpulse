@@ -173,7 +173,7 @@ export default async function FinanceiroPage({
                   linhas={fluxo}
                   colunas={COLUNAS_FLUXO}
                   tela="executive"
-                  de={de}
+                  de={inicio ?? de}
                   ate={ate}
                 />
               )}

@@ -139,7 +139,7 @@ export default async function ProdutosPage({
                   linhas={abc}
                   colunas={COLUNAS_ABC}
                   tela="produtos"
-                  de={de}
+                  de={inicio ?? de}
                   ate={ate}
                 />
               )}

@@ -67,7 +67,7 @@ export default async function ExportarPage({
       ) : (
         <>
           {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
-          <PainelExportacao fluxo={fluxo} abc={abc} rfm={rfm} de={de} ate={ate} />
+          <PainelExportacao fluxo={fluxo} abc={abc} rfm={rfm} de={inicio ?? de} ate={ate} />
         </>
       )}
 

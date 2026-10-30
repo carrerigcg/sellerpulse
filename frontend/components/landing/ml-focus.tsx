@@ -19,7 +19,7 @@ const VANTAGENS = [
     // o valor que aparece em `payments[].shipping_cost` e o frete que o COMPRADOR
     // pagou, nao custo do vendedor. Descoberto na primeira ingestao real. Volta
     // quando a API de shipments estiver integrada de verdade.
-    titulo: "Histórico completo, sem digitar nada",
+    titulo: "Seis meses de histórico, sem digitar nada",
     texto:
       "Ao conectar, os últimos 6 meses de pedidos entram sozinhos — produtos e compradores já identificados.",
   },
