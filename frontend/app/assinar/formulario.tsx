@@ -167,11 +167,11 @@ export function FormularioDeAssinatura({
         />
         <span>
           Li e aceito os{" "}
-          <a href="/termos" target="_blank" className="font-medium text-accent underline">
+          <a href="/termos" target="_blank" rel="noopener noreferrer" className="font-medium text-accent underline">
             Termos de Uso
           </a>{" "}
           e a{" "}
-          <a href="/privacidade" target="_blank" className="font-medium text-accent underline">
+          <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="font-medium text-accent underline">
             Política de Privacidade
           </a>{" "}
           do SellerPulse.

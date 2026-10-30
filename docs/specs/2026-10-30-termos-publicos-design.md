@@ -27,6 +27,16 @@ Guilherme pediu para implementar os termos reais logo depois de fechar as vendas
    (Guilherme, 2026-10-30). Um teste recusa CPF ou CNPJ no texto e a expressão
    "com endereço em".
 
+## Decisões da revisão
+
+- **Quem não aceitar** cancela na própria tela de aceite, porque o painel fica
+  bloqueado e a cobrança continuaria. Esse período não dá acesso: o texto antes
+  prometia o contrário.
+- **Desconectar sem plano e trocar o plano anual** são feitos pelos canais de contato,
+  porque não há tela para isso.
+- **"Não guardamos nome do comprador" foi medido em produção** (2026-10-30): em 2.071
+  pedidos, `raw_json->'buyer'` só tem `id` e `nickname`.
+
 ## O que trava a abertura das vendas
 
 O Decreto 7.962/2013, art. 2º, pede a identificação do fornecedor no site de comércio

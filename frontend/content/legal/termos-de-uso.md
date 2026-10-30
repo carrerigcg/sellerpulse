@@ -43,8 +43,8 @@ Para contratar o SellerPulse, você precisa:
 
 - A conexão é feita pelo **fluxo oficial de autorização do Mercado Livre**.
   O SellerPulse nunca recebe a senha da sua conta do Mercado Livre.
-- Você pode **desconectar a qualquer momento**, na tela de conexão. Isso
-  apaga a credencial de acesso e interrompe a importação. Os dados já
+- Você pode **desconectar a qualquer momento**, na tela de conexão ou, sem plano
+  ativo, pelos canais da seção 16. Isso apaga a credencial de acesso e interrompe a importação. Os dados já
   importados continuam na sua conta até você pedir a exclusão.
 - Desconectar **não cancela** a assinatura. O cancelamento é feito conforme a
   seção 8.
@@ -92,7 +92,7 @@ Você concorda em não:
 
 ### 7.1 Planos
 
-| | Essencial | Exclusive |
+| Condição | Essencial | Exclusive |
 | --- | --- | --- |
 | Preço mensal | R$ 49,90 | R$ 79,90 |
 | Preço anual, em pagamento único | R$ 499,00 | R$ 799,00 |
@@ -144,6 +144,7 @@ apagado por causa disso, e o acesso volta com uma nova contratação.
   da próxima cobrança, sem cobrança da diferença do período em curso.
 - **Para um plano menor:** vale a partir do próximo ciclo. Até lá, você mantém
   o plano atual.
+- **No plano anual:** a troca é combinada pelos canais da seção 16.
 
 ### 7.7 Mudança de preços
 
@@ -177,8 +178,8 @@ O documento fiscal da assinatura segue a legislação aplicável. Se precisar de
   funcionamento ininterrupto ou livre de erros**.
 - Pode haver manutenção, atualizações e interrupções de fornecedores
   (hospedagem, banco de dados, pagamento, Mercado Livre).
-- O suporte é prestado por e-mail e WhatsApp, em dias úteis, em horário comercial,
-  com a prioridade indicada no plano. Não há garantia contratual de tempo de
+- O suporte é prestado pelos canais e com a prioridade indicados no plano, em
+  dias úteis, em horário comercial. Não há garantia contratual de tempo de
   resposta ou de disponibilidade (SLA).
 
 ## 10. Seus dados
@@ -221,8 +222,8 @@ usar o serviço enquanto a sua conta estiver ativa.
 
 Se estes Termos mudarem de forma relevante, avisamos com antecedência de
 30 dias, pelo e-mail da conta ou dentro do serviço, e pedimos um novo aceite
-para continuar usando o serviço. Quem não aceitar pode cancelar, e mantém o acesso
-até o fim do período já pago.
+para continuar usando o serviço. Sem o novo aceite, o painel fica indisponível. Quem não aceitar pode cancelar a
+assinatura na própria tela de aceite, sem multa.
 
 ## 15. Lei e foro
 

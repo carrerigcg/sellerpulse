@@ -6,6 +6,7 @@ import { getAcesso } from "@/lib/api";
 import { ResumoDosTermos } from "@/components/planos/resumo-dos-termos";
 import { NOMES_DOS_PLANOS } from "@/lib/plano";
 
+import { CancelarCobranca } from "../planos/cancelar-cobranca";
 import { FormularioDeAceite } from "./formulario";
 
 export const metadata: Metadata = { title: "Termos de Uso · SellerPulse" };
@@ -35,13 +36,21 @@ export default async function AceitePage() {
           Seu plano {NOMES_DOS_PLANOS[acesso.plano]} está ativo
         </h1>
         <p className="mt-2 text-muted">
-          Antes de conectar a sua conta do Mercado Livre, leia e aceite os Termos de Uso e a
-          Política de Privacidade.
+          Para usar o painel, leia e aceite os Termos de Uso e a Política de Privacidade.
         </p>
 
         <ResumoDosTermos versao={acesso.termos.versao} />
 
         <FormularioDeAceite versao={acesso.termos.versao} />
+
+        {/* Os Termos prometem esta saída a quem não aceitar: aqui a pessoa ainda
+            não chega à "Minha assinatura", e a cobrança continuaria. */}
+        {acesso.assinatura?.recorrente && (
+          <section className="mt-8 border-t border-line pt-6 text-sm">
+            <h2 className="font-semibold">Não quer aceitar?</h2>
+            <CancelarCobranca />
+          </section>
+        )}
       </div>
     </main>
   );

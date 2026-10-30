@@ -32,11 +32,11 @@ export function ResumoDosTermos({ versao }: { versao: string }) {
       </ul>
       <p className="text-xs text-muted">
         Versão {versao}. Este é um resumo: valem os{" "}
-        <a href="/termos" target="_blank" className="underline hover:text-accent">
+        <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
           Termos de Uso
         </a>{" "}
         e a{" "}
-        <a href="/privacidade" target="_blank" className="underline hover:text-accent">
+        <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
           Política de Privacidade
         </a>{" "}
         completos.
