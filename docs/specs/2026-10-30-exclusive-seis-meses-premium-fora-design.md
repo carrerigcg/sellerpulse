@@ -1,6 +1,6 @@
 # Exclusive com 6 meses de histórico e Premium fora da venda
 
-Estado: em revisão. Etapa 2 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
+Estado: no ar desde 2026-10-30 (#38). Etapa 2 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## Por quê
 
