@@ -30,7 +30,7 @@ export function Precos() {
         </div>
 
         <p className="mt-10 text-sm text-muted">
-          Quer ver antes de contratar?{" "}
+          Quer ver como funciona?{" "}
           <Link href="/demo" className="font-medium text-accent underline hover:text-accent-hover">
             Abra a demonstração
           </Link>

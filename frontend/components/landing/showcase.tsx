@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChamadaPrincipal } from "@/components/landing/chamada-principal";
+import { vitrineComVendasAbertas } from "@/lib/vendas";
 
 import { BrowserFrame } from "./browser-frame";
 
@@ -94,15 +96,12 @@ export function Showcase() {
         </div>
 
         <div className="mt-16 flex flex-wrap items-center gap-x-6 gap-y-4 border-t border-line pt-10 sm:mt-20">
-          <Link
-            href="/signup"
-            className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
-          >
-            Criar conta grátis
-          </Link>
-          <Link href="/demo" className="text-sm font-semibold text-ink hover:text-accent">
-            ou continue explorando a demonstração →
-          </Link>
+          <ChamadaPrincipal className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover" />
+          {vitrineComVendasAbertas() && (
+            <Link href="/demo" className="text-sm font-semibold text-ink hover:text-accent">
+              ou continue explorando a demonstração →
+            </Link>
+          )}
         </div>
       </div>
     </section>

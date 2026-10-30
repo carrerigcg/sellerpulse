@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { ChamadaPrincipal } from "@/components/landing/chamada-principal";
 
 /**
  * Seção 5 — "feito para o Mercado Livre", tratado como vantagem. Esta é a
@@ -62,12 +62,7 @@ export function MlFocus() {
         </div>
 
         <div className="mt-14">
-          <Link
-            href="/signup"
-            className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover"
-          >
-            Criar conta grátis
-          </Link>
+          <ChamadaPrincipal className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white transition hover:bg-accent-hover" />
         </div>
       </div>
     </section>

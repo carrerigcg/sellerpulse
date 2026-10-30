@@ -25,6 +25,19 @@ chegar à página. Até os termos finais existirem, ninguém deve conseguir cont
      conta para algo fechado, e a landing não depender do backend para desenhar.
 5. **Vitrine fechada:** os preços continuam visíveis, com "As vendas abrem em breve"
    e o botão "Quero saber quando abrir", que leva ao WhatsApp.
+6. **Toda chamada de cadastro segue a mesma regra.** Na vitrine fechada, "Criar conta
+   grátis" vira "Ver demonstração", e o botão some da demo. Quem já tem conta segue
+   entrando pelo login.
+
+## Decisões da revisão
+
+- **Quem já assina:** `/planos` indica "Minha assinatura", porque os convites de
+  upgrade do painel levam para lá e os cartões fechados não oferecem nada a ele.
+- **Inadimplente:** o painel o manda para `/planos?motivo=vencido`, e a assinatura
+  continua viva no Asaas. O aviso ganha "Cancelar a cobrança", com vendas abertas ou
+  fechadas. Antes, recontratar era a única saída pela tela.
+- **"Grátis para começar, sem cartão" saiu da vitrine**, porque era falso: não há
+  plano grátis, e o teste de 7 dias pede cartão.
 
 ## Abrir as vendas
 

@@ -30,7 +30,8 @@ import {
  *
  * Os preços moram em `lib/precos.ts`, que o backend confere contra o que ele
  * cobra. "Assinar" leva à contratação (`/assinar`); o contato fica para quem
- * quer tirar dúvida antes.
+ * quer tirar dúvida antes. Com as vendas fechadas (`lib/vendas.ts`), o botão vira
+ * o contato para saber da abertura.
  *
  * Promoção de lançamento: o preço de depois aparece riscado, como ÂNCORA, ao
  * lado do de agora, com o desconto e a economia em reais. O riscado é dito
