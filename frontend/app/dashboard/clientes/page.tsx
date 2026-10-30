@@ -3,12 +3,12 @@ import { ExportButton } from "@/components/analytics/export-button";
 import { RfmChart } from "@/components/analytics/rfm-chart";
 import { RfmLegend } from "@/components/analytics/rfm-legend";
 import { SegmentBand } from "@/components/analytics/segment-band";
-import { Cadeado } from "@/components/planos/cadeado";
+import { AvisoDeHistorico, Cadeado } from "@/components/planos/cadeado";
 import { getAcesso, mensagemDeFalhaAoCarregar, getRfmScores, type RfmLinha } from "@/lib/api";
 import { COLUNAS_RFM } from "@/lib/colunas-export";
 import { getDemoRfmScores } from "@/lib/demo";
-import { podeUsar } from "@/lib/plano";
-import { periodoPadrao } from "@/lib/periodo";
+import { historicoCortado, inicioDoHistorico, podeUsar } from "@/lib/plano";
+import { hojeNoFusoDoVendedor, periodoPadrao } from "@/lib/periodo";
 import { segmentoDaUrl } from "@/lib/segmento-da-url";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 import { SemPedidosNoPeriodo } from "@/components/analytics/sem-pedidos-no-periodo";
@@ -37,6 +37,8 @@ export default async function ClientesPage({
   if (!podeUsar(acesso, "clientes")) {
     return <ClientesTrancado de={de} ate={ate} />;
   }
+  const hoje = hojeNoFusoDoVendedor();
+  const inicio = acesso && historicoCortado(acesso, de, hoje) ? inicioDoHistorico(acesso, hoje) : null;
 
   let rfm: RfmLinha[] = [];
   let erro: string | null = null;
@@ -69,6 +71,8 @@ export default async function ClientesPage({
         <SemPedidosNoPeriodo mensagem="Nenhum comprador com pedido pago neste período." />
       ) : (
         <>
+          {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
+
           <SegmentBand rfm={rfm} />
 
           <section className="mt-6 rounded-xl border border-line p-5">

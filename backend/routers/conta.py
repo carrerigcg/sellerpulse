@@ -191,6 +191,8 @@ async def post_checkout(
     # contratar algo que não vai acontecer.
     if not vendas_abertas():
         raise recusa(503, "vendas-fechadas", "As vendas ainda não estão abertas")
+    if not PLANOS[corpo.plano].a_venda:
+        raise recusa(409, "plano-fora-de-venda", "Este plano ainda não está à venda")
     if not asaas.configurado():
         raise recusa(503, "cobranca-indisponivel", "A contratação está indisponível agora")
     pool = await get_pool()
@@ -333,6 +335,9 @@ async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)
     linha, assinatura = await _assinatura_recorrente(pool, acesso.seller_id)
     novo = PLANOS[corpo.plano]
     atual = PLANOS[linha["plano"]]
+    # Quem já está no plano pode continuar nele: é o que desfaz um downgrade agendado.
+    if not novo.a_venda and novo.nome != atual.nome:
+        raise recusa(409, "plano-fora-de-venda", "Este plano ainda não está à venda")
     if novo.nome == atual.nome and linha["plano_no_proximo_ciclo"] is None:
         raise recusa(409, "mesmo-plano", "Esse já é o seu plano")
     # Escolher o plano atual com um downgrade agendado desfaz o downgrade: o

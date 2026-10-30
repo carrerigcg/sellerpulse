@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CartoesDePlanos } from "@/components/planos/cartoes-de-planos";
 
 /**
- * Seção de preços — os três planos, com o Exclusive no centro.
+ * Seção de preços — os planos à venda, com o Exclusive em destaque.
  *
  * Vem depois de "Seus dados" e antes da faixa final: quem chegou até aqui já
  * viu o produto, entendeu o que faz e perdeu o medo de conectar a conta; a

@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   comparaComAnterior,
   destinoSemAcesso,
+  fraseDoHistorico,
+  PLANOS_A_VENDA,
   diaDe,
   ultimoDia,
   historicoCortado,
@@ -48,6 +50,17 @@ describe("destinoSemAcesso", () => {
 });
 
 describe("histórico do plano", () => {
+  it("o Premium fica fora do que se vende", () => {
+    expect(PLANOS_A_VENDA).toEqual(["essencial", "exclusive"]);
+  });
+
+  it("diz o histórico do plano de quem vê o aviso", () => {
+    expect(fraseDoHistorico(ESSENCIAL)).toBe("No Essencial, o histórico é de 3 meses");
+    expect(fraseDoHistorico({ ...ESSENCIAL, plano: "exclusive", dias_de_historico: 180 })).toBe(
+      "No Exclusive, o histórico é de 6 meses",
+    );
+  });
+
   it("começa 90 dias antes de hoje no Essencial, como no backend", () => {
     // 28/10 menos 90 dias = 30/07 (o mesmo par do teste do backend).
     expect(inicioDoHistorico(ESSENCIAL, "2026-10-28")).toBe("2026-07-30");

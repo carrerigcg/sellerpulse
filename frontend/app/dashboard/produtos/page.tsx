@@ -99,7 +99,7 @@ export default async function ProdutosPage({
         <SemPedidosNoPeriodo mensagem="Nenhum pedido pago neste período." />
       ) : (
         <>
-          {inicio && <AvisoDeHistorico inicio={inicio} />}
+          {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
 
           {/* Os cartões de classe e a cobertura somam a lista. Com parte dos
               produtos fora do plano, somariam só os 10 visíveis e diriam

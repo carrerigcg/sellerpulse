@@ -1,10 +1,10 @@
 import { GlossarioColunas } from "@/components/analytics/glossario-colunas";
 import { PainelExportacao } from "@/components/analytics/painel-exportacao";
-import { Cadeado } from "@/components/planos/cadeado";
+import { AvisoDeHistorico, Cadeado } from "@/components/planos/cadeado";
 import { getAcesso, mensagemDeFalhaAoCarregar, getAbcPareto, getFluxoFinanceiro, getRfmScores, type AbcLinha, type FluxoDia, type RfmLinha } from "@/lib/api";
 import { getDemoAbcPareto, getDemoFluxoFinanceiro, getDemoRfmScores } from "@/lib/demo";
-import { periodoPadrao } from "@/lib/periodo";
-import { podeUsar } from "@/lib/plano";
+import { hojeNoFusoDoVendedor, periodoPadrao } from "@/lib/periodo";
+import { historicoCortado, inicioDoHistorico, podeUsar } from "@/lib/plano";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
 
 /**
@@ -31,6 +31,8 @@ export default async function ExportarPage({
   if (!podeUsar(acesso, "exportar")) {
     return <ExportarTrancado de={de} ate={ate} />;
   }
+  const hoje = hojeNoFusoDoVendedor();
+  const inicio = acesso && historicoCortado(acesso, de, hoje) ? inicioDoHistorico(acesso, hoje) : null;
 
   let fluxo: FluxoDia[] = [];
   let abc: AbcLinha[] = [];
@@ -63,7 +65,10 @@ export default async function ExportarPage({
           {erro}
         </p>
       ) : (
-        <PainelExportacao fluxo={fluxo} abc={abc} rfm={rfm} de={de} ate={ate} />
+        <>
+          {inicio && acesso && <AvisoDeHistorico inicio={inicio} acesso={acesso} />}
+          <PainelExportacao fluxo={fluxo} abc={abc} rfm={rfm} de={de} ate={ate} />
+        </>
       )}
 
       {/* O glossário aparece mesmo com erro ou sem dado: é documentação, e

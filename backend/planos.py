@@ -56,6 +56,8 @@ class Plano:
     dias_de_historico: int | None
     # None = a curva inteira.
     produtos_na_abc: int | None
+    # Fora de venda: não entra em checkout nem em troca, mas quem já tem continua.
+    a_venda: bool = True
 
     def libera(self, recurso: Recurso) -> bool:
         return recurso in self.recursos
@@ -77,12 +79,13 @@ PLANOS: dict[str, Plano] = {
     ),
     # Exclusive e Premium liberam tudo o que existe hoje. O que vai
     # diferenciá-los (MCP com a conta real, alertas, várias contas) entra com
-    # cada feature (decisão 8 da spec).
+    # cada feature (decisão 8 da spec). Sem corte no Exclusive, ele entregaria
+    # com o tempo o histórico longo que o Premium vai vender.
     "exclusive": Plano(
         nome="exclusive",
         preco_mensal=Decimal("79.90"),
         recursos=_TUDO,
-        dias_de_historico=None,
+        dias_de_historico=180,
         produtos_na_abc=None,
     ),
     "premium": Plano(
@@ -91,5 +94,7 @@ PLANOS: dict[str, Plano] = {
         recursos=_TUDO,
         dias_de_historico=None,
         produtos_na_abc=None,
+        # Volta à venda quando as funções que o diferenciam existirem.
+        a_venda=False,
     ),
 }

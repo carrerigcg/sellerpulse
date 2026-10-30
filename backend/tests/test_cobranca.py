@@ -203,10 +203,26 @@ async def test_contratar_o_anual_e_pagamento_unico_por_pix_ou_cartao(
     assert "subscription" not in corpo
 
 
+async def test_premium_fora_de_venda_nao_abre_checkout_nem_grava_aceite(
+    client, pg_pool, sem_plano, asaas_falso
+):
+    user_id, seller_id = sem_plano
+    resp = client.post(
+        "/conta/checkout", json=_contratacao(plano="premium"), headers=_auth(user_id)
+    )
+    assert resp.status_code == 409
+    assert asaas_falso.pedidos == []
+    async with pg_pool.acquire() as conn:
+        aceites = await conn.fetchval(
+            "SELECT count(*) FROM aceites_de_termos WHERE seller_id = $1", seller_id
+        )
+    assert aceites == 0
+
+
 async def test_so_o_exclusive_mensal_tem_teste(client, sem_plano, asaas_falso):
     user_id, _ = sem_plano
     resp = client.post(
-        "/conta/checkout", json=_contratacao(plano="premium"), headers=_auth(user_id)
+        "/conta/checkout", json=_contratacao(plano="essencial"), headers=_auth(user_id)
     )
     assert resp.json()["teste"] is False
     assert (
@@ -614,10 +630,19 @@ async def test_upgrade_vale_na_hora_e_o_valor_novo_na_proxima_cobranca(
 ):
     user_id, seller_id = test_seller
     await _assinante(pg_pool, seller_id, "essencial")
+    resp = client.post("/conta/plano", json={"plano": "exclusive"}, headers=_auth(user_id))
+    assert resp.json() == {"plano": "exclusive", "no_proximo_ciclo": None}
+    assert asaas_falso.pedidos == [("PUT", "/v3/subscriptions/sub_9", {"value": 79.9})]
+    assert (await _assinatura(pg_pool, seller_id))["plano"] == "exclusive"
+
+
+async def test_nao_troca_para_plano_fora_de_venda(client, pg_pool, test_seller, asaas_falso):
+    user_id, seller_id = test_seller
+    await _assinante(pg_pool, seller_id, "exclusive")
     resp = client.post("/conta/plano", json={"plano": "premium"}, headers=_auth(user_id))
-    assert resp.json() == {"plano": "premium", "no_proximo_ciclo": None}
-    assert asaas_falso.pedidos == [("PUT", "/v3/subscriptions/sub_9", {"value": 139.9})]
-    assert (await _assinatura(pg_pool, seller_id))["plano"] == "premium"
+    assert resp.status_code == 409
+    assert asaas_falso.pedidos == []
+    assert (await _assinatura(pg_pool, seller_id))["plano"] == "exclusive"
 
 
 async def test_downgrade_fica_para_o_proximo_ciclo(client, pg_pool, test_seller, asaas_falso):
