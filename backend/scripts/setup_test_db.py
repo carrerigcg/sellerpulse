@@ -50,6 +50,7 @@ MIGRATIONS = (
     "0014_minimiza_pagamentos.sql",
     "0016_planos_e_aceite.sql",
     "0018_cobranca.sql",
+    "0019_registros_de_acesso.sql",
 )
 
 

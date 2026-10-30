@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { RegistroDeAcesso } from "@/components/registro-de-acesso";
 import { getAcesso } from "@/lib/api";
 import { destinoSemAcesso } from "@/lib/plano";
 import { createClient } from "@/lib/supabase/server";
@@ -31,6 +32,9 @@ export default async function DashboardLayout({
   // `rodape` é a função de `comRotulos`) e função não atravessa a fronteira
   // servidor→cliente. Daqui só desce o email, que é string.
   return (
-    <NavegacaoDashboard email={user.email ?? ""}>{children}</NavegacaoDashboard>
+    <>
+      <RegistroDeAcesso />
+      <NavegacaoDashboard email={user.email ?? ""}>{children}</NavegacaoDashboard>
+    </>
   );
 }

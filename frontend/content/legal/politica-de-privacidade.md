@@ -36,6 +36,7 @@ cada um:
 ### 3.2 Dados da contratação e da assinatura
 - **Prova do aceite dos Termos:** versão aceita, data e hora, endereço IP e
   navegador usado.
+- **Registros de acesso:** data e hora de uso do painel e endereço IP.
 - **Assinatura:** plano, ciclo (mensal ou anual), datas de início, de validade
   e de cancelamento.
 - **Dados técnicos da cobrança, enviados pelo Asaas:** os códigos que o Asaas
@@ -93,6 +94,7 @@ ferramentas de análise de comportamento.
 | Criar e manter a sua conta | e-mail, senha | execução de contrato (V) |
 | Contratar, cobrar e controlar o acesso ao plano | assinatura, dados técnicos da cobrança | execução de contrato (V) |
 | Provar o aceite dos Termos | versão, data, IP, navegador | exercício regular de direitos (VI) |
+| Guardar os registros de acesso à aplicação | data, hora, IP | obrigação legal (II): Marco Civil, art. 15 |
 | Importar e atualizar seus dados do Mercado Livre | token, pedidos, anúncios, envios | execução de contrato (V) |
 | Calcular as análises (margem, curva ABC, clientes, desempenho dos anúncios) | pedidos, custos informados, dados dos compradores | execução de contrato (V), em nome do vendedor-controlador |
 | Atender você | mensagens de suporte | execução de contrato (V) |

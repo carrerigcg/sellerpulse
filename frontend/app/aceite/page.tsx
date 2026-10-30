@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Wordmark } from "@/components/brand";
 import { getAcesso } from "@/lib/api";
 import { ResumoDosTermos } from "@/components/planos/resumo-dos-termos";
+import { RegistroDeAcesso } from "@/components/registro-de-acesso";
 import { NOMES_DOS_PLANOS } from "@/lib/plano";
 
 import { CancelarCobranca } from "../planos/cancelar-cobranca";
@@ -30,6 +31,7 @@ export default async function AceitePage() {
 
   return (
     <main className="min-h-screen bg-bg px-4 py-10 text-ink sm:px-6">
+      <RegistroDeAcesso />
       <div className="mx-auto max-w-2xl">
         <Wordmark />
         <h1 className="mt-10 text-2xl font-semibold tracking-tight">

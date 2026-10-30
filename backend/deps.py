@@ -46,6 +46,13 @@ async def get_current_seller_id(
     return await resolve_seller_id(pool, claims["sub"])
 
 
+async def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> uuid.UUID:
+    """Só o token: para o que precisa continuar valendo sem `sellers`."""
+    return uuid.UUID(decode_supabase_jwt(credentials.credentials)["sub"])
+
+
 @dataclass(frozen=True)
 class Acesso:
     seller_id: uuid.UUID
