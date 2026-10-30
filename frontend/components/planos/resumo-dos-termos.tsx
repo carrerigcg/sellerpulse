@@ -31,8 +31,15 @@ export function ResumoDosTermos({ versao }: { versao: string }) {
         </li>
       </ul>
       <p className="text-xs text-muted">
-        Versão {versao}. O texto completo está em revisão e será publicado antes
-        do lançamento; quando isso acontecer, pediremos o seu aceite de novo.
+        Versão {versao}. Este é um resumo: valem os{" "}
+        <a href="/termos" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+          Termos de Uso
+        </a>{" "}
+        e a{" "}
+        <a href="/privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-accent">
+          Política de Privacidade
+        </a>{" "}
+        completos.
       </p>
     </section>
   );

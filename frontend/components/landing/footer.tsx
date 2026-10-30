@@ -10,9 +10,17 @@ export function LandingFooter() {
           <Wordmark className="text-sm text-white" />
         </Link>
         <p>Analytics para vendedores do Mercado Livre.</p>
-        <Link href="/login" className="transition hover:text-white">
-          Entrar
-        </Link>
+        <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+          <Link href="/termos" className="transition hover:text-white">
+            Termos de Uso
+          </Link>
+          <Link href="/privacidade" className="transition hover:text-white">
+            Privacidade
+          </Link>
+          <Link href="/login" className="transition hover:text-white">
+            Entrar
+          </Link>
+        </nav>
       </div>
     </footer>
   );

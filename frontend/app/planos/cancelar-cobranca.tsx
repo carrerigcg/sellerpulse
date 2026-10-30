@@ -5,9 +5,9 @@ import { useState } from "react";
 import { cancelarAssinatura } from "@/lib/ml";
 
 /**
- * Parar a cobrança de quem ficou inadimplente. O painel, onde fica o "Cancelar",
- * manda essa pessoa para cá, e a assinatura continua viva no Asaas: sem este
- * botão, a única saída seria pedir a alguém.
+ * Parar a cobrança de quem não chega ao painel, onde fica o "Cancelar": quem ficou
+ * inadimplente e quem não aceitou uma versão nova dos Termos. A assinatura continua
+ * viva no Asaas: sem este botão, a única saída seria pedir a alguém.
  */
 export function CancelarCobranca() {
   const [confirmando, setConfirmando] = useState(false);
