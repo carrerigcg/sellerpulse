@@ -73,6 +73,7 @@
 0015_remove_update_de_sellers.sql	20261029013222	2026-10-28
 0016_planos_e_aceite.sql	20261029130655	2026-10-29
 0017_rls_planos_e_aceite.sql	20261029130659	2026-10-29
+0018_cobranca.sql	20261030130918	2026-10-30
 
 # SO PARA O BANCO DE TESTE -- nunca vai para producao.
 # Prefixo `!`. O `auth.users` do Supabase e nativo; este arquivo e o stub que
