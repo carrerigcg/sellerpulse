@@ -1,7 +1,9 @@
 # Cobrança pelo Asaas
 
-Estado: no ar desde 2026-10-30 (#35), com a conta de produção do Asaas. Falta a
-compra real de teste, seguida de estorno, e os termos finais antes de divulgar.
+Estado: no ar desde 2026-10-30 (#35), provada com uma compra real de R$ 49,90
+na conta de produção do Asaas: pagamento, plano liberado, cancelamento e estorno
+(os avisos chegaram e o acesso foi encurtado). Não testados em produção: Pix e
+renovação mensal. Falta domínio e termos finais antes de divulgar.
 
 ## Por quê
 
