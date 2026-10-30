@@ -1,3 +1,5 @@
+import { vitrineComVendasAbertas } from "@/lib/vendas";
+
 import { NavegacaoDemo } from "./navegacao";
 
 /**
@@ -11,7 +13,7 @@ import { NavegacaoDemo } from "./navegacao";
  */
 export default function DemoLayout({ children }: LayoutProps<"/demo">) {
   return (
-    <NavegacaoDemo>
+    <NavegacaoDemo vendasAbertas={vitrineComVendasAbertas()}>
       <p className="mb-6 rounded-lg border border-line bg-highlight/10 px-4 py-2 text-center text-xs text-muted">
         Você está vendo dados de demonstração fictícios, não uma loja real.
       </p>

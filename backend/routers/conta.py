@@ -42,6 +42,17 @@ _MAX_IP = 256
 NomeDoPlano = Literal["essencial", "exclusive", "premium"]
 
 
+def vendas_abertas() -> bool:
+    """A contratação nova só abre com `VENDAS_ABERTAS=1`, e nada mais.
+
+    Ausente = fechado, porque o texto final dos termos ainda não existe e o
+    checkout cobra de verdade. Lida na hora da chamada: abrir para uma compra de
+    teste não exige novo deploy do código. Só trava a contratação nova: cancelar
+    e trocar de plano continuam, porque quem assina não pode ficar preso.
+    """
+    return os.environ.get("VENDAS_ABERTAS") == "1"
+
+
 @router.get("/acesso")
 async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
     pool = await get_pool()
@@ -67,6 +78,7 @@ async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_
         "dias_de_historico": plano.dias_de_historico if plano else None,
         "produtos_na_abc": plano.produtos_na_abc if plano else None,
         "termos": {"versao": VERSAO_DOS_TERMOS, "aceito": aceitou},
+        "vendas_abertas": vendas_abertas(),
         # O que a tela "Minha assinatura" mostra. Vem mesmo com o plano vencido:
         # é ali que o vendedor descobre por que perdeu o acesso.
         "assinatura": None
@@ -175,6 +187,10 @@ async def post_checkout(
     sai de `backend/planos.py`, nunca do corpo. Os dados de cobrança (CPF,
     endereço, cartão) a pessoa preenche na página do Asaas, não aqui.
     """
+    # Antes do aceite: com as vendas fechadas, ninguém aceita um texto para
+    # contratar algo que não vai acontecer.
+    if not vendas_abertas():
+        raise recusa(503, "vendas-fechadas", "As vendas ainda não estão abertas")
     if not asaas.configurado():
         raise recusa(503, "cobranca-indisponivel", "A contratação está indisponível agora")
     pool = await get_pool()

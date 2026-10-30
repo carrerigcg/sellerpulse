@@ -12,6 +12,11 @@ import {
   formatarPreco,
   precoAnual,
 } from "@/lib/precos";
+import {
+  AVISO_DE_VENDAS_FECHADAS,
+  mensagemParaSaberDaAbertura,
+  vitrineComVendasAbertas,
+} from "@/lib/vendas";
 
 /**
  * Os três planos, em cartões. Usado pela página `/planos` e pela seção de
@@ -25,7 +30,8 @@ import {
  *
  * Os preços moram em `lib/precos.ts`, que o backend confere contra o que ele
  * cobra. "Assinar" leva à contratação (`/assinar`); o contato fica para quem
- * quer tirar dúvida antes.
+ * quer tirar dúvida antes. Com as vendas fechadas (`lib/vendas.ts`), o botão vira
+ * o contato para saber da abertura.
  *
  * Promoção de lançamento: o preço de depois aparece riscado, como ÂNCORA, ao
  * lado do de agora, com o desconto e a economia em reais. O riscado é dito
@@ -93,6 +99,7 @@ const PLANOS: Plano[] = [
 
 export function CartoesDePlanos() {
   const maiorDesconto = Math.max(...PLANOS.map((p) => descontoDeLancamento(p.chave)));
+  const vendasAbertas = vitrineComVendasAbertas();
   return (
     <>
       {/* A promessa de manter o preço é verdade pelo jeito que a cobrança
@@ -102,20 +109,23 @@ export function CartoesDePlanos() {
           dia) nem para a troca de plano (que usa a tabela vigente) — por isso
           o texto diz "mensal" e "mesmo plano". */}
       <div className="mb-8 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 text-sm text-ink">
+        {!vendasAbertas && (
+          <span className="font-semibold">{AVISO_DE_VENDAS_FECHADAS} </span>
+        )}
         <span className="font-semibold">Preço de lançamento:</span> até {maiorDesconto}% a menos
-        para quem assina agora. No plano mensal, você mantém este preço enquanto continuar no
-        mesmo plano.
+        {vendasAbertas ? " para quem assina agora" : " para quem assinar na abertura"}. No plano
+        mensal, você mantém este preço enquanto continuar no mesmo plano.
       </div>
       <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
         {PLANOS.map((plano) => (
-          <CartaoDoPlano key={plano.nome} plano={plano} />
+          <CartaoDoPlano key={plano.nome} plano={plano} vendasAbertas={vendasAbertas} />
         ))}
       </div>
     </>
   );
 }
 
-function CartaoDoPlano({ plano }: { plano: Plano }) {
+function CartaoDoPlano({ plano, vendasAbertas }: { plano: Plano; vendasAbertas: boolean }) {
   const mensagem = `Olá! Tenho uma dúvida sobre o plano ${plano.nome} do SellerPulse.`;
   const temTeste = plano.chave === PLANO_COM_TESTE;
   return (
@@ -186,16 +196,33 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       )}
 
       <div className="mt-6 flex flex-col gap-2">
-        <Link
-          href={`/assinar?plano=${plano.chave}`}
-          className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
-            plano.destaque
-              ? "bg-accent text-white hover:bg-accent-hover"
-              : "border border-line hover:bg-surface"
-          }`}
-        >
-          {temTeste ? `Testar ${DIAS_DE_TESTE} dias grátis` : `Assinar o ${plano.nome}`}
-        </Link>
+        {vendasAbertas ? (
+          <Link
+            href={`/assinar?plano=${plano.chave}`}
+            className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
+              plano.destaque
+                ? "bg-accent text-white hover:bg-accent-hover"
+                : "border border-line hover:bg-surface"
+            }`}
+          >
+            {temTeste ? `Testar ${DIAS_DE_TESTE} dias grátis` : `Assinar o ${plano.nome}`}
+          </Link>
+        ) : (
+          WHATSAPP_DE_CONTATO && (
+            <a
+              href={linkDeWhatsapp(WHATSAPP_DE_CONTATO, mensagemParaSaberDaAbertura(plano.nome))}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
+                plano.destaque
+                  ? "bg-accent text-white hover:bg-accent-hover"
+                  : "border border-line hover:bg-surface"
+              }`}
+            >
+              Quero saber quando abrir
+            </a>
+          )
+        )}
         <a
           href={
             WHATSAPP_DE_CONTATO

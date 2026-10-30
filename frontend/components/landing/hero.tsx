@@ -1,5 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ChamadaPrincipal } from "@/components/landing/chamada-principal";
+import { vitrineComVendasAbertas } from "@/lib/vendas";
 
 import { HeroVideo } from "./hero-video";
 
@@ -70,18 +72,15 @@ export function Hero() {
           </p>
 
           <div className="mt-8 flex flex-wrap gap-4">
-            <Link
-              href="/signup"
-              className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/30 transition hover:bg-accent-hover"
-            >
-              Criar conta grátis
-            </Link>
-            <Link
-              href="/demo"
-              className="rounded-lg border border-white/30 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-            >
-              Ver demonstração
-            </Link>
+            <ChamadaPrincipal className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/30 transition hover:bg-accent-hover" />
+            {vitrineComVendasAbertas() && (
+              <Link
+                href="/demo"
+                className="rounded-lg border border-white/30 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+              >
+                Ver demonstração
+              </Link>
+            )}
           </div>
         </div>
       </div>

@@ -15,12 +15,20 @@ import { Sidebar } from "@/components/nav/sidebar";
  * derruba a página — e o `npm run build` passa assim mesmo, porque estas rotas
  * são dinâmicas e nunca são renderizadas no build.
  */
-export function NavegacaoDemo({ children }: { children: ReactNode }) {
+export function NavegacaoDemo({
+  children,
+  vendasAbertas,
+}: {
+  children: ReactNode;
+  /** Vem do layout: a variável do servidor não existe neste Client Component. */
+  vendasAbertas: boolean;
+}) {
   return (
     <Sidebar
       grupos={GRUPOS_DEMO}
       rodape={(comRotulos) => (
         <div className="flex flex-col gap-2">
+          {vendasAbertas && (
           <Link
             href="/signup"
             title="Criar conta grátis"
@@ -51,6 +59,7 @@ export function NavegacaoDemo({ children }: { children: ReactNode }) {
               </>
             )}
           </Link>
+          )}
           <Link
             href="/login"
             className={`px-1 text-xs text-muted transition hover:text-ink ${

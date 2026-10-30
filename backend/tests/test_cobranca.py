@@ -69,6 +69,7 @@ def asaas_falso(monkeypatch):
     falso = AsaasFalso()
     monkeypatch.setenv("ASAAS_API_KEY", "chave-de-teste")
     monkeypatch.setenv("ASAAS_WEBHOOK_TOKEN", TOKEN_DO_WEBHOOK)
+    monkeypatch.setenv("VENDAS_ABERTAS", "1")
     monkeypatch.setattr(
         asaas,
         "_cliente",
@@ -139,6 +140,7 @@ def test_os_precos_da_vitrine_batem_com_os_do_backend():
 
 async def test_contratar_sem_o_asaas_configurado_responde_503(client, sem_plano, monkeypatch):
     monkeypatch.delenv("ASAAS_API_KEY", raising=False)
+    monkeypatch.setenv("VENDAS_ABERTAS", "1")
     user_id, _ = sem_plano
     resp = client.post("/conta/checkout", json=_contratacao(), headers=_auth(user_id))
     assert resp.status_code == 503
@@ -203,6 +205,49 @@ async def test_so_o_exclusive_mensal_tem_teste(client, sem_plano, asaas_falso):
     assert (
         asaas_falso.pedidos[0][2]["subscription"]["nextDueDate"] == hoje_do_vendedor().isoformat()
     )
+
+
+@pytest.mark.parametrize("valor", [None, "", "0", "true"])
+async def test_vendas_fechadas_nao_abrem_checkout_nem_gravam_aceite(
+    client, pg_pool, sem_plano, asaas_falso, monkeypatch, valor
+):
+    # Só "1" abre: variável ausente ou escrita de outro jeito deixa fechado.
+    if valor is None:
+        monkeypatch.delenv("VENDAS_ABERTAS")
+    else:
+        monkeypatch.setenv("VENDAS_ABERTAS", valor)
+    user_id, seller_id = sem_plano
+
+    resp = client.post("/conta/checkout", json=_contratacao(), headers=_auth(user_id))
+
+    assert resp.status_code == 503
+    assert resp.json()["detail"]["codigo"] == "vendas-fechadas"
+    assert asaas_falso.pedidos == []
+    async with pg_pool.acquire() as conn:
+        aceites = await conn.fetchval(
+            "SELECT count(*) FROM aceites_de_termos WHERE seller_id = $1", seller_id
+        )
+    assert aceites == 0
+
+
+async def test_a_conta_diz_se_as_vendas_estao_abertas(client, sem_plano, monkeypatch):
+    user_id, _ = sem_plano
+    monkeypatch.delenv("VENDAS_ABERTAS", raising=False)
+    assert client.get("/conta/acesso", headers=_auth(user_id)).json()["vendas_abertas"] is False
+    monkeypatch.setenv("VENDAS_ABERTAS", "1")
+    assert client.get("/conta/acesso", headers=_auth(user_id)).json()["vendas_abertas"] is True
+
+
+async def test_com_vendas_fechadas_quem_ja_assina_ainda_cancela(
+    client, pg_pool, sem_plano, asaas_falso, monkeypatch
+):
+    # Fechar as vendas não pode prender ninguém numa cobrança.
+    user_id, seller_id = sem_plano
+    await _assinante(pg_pool, seller_id)
+    monkeypatch.delenv("VENDAS_ABERTAS")
+
+    assert client.post("/conta/cancelar", headers=_auth(user_id)).status_code == 200
+    assert any(metodo == "DELETE" for metodo, *_ in asaas_falso.pedidos)
 
 
 async def test_contratar_com_versao_velha_dos_termos_nao_abre_checkout(
@@ -930,6 +975,7 @@ async def test_asaas_fora_do_ar_vira_502_e_nao_500(client, monkeypatch, sem_plan
         raise httpx.ConnectError("sem rede", request=request)
 
     monkeypatch.setenv("ASAAS_API_KEY", "chave-de-teste")
+    monkeypatch.setenv("VENDAS_ABERTAS", "1")
     monkeypatch.setattr(
         asaas,
         "_cliente",
