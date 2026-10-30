@@ -637,6 +637,21 @@ async def test_trocar_plano_dado_a_mao_e_recusado(client, test_seller, asaas_fal
     assert asaas_falso.pedidos == []
 
 
+async def test_quem_nao_aceitou_a_versao_nova_consegue_cancelar(
+    client, pg_pool, test_seller, asaas_falso
+):
+    # Os Termos prometem esta saída na tela de aceite, onde o painel ainda está bloqueado.
+    user_id, seller_id = test_seller
+    await _assinante(pg_pool, seller_id)
+    async with pg_pool.acquire() as conn:
+        await conn.execute("DELETE FROM aceites_de_termos WHERE seller_id = $1", seller_id)
+    recusa = client.post("/conta/plano", json={"plano": "premium"}, headers=_auth(user_id))
+    assert recusa.status_code == 403
+    resp = client.post("/conta/cancelar", headers=_auth(user_id))
+    assert resp.status_code == 200
+    assert asaas_falso.pedidos == [("DELETE", "/v3/subscriptions/sub_9", None)]
+
+
 async def test_cancelar_mantem_o_acesso_ate_o_fim_do_periodo_pago(
     client, pg_pool, test_seller, asaas_falso
 ):
