@@ -11,9 +11,9 @@ vigencia), `0010_visitas_do_anuncio.sql` (`item_visits` e o tipo de job
 `visitas` na fila) e `0012_frete_real.sql` (`orders.shipment_id`,
 `shipment_costs` e o tipo de job `frete`), `0014_minimiza_pagamentos.sql`
 (so dado; no banco vazio e no-op), `0016_planos_e_aceite.sql` (`assinaturas`
-e `aceites_de_termos`) e `0018_cobranca.sql` (prazo do acesso, `checkouts` e
-`eventos_do_gateway`). As migrations 0002, 0003, 0005, 0009, 0011, 0013, 0015,
-0017 NAO sao aplicadas:
+e `aceites_de_termos`) `0018_cobranca.sql` (prazo do acesso, `checkouts` e
+`eventos_do_gateway`) e `0019_registros_de_acesso.sql`. As migrations 0002, 0003,
+0005, 0009, 0011, 0013, 0015, 0017, 0020 NAO sao aplicadas:
 dependem de `auth.uid()`, funcao exclusiva do ambiente Supabase (a 0015 so
 apaga uma policy da 0002, que aqui nao existe). O isolamento entre tenants que os testes exercitam e o filtro
 explicito por `seller_id` nas queries, nao a RLS.
@@ -50,6 +50,7 @@ MIGRATIONS = (
     "0014_minimiza_pagamentos.sql",
     "0016_planos_e_aceite.sql",
     "0018_cobranca.sql",
+    "0019_registros_de_acesso.sql",
 )
 
 

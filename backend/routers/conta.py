@@ -24,7 +24,14 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from backend.db import get_pool
-from backend.deps import Acesso, get_acesso, get_current_seller_id, le_plano_e_aceite, recusa
+from backend.deps import (
+    Acesso,
+    get_acesso,
+    get_current_seller_id,
+    get_current_user_id,
+    le_plano_e_aceite,
+    recusa,
+)
 from backend.pagamentos import asaas
 from backend.pagamentos.eventos import referencia_do_vendedor
 from backend.pagamentos.prazos import hoje_do_vendedor
@@ -110,11 +117,42 @@ def _ip_de(request: Request) -> str | None:
     # No Render a requisição chega por proxy, e o socket é o do proxy. Guarda
     # a cadeia inteira do X-Forwarded-For, e não só o primeiro: o primeiro
     # pode ter vindo do próprio cliente, e para prova vale mais a cadeia
-    # completa do que um palpite sobre qual elo é o verdadeiro.
+    # completa do que um palpite sobre qual elo é o verdadeiro. Se passar do
+    # limite, corta o começo: o fim é o elo que o proxy acrescentou, e o começo
+    # o cliente escreve como quiser.
     encaminhado = request.headers.get("x-forwarded-for")
     if encaminhado:
-        return encaminhado[:_MAX_IP]
+        return encaminhado[-_MAX_IP:]
     return request.client.host if request.client else None
+
+
+@router.post("/registro-de-acesso", status_code=204)
+async def post_registro_de_acesso(
+    request: Request, user_id: uuid.UUID = Depends(get_current_user_id)
+) -> None:
+    """Marco Civil, art. 15: data, hora e IP de uso, guardados por 6 meses.
+
+    Quem chama é o navegador, e não o servidor do front: chamado de lá, o IP
+    gravado seria o da Vercel. A limpeza acontece aqui porque quem grava é quem
+    faz o volume crescer, e assim ela não depende de um agendador. A hora gravada
+    é a do começo do período, por isso a folga de uma hora: sem ela, o acesso das
+    10:59 sairia antes de completar os 6 meses.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        resultado = await conn.execute(
+            """
+            INSERT INTO registros_de_acesso (user_id, ip, hora)
+            VALUES ($1, $2, date_trunc('hour', now()))
+            ON CONFLICT DO NOTHING
+            """,
+            user_id,
+            _ip_de(request) or "desconhecido",
+        )
+        if resultado == "INSERT 0 1":
+            await conn.execute(
+                "DELETE FROM registros_de_acesso WHERE hora < now() - interval '6 months 1 hour'"
+            )
 
 
 async def _grava_aceite(pool, seller_id: uuid.UUID, versao: str, request: Request) -> None:

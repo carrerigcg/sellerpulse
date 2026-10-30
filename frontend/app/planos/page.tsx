@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Wordmark } from "@/components/brand";
 import { CartoesDePlanos } from "@/components/planos/cartoes-de-planos";
+import { RegistroDeAcesso } from "@/components/registro-de-acesso";
 import { getAcesso } from "@/lib/api";
 import { linkDeEmail } from "@/lib/contato";
 import { vitrineComVendasAbertas } from "@/lib/vendas";
@@ -35,6 +36,7 @@ export default async function PlanosPage({ searchParams }: PageProps<"/planos">)
     venceu && (await getAcesso().catch(() => null))?.assinatura?.recorrente === true;
   return (
     <main className="min-h-screen bg-bg px-4 py-10 text-ink sm:px-6">
+      <RegistroDeAcesso />
       <div className="mx-auto max-w-5xl">
         <Link href="/" aria-label="Página inicial">
           <Wordmark />

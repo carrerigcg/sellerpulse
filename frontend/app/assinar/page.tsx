@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { Wordmark } from "@/components/brand";
 import { ResumoDosTermos } from "@/components/planos/resumo-dos-termos";
+import { RegistroDeAcesso } from "@/components/registro-de-acesso";
 import { getAcesso } from "@/lib/api";
 import { WHATSAPP_DE_CONTATO, linkDeWhatsapp } from "@/lib/contato";
 import { NOMES_DOS_PLANOS, PLANOS_A_VENDA } from "@/lib/plano";
@@ -37,6 +38,7 @@ export default async function AssinarPage({ searchParams }: PageProps<"/assinar"
 
   return (
     <main className="min-h-screen bg-bg px-4 py-10 text-ink sm:px-6">
+      <RegistroDeAcesso />
       <div className="mx-auto max-w-2xl">
         <div className="flex items-center justify-between gap-4">
           <Link href="/" aria-label="Página inicial">

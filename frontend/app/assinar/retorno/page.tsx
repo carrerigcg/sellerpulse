@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { Wordmark } from "@/components/brand";
+import { RegistroDeAcesso } from "@/components/registro-de-acesso";
 import { WHATSAPP_DE_CONTATO, linkDeEmail, linkDeWhatsapp } from "@/lib/contato";
 import { temPlanoAtivo } from "@/lib/ml";
 
@@ -25,6 +26,7 @@ const TENTATIVAS = 40;
 export default function RetornoDoPagamento() {
   return (
     <main className="min-h-screen bg-bg px-4 py-10 text-ink sm:px-6">
+      <RegistroDeAcesso />
       <div className="mx-auto max-w-xl">
         <Wordmark />
         <Suspense>

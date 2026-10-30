@@ -79,3 +79,5 @@
 # Prefixo `!`. O `auth.users` do Supabase e nativo; este arquivo e o stub que
 # o banco de teste precisa para ter a tabela.
 !0000_test_auth_stub.sql
+0019_registros_de_acesso.sql	20261030162117	2026-10-30
+0020_rls_registros_de_acesso.sql	20261030162119	2026-10-30
