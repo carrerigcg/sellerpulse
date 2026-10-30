@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+// O vitest daqui não resolve o alias `@/`, e nada destes módulos é usado no teste.
+vi.mock("@/lib/frete", () => ({}));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 
 import { ApiError, mensagemDeFalhaAoCarregar } from "./api";
