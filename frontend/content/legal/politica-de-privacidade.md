@@ -2,17 +2,16 @@
 
 **Versão:** 2026-11-v1
 
-**Última atualização:** [DADO: data da publicação]
+**Última atualização:** 30 de outubro de 2026
 
 ## 1. Quem somos
 
 O SellerPulse é um serviço de análise de vendas para vendedores do Mercado
-Livre, operado por **[DADO: nome ou razão social]**, inscrito no
-**[DADO: CPF ou CNPJ]**, com endereço em **[DADO: endereço]** ("SellerPulse", "nós").
+Livre, operado por **Guilherme Carreri Giampietro** ("SellerPulse", "nós").
 
 Encarregado pelo tratamento de dados pessoais (LGPD, art. 41), ou canal de
-atendimento ao titular: **[DADO: nome do encarregado]**, pelo e-mail
-**[DADO: e-mail de contato]**.
+atendimento ao titular: **Guilherme Carreri Giampietro**, pelo e-mail
+**carreri.gcg@gmail.com**.
 
 ## 2. Os dois papéis que temos
 
@@ -112,7 +111,7 @@ Usamos fornecedores para operar o serviço:
 | Supabase | banco de dados e autenticação | Estados Unidos (Ohio) |
 | Render | servidor da aplicação | Estados Unidos (Oregon) |
 | Vercel | hospedagem do site | Estados Unidos e rede global |
-| Asaas | cobrança: recebe diretamente de você os dados de pagamento | [DADO: local de tratamento do Asaas] |
+| Asaas | cobrança: recebe diretamente de você os dados de pagamento | empresa brasileira; conforme a política do Asaas |
 | Mercado Livre | origem dos dados; a conexão é autorizada por você | conforme a política do Mercado Livre |
 | Google (Gmail) e WhatsApp | suporte, quando você nos procura por esses canais | conforme a política de cada um |
 
@@ -142,8 +141,7 @@ com a LGPD.
   acesso e paramos de buscar dados novos. Os dados já importados continuam,
   para você não perder o histórico, até você pedir a exclusão.
 - **Ao pedir a exclusão da conta**, apagamos a conta e os dados ligados a ela em
-  até **30 dias**. Cópias de segurança dos fornecedores, se existirem, expiram
-  no prazo deles, de no máximo [DADO: prazo dos backups] dias.
+  até **30 dias**. Cópias de segurança dos fornecedores, se existirem, expiram no prazo de cada um.
 - **Mantemos pelo prazo legal** o que a lei obrigar ou o que for preciso para
   defender direitos, como a prova do aceite e os registros da cobrança, por
   5 anos, e os registros de acesso à aplicação, por 6 meses (Marco Civil da
@@ -160,7 +158,7 @@ Pela LGPD (art. 18), você pode pedir:
   ser baixada em CSV;
 - eliminação dos dados e informação sobre com quem compartilhamos.
 
-Para exercer esses direitos, escreva para **[DADO: e-mail de contato]**.
+Para exercer esses direitos, escreva para **carreri.gcg@gmail.com**.
 Respondemos em até **15 dias**.
 
 **Pedidos de compradores:** se um comprador seu nos procurar, vamos
@@ -193,4 +191,4 @@ dentro do serviço antes de a mudança valer.
 
 ## 12. Contato
 
-**[DADO: e-mail de contato]** · WhatsApp: **(11) 99234-4633** · [DADO: endereço]
+**carreri.gcg@gmail.com** · WhatsApp: **(11) 99234-4633** 

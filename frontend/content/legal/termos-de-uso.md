@@ -2,12 +2,11 @@
 
 **Versão:** 2026-11-v1
 
-**Última atualização:** [DADO: data da publicação]
+**Última atualização:** 30 de outubro de 2026
 
 ## 1. Quem somos e o que é o serviço
 
-O SellerPulse ("serviço") é operado por **[DADO: nome ou razão social]**,
-**[DADO: CPF ou CNPJ]**, com endereço em **[DADO: endereço]** ("nós").
+O SellerPulse ("serviço") é operado por **Guilherme Carreri Giampietro** ("nós").
 
 O SellerPulse importa, com a sua autorização, os dados da sua conta de
 vendedor no Mercado Livre e os transforma em análises:
@@ -154,7 +153,7 @@ afete uma assinatura em curso.
 
 ### 7.8 Nota fiscal
 
-[DADO: como a nota fiscal é emitida]
+O documento fiscal da assinatura segue a legislação aplicável. Se precisar dele, peça pelos canais da seção 16.
 
 ## 8. Cancelamento, arrependimento e reembolso
 
@@ -228,10 +227,10 @@ até o fim do período já pago.
 ## 15. Lei e foro
 
 Estes Termos seguem as leis do Brasil. Fica eleito o foro da comarca de
-**[DADO: cidade e estado]**, ressalvado o direito do consumidor de propor ação no foro do
+**São Paulo/SP**, ressalvado o direito do consumidor de propor ação no foro do
 seu domicílio.
 
 ## 16. Contato
 
-E-mail: **[DADO: e-mail de contato]** ·
-WhatsApp: **(11) 99234-4633** · [DADO: endereço]
+E-mail: **carreri.gcg@gmail.com** ·
+WhatsApp: **(11) 99234-4633** 

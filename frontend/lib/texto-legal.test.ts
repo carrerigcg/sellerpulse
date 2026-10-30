@@ -12,6 +12,14 @@ describe.each(["termos-de-uso.md", "politica-de-privacidade.md"])("%s", (arquivo
     expect(ler(arquivo).match(/\[DADO:[^\]]*\]/g) ?? []).toEqual([]);
   });
 
+  // Decisão do dono: documento e endereço pessoais não vão para o site.
+  it("não expõe CPF, CNPJ nem endereço do titular", () => {
+    const texto = ler(arquivo);
+    expect(texto.match(/\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g) ?? []).toEqual([]);
+    expect(texto.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/g) ?? []).toEqual([]);
+    expect(texto).not.toMatch(/com endereço em/);
+  });
+
   it("não tem colchete de rascunho", () => {
     // Link de Markdown, `[texto](/rota)`, é o único colchete permitido.
     expect(ler(arquivo).match(/\[[^\]]*\](?!\()/g) ?? []).toEqual([]);

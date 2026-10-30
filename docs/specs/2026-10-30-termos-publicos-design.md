@@ -1,7 +1,7 @@
 # Termos de Uso e Política de Privacidade publicados
 
-Estado: em implementação. Não pode entrar na `main` com dado pendente: um teste
-recusa o texto enquanto houver `[DADO: ...]`.
+Estado: em revisão. Um teste recusa o texto enquanto houver `[DADO: ...]`. Publicar
+não abre as vendas.
 
 ## Por quê
 
@@ -22,6 +22,18 @@ Guilherme pediu para implementar os termos reais logo depois de fechar as vendas
    vitrine leva às duas páginas.
 5. **Publicar não abre as vendas.** Elas só abrem na etapa 14 do plano, depois da
    revisão do advogado e das etapas que tornam o texto verdadeiro.
+
+6. **CPF e endereço do titular não vão para o site nem para o repositório**
+   (Guilherme, 2026-10-30). Um teste recusa CPF ou CNPJ no texto e a expressão
+   "com endereço em".
+
+## O que trava a abertura das vendas
+
+O Decreto 7.962/2013, art. 2º, pede a identificação do fornecedor no site de comércio
+eletrônico, com CPF ou CNPJ e endereço. Só com o nome, o texto pode não atender a essa
+regra, e o advogado precisa dizer o que fazer. O caminho provável é um CNPJ com
+endereço comercial, que entra aqui sem expor dados pessoais. A nota fiscal também está
+sem definição do contador: o texto só diz que segue a legislação.
 
 ## Compromissos do texto que o sistema ainda não cumpre sozinho
 
