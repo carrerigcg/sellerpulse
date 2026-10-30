@@ -12,6 +12,7 @@ import {
   TextField,
 } from "@/components/auth-ui";
 import { mensagemDeLogin, registraErroDeAuth } from "@/lib/auth-errors";
+import { destinoDepoisDoLogin } from "@/lib/proximo";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -37,7 +38,7 @@ export default function LoginPage() {
         setCarregando(false);
         return;
       }
-      router.push("/dashboard");
+      router.push(destinoDepoisDoLogin());
       router.refresh();
     } catch (e) {
       // signInWithPassword normalmente devolve o erro em vez de lançar, mas

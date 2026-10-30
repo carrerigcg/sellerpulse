@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Protege /dashboard e /aceite: sem sessão Supabase válida, redireciona para /login.
+ * Protege /dashboard, /aceite e /assinar: sem sessão Supabase válida, redireciona para /login.
  *
  * @supabase/ssr@0.12.7 exige getAll/setAll (não get/set/remove) e o
  * `setAll` do server client recebe um segundo argumento `headers` com
@@ -48,6 +48,10 @@ export async function proxy(request: NextRequest) {
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    // Para onde a pessoa ia: o login devolve para lá (`lib/proximo.ts`), em
+    // vez de largar no painel quem tinha clicado em "Assinar".
+    url.search = "";
+    url.searchParams.set("proximo", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 
@@ -55,5 +59,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/aceite"],
+  matcher: ["/dashboard/:path*", "/aceite", "/assinar/:path*"],
 };

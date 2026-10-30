@@ -59,7 +59,12 @@ def recusa(status: int, codigo: str, mensagem: str) -> HTTPException:
 
 
 async def le_plano_e_aceite(pool: asyncpg.Pool, seller_id: uuid.UUID) -> tuple[Plano | None, bool]:
-    """O plano do vendedor (None se não tem) e se aceitou a versão vigente."""
+    """O plano do vendedor (None se não tem) e se aceitou a versão vigente.
+
+    Plano com prazo vencido (`acesso_ate` no passado) conta como sem plano: é
+    assim que a inadimplência e o cancelamento desligam o acesso, sem
+    agendador nenhum (spec docs/specs/2026-10-29-cobranca-asaas-design.md).
+    """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -67,7 +72,9 @@ async def le_plano_e_aceite(pool: asyncpg.Pool, seller_id: uuid.UUID) -> tuple[P
                    EXISTS (SELECT 1 FROM aceites_de_termos t
                             WHERE t.seller_id = $1 AND t.versao = $2) AS aceitou
               FROM (SELECT 1) AS um
-              LEFT JOIN assinaturas a ON a.seller_id = $1
+              LEFT JOIN assinaturas a
+                     ON a.seller_id = $1
+                    AND (a.acesso_ate IS NULL OR a.acesso_ate > now())
             """,
             seller_id,
             VERSAO_DOS_TERMOS,

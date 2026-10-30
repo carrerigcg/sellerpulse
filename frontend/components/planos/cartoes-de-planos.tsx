@@ -1,16 +1,16 @@
-import {
-  EMAIL_DE_CONTATO,
-  WHATSAPP_DE_CONTATO,
-  linkDeEmail,
-  linkDeWhatsapp,
-} from "@/lib/contato";
+import Link from "next/link";
+
+import { WHATSAPP_DE_CONTATO, linkDeEmail, linkDeWhatsapp } from "@/lib/contato";
 import type { NomeDoPlano } from "@/lib/plano";
 import {
+  DIAS_DE_TESTE,
+  PLANO_COM_TESTE,
   PRECOS_DEPOIS_DO_LANCAMENTO,
   PRECOS_MENSAIS,
   descontoDeLancamento,
   economiaMensal,
   formatarPreco,
+  precoAnual,
 } from "@/lib/precos";
 
 /**
@@ -23,13 +23,14 @@ import {
  * prometer o que o produto não entrega. O Exclusive é o recomendado e o mais
  * destacado, no centro (spec `docs/specs/2026-10-28-planos-e-acesso-design.md`).
  *
- * Os preços moram em `lib/precos.ts`. Promoção de lançamento: o preço de
- * depois aparece riscado, como âncora, com o desconto e a economia em reais.
- * O riscado é dito na tela como o preço DEPOIS do lançamento, nunca como um
- * "de" que já foi cobrado (CDC, art. 37).
+ * Os preços moram em `lib/precos.ts`, que o backend confere contra o que ele
+ * cobra. "Assinar" leva à contratação (`/assinar`); o contato fica para quem
+ * quer tirar dúvida antes.
  *
- * Enquanto a cobrança pelo Asaas não está no ar, o botão leva ao WhatsApp ou
- * ao e-mail.
+ * Promoção de lançamento: o preço de depois aparece riscado, como ÂNCORA, ao
+ * lado do de agora, com o desconto e a economia em reais. O riscado é dito
+ * como o preço depois do lançamento, nunca como um "de" que já foi cobrado
+ * (ver `PRECOS_DEPOIS_DO_LANCAMENTO`).
  */
 
 type Plano = {
@@ -94,9 +95,16 @@ export function CartoesDePlanos() {
   const maiorDesconto = Math.max(...PLANOS.map((p) => descontoDeLancamento(p.chave)));
   return (
     <>
+      {/* A promessa de manter o preço é verdade pelo jeito que a cobrança
+          funciona: a assinatura mensal no Asaas guarda o valor do dia em que
+          foi criada, e um aumento só vale para quem assina depois. Ela NÃO
+          vale para o anual (pagamento único, que se recontrata pelo preço do
+          dia) nem para a troca de plano (que usa a tabela vigente) — por isso
+          o texto diz "mensal" e "mesmo plano". */}
       <div className="mb-8 rounded-xl border border-accent/40 bg-accent-soft px-4 py-3 text-sm text-ink">
         <span className="font-semibold">Preço de lançamento:</span> até {maiorDesconto}% a menos
-        para quem assina agora.
+        para quem assina agora. No plano mensal, você mantém este preço enquanto continuar no
+        mesmo plano.
       </div>
       <div className="grid gap-6 md:grid-cols-3 md:items-stretch">
         {PLANOS.map((plano) => (
@@ -108,7 +116,8 @@ export function CartoesDePlanos() {
 }
 
 function CartaoDoPlano({ plano }: { plano: Plano }) {
-  const mensagem = `Olá! Quero contratar o plano ${plano.nome} do SellerPulse.`;
+  const mensagem = `Olá! Tenho uma dúvida sobre o plano ${plano.nome} do SellerPulse.`;
+  const temTeste = plano.chave === PLANO_COM_TESTE;
   return (
     <section
       className={`relative flex flex-col rounded-2xl border p-6 ${
@@ -143,6 +152,14 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       <p className="mt-1 text-xs text-muted">
         Preço de lançamento: {formatarPreco(economiaMensal(plano.chave))} a menos por mês
       </p>
+      <p className="mt-1 text-xs text-muted">
+        ou {formatarPreco(precoAnual(plano.chave))} por ano (2 meses grátis)
+      </p>
+      {temTeste && (
+        <p className="mt-2 inline-flex w-fit rounded-full border border-accent px-2.5 py-0.5 text-xs font-semibold text-accent">
+          {DIAS_DE_TESTE} dias grátis no mensal
+        </p>
+      )}
 
       <ul className="mt-5 flex-1 space-y-2 text-sm">
         {plano.itens.map((item) => (
@@ -169,31 +186,28 @@ function CartaoDoPlano({ plano }: { plano: Plano }) {
       )}
 
       <div className="mt-6 flex flex-col gap-2">
-        {WHATSAPP_DE_CONTATO && (
-          <a
-            href={linkDeWhatsapp(WHATSAPP_DE_CONTATO, mensagem)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
-              plano.destaque
-                ? "bg-accent text-white hover:bg-accent-hover"
-                : "border border-line hover:bg-surface"
-            }`}
-          >
-            Quero o {plano.nome} pelo WhatsApp
-          </a>
-        )}
-        <a
-          href={linkDeEmail(`Quero o plano ${plano.nome}`)}
+        <Link
+          href={`/assinar?plano=${plano.chave}`}
           className={`rounded-lg px-4 py-2 text-center text-sm font-medium transition ${
-            plano.destaque && !WHATSAPP_DE_CONTATO
+            plano.destaque
               ? "bg-accent text-white hover:bg-accent-hover"
               : "border border-line hover:bg-surface"
           }`}
         >
-          {WHATSAPP_DE_CONTATO ? "Ou por e-mail" : `Quero o ${plano.nome}`}
+          {temTeste ? `Testar ${DIAS_DE_TESTE} dias grátis` : `Assinar o ${plano.nome}`}
+        </Link>
+        <a
+          href={
+            WHATSAPP_DE_CONTATO
+              ? linkDeWhatsapp(WHATSAPP_DE_CONTATO, mensagem)
+              : linkDeEmail(`Dúvida sobre o plano ${plano.nome}`)
+          }
+          target={WHATSAPP_DE_CONTATO ? "_blank" : undefined}
+          rel={WHATSAPP_DE_CONTATO ? "noopener noreferrer" : undefined}
+          className="inline-flex min-h-11 items-center justify-center text-xs text-muted underline hover:text-accent"
+        >
+          Tirar dúvidas {WHATSAPP_DE_CONTATO ? "no WhatsApp" : "por e-mail"}
         </a>
-        <span className="sr-only">E-mail: {EMAIL_DE_CONTATO}</span>
       </div>
     </section>
   );

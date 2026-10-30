@@ -11,6 +11,7 @@ Desenho e decisões em docs/specs/2026-10-28-planos-e-acesso-design.md.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import StrEnum
 
 # Versão dos Termos de Uso que o vendedor precisa ter aceitado. Mudar este
@@ -18,6 +19,13 @@ from enum import StrEnum
 # muda. Hoje os termos são rascunho; a versão revisada pelo advogado entra com
 # outro nome e pede aceite novo.
 VERSAO_DOS_TERMOS = "2026-10-28-rascunho"
+
+# Decisões da spec de cobrança (docs/specs/2026-10-29-cobranca-asaas-design.md).
+MESES_PAGOS_NO_ANUAL = 10
+DIAS_DE_TOLERANCIA = 7
+DIAS_DE_TESTE = 7
+# Só o Exclusive mensal tem teste (decisão 7): é o plano que se quer vender.
+PLANOS_COM_TESTE = frozenset({"exclusive"})
 
 
 class Recurso(StrEnum):
@@ -38,6 +46,11 @@ class Recurso(StrEnum):
 @dataclass(frozen=True)
 class Plano:
     nome: str
+    # Por mês, em reais. É o valor que vai para o checkout: o navegador nunca
+    # diz quanto cobrar. A vitrine mostra o mesmo número
+    # (`frontend/components/planos/cartoes-de-planos.tsx`), e um teste confere
+    # que os dois batem.
+    preco_mensal: Decimal
     recursos: frozenset[Recurso]
     # None = sem limite além do que a ingestão trouxe.
     dias_de_historico: int | None
@@ -47,12 +60,17 @@ class Plano:
     def libera(self, recurso: Recurso) -> bool:
         return recurso in self.recursos
 
+    def preco(self, ciclo: str) -> Decimal:
+        """Valor cobrado no ciclo. O anual é 10 mensais: paga 10, leva 12."""
+        return self.preco_mensal * MESES_PAGOS_NO_ANUAL if ciclo == "anual" else self.preco_mensal
+
 
 _TUDO = frozenset(Recurso)
 
 PLANOS: dict[str, Plano] = {
     "essencial": Plano(
         nome="essencial",
+        preco_mensal=Decimal("49.90"),
         recursos=frozenset(),
         dias_de_historico=90,
         produtos_na_abc=10,
@@ -61,7 +79,17 @@ PLANOS: dict[str, Plano] = {
     # diferenciá-los (MCP com a conta real, alertas, várias contas) entra com
     # cada feature (decisão 8 da spec).
     "exclusive": Plano(
-        nome="exclusive", recursos=_TUDO, dias_de_historico=None, produtos_na_abc=None
+        nome="exclusive",
+        preco_mensal=Decimal("79.90"),
+        recursos=_TUDO,
+        dias_de_historico=None,
+        produtos_na_abc=None,
     ),
-    "premium": Plano(nome="premium", recursos=_TUDO, dias_de_historico=None, produtos_na_abc=None),
+    "premium": Plano(
+        nome="premium",
+        preco_mensal=Decimal("139.90"),
+        recursos=_TUDO,
+        dias_de_historico=None,
+        produtos_na_abc=None,
+    ),
 }
