@@ -1,6 +1,6 @@
 # Registro de acesso à aplicação
 
-Estado: em revisão.
+Estado: no ar desde 2026-10-30 (#39). Falta conferir uma linha real gravada e o IP atrás do proxy do Render.
 
 ## Por quê
 
