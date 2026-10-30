@@ -43,8 +43,8 @@ Para contratar o SellerPulse, você precisa:
 
 - A conexão é feita pelo **fluxo oficial de autorização do Mercado Livre**.
   O SellerPulse nunca recebe a senha da sua conta do Mercado Livre.
-- Você pode **desconectar a qualquer momento**, na tela de conexão ou, sem plano
-  ativo, pelos canais da seção 16. Isso apaga a credencial de acesso e interrompe a importação. Os dados já
+- Você pode **desconectar a qualquer momento**, na tela de conexão ou, sem
+  acesso ao painel, pelos canais da seção 16. Isso apaga a credencial de acesso e interrompe a importação. Os dados já
   importados continuam na sua conta até você pedir a exclusão.
 - Desconectar **não cancela** a assinatura. O cancelamento é feito conforme a
   seção 8.
@@ -222,8 +222,9 @@ usar o serviço enquanto a sua conta estiver ativa.
 
 Se estes Termos mudarem de forma relevante, avisamos com antecedência de
 30 dias, pelo e-mail da conta ou dentro do serviço, e pedimos um novo aceite
-para continuar usando o serviço. Sem o novo aceite, o painel fica indisponível. Quem não aceitar pode cancelar a
-assinatura na própria tela de aceite, sem multa.
+para continuar usando o serviço. Sem o novo aceite, o painel fica indisponível. No plano mensal, quem não aceitar pode
+cancelar a assinatura na própria tela de aceite, sem multa. No plano anual, o
+cancelamento é feito pelos canais da seção 16.
 
 ## 15. Lei e foro
 

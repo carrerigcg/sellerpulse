@@ -1,7 +1,7 @@
 # Termos de Uso e Política de Privacidade publicados
 
-Estado: em revisão. Um teste recusa o texto enquanto houver `[DADO: ...]`. Publicar
-não abre as vendas.
+Estado: no ar desde 2026-10-30 (#37). Um teste recusa o texto enquanto houver
+`[DADO: ...]`. Publicar não abre as vendas.
 
 ## Por quê
 
@@ -32,10 +32,22 @@ Guilherme pediu para implementar os termos reais logo depois de fechar as vendas
 - **Quem não aceitar** cancela na própria tela de aceite, porque o painel fica
   bloqueado e a cobrança continuaria. Esse período não dá acesso: o texto antes
   prometia o contrário.
-- **Desconectar sem plano e trocar o plano anual** são feitos pelos canais de contato,
+- **Desconectar sem acesso ao painel, trocar o plano anual e cancelar o anual sem
+  aceitar** são feitos pelos canais de contato,
   porque não há tela para isso.
 - **"Não guardamos nome do comprador" foi medido em produção** (2026-10-30): em 2.071
   pedidos, `raw_json->'buyer'` só tem `id` e `nickname`.
+
+## Pendências da revisão, que não travam a publicação
+
+- Em `/aceite`, o texto de `CancelarCobranca` foi escrito para o inadimplente ("se não
+  pretende voltar"), não diz que o painel segue indisponível e, depois de cancelar, a
+  tela ainda mostra "plano ativo".
+- O resumo em `/aceite` diz que o acesso continua até o fim do período pago, o que só
+  vale para quem aceita.
+- Mensal sem assinatura localizada no Asaas vê o botão e recebe 409.
+- `sync-todos` não confere o aceite: quem recusou segue importado até `acesso_ate`.
+- O destino do valor pago de quem tem plano anual e recusa uma versão nova: advogado.
 
 ## O que trava a abertura das vendas
 
