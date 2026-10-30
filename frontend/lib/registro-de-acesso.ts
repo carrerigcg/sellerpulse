@@ -8,9 +8,12 @@ export function criaRegistrador(enviar: () => Promise<void>, agora: () => number
   return async function tenta(): Promise<void> {
     if (ultimo !== null && agora() - ultimo < INTERVALO_DO_REGISTRO) return;
     try {
+      // O instante é o de antes do envio: medido depois, a latência faria o relógio
+      // de 5 minutos cair sempre um pouco antes do prazo e pular uma volta.
+      const inicio = agora();
       await enviar();
       // Só depois do sucesso: falha de rede não pode esperar o intervalo inteiro.
-      ultimo = agora();
+      ultimo = inicio;
     } catch {
       // Registro nunca atrapalha a tela.
     }
