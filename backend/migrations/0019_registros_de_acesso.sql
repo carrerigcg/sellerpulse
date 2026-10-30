@@ -14,4 +14,8 @@ create table registros_de_acesso (
 );
 
 -- A limpeza dos vencidos filtra por data.
-create index registros_de_acesso_hora on registros_de_acesso (hora);
+create index idx_registros_de_acesso_hora on registros_de_acesso (hora);
+
+-- Nasce fechada, como a 0018: tabela nova em public vem aberta para a chave
+-- publica, e aqui o que se forjaria tem valor de prova.
+alter table registros_de_acesso enable row level security;

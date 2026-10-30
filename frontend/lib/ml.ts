@@ -124,10 +124,12 @@ export async function contratar(dados: Contratacao): Promise<string> {
 }
 
 export async function registrarAcesso(): Promise<void> {
-  await fetch(`${BASE}/conta/registro-de-acesso`, {
+  const res = await fetch(`${BASE}/conta/registro-de-acesso`, {
     method: "POST",
     headers: await autorizacao(),
   });
+  // Sem isto, um 500 contaria como registrado e só se tentaria de novo depois.
+  if (!res.ok) throw new Error(`registro-de-acesso: ${res.status}`);
 }
 
 export async function trocarPlano(plano: Contratacao["plano"]): Promise<void> {

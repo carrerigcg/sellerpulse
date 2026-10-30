@@ -117,10 +117,12 @@ def _ip_de(request: Request) -> str | None:
     # No Render a requisição chega por proxy, e o socket é o do proxy. Guarda
     # a cadeia inteira do X-Forwarded-For, e não só o primeiro: o primeiro
     # pode ter vindo do próprio cliente, e para prova vale mais a cadeia
-    # completa do que um palpite sobre qual elo é o verdadeiro.
+    # completa do que um palpite sobre qual elo é o verdadeiro. Se passar do
+    # limite, corta o começo: o fim é o elo que o proxy acrescentou, e o começo
+    # o cliente escreve como quiser.
     encaminhado = request.headers.get("x-forwarded-for")
     if encaminhado:
-        return encaminhado[:_MAX_IP]
+        return encaminhado[-_MAX_IP:]
     return request.client.host if request.client else None
 
 
@@ -132,7 +134,9 @@ async def post_registro_de_acesso(
 
     Quem chama é o navegador, e não o servidor do front: chamado de lá, o IP
     gravado seria o da Vercel. A limpeza acontece aqui porque quem grava é quem
-    faz o volume crescer, e assim ela não depende de um agendador.
+    faz o volume crescer, e assim ela não depende de um agendador. A hora gravada
+    é a do começo do período, por isso a folga de uma hora: sem ela, o acesso das
+    10:59 sairia antes de completar os 6 meses.
     """
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -147,7 +151,7 @@ async def post_registro_de_acesso(
         )
         if resultado == "INSERT 0 1":
             await conn.execute(
-                "DELETE FROM registros_de_acesso WHERE hora < now() - interval '6 months'"
+                "DELETE FROM registros_de_acesso WHERE hora < now() - interval '6 months 1 hour'"
             )
 
 
