@@ -16,9 +16,9 @@ from enum import StrEnum
 
 # Versão dos Termos de Uso que o vendedor precisa ter aceitado. Mudar este
 # valor obriga todo mundo a aceitar de novo: é o que se quer quando o texto
-# muda. Hoje os termos são rascunho; a versão revisada pelo advogado entra com
-# outro nome e pede aceite novo.
-VERSAO_DOS_TERMOS = "2026-10-28-rascunho"
+# muda. A mesma versão está escrita nos textos de `frontend/content/legal/`, e
+# um teste falha se divergirem.
+VERSAO_DOS_TERMOS = "2026-11-v1"
 
 # Decisões da spec de cobrança (docs/specs/2026-10-29-cobranca-asaas-design.md).
 MESES_PAGOS_NO_ANUAL = 10

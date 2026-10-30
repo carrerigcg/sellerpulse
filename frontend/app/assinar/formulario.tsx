@@ -165,7 +165,17 @@ export function FormularioDeAssinatura({
           onChange={(e) => setAceito(e.target.checked)}
           className="mt-0.5 h-4 w-4 accent-accent"
         />
-        <span>Li e aceito os Termos de Uso e a Política de Privacidade do SellerPulse.</span>
+        <span>
+          Li e aceito os{" "}
+          <a href="/termos" target="_blank" className="font-medium text-accent underline">
+            Termos de Uso
+          </a>{" "}
+          e a{" "}
+          <a href="/privacidade" target="_blank" className="font-medium text-accent underline">
+            Política de Privacidade
+          </a>{" "}
+          do SellerPulse.
+        </span>
       </label>
 
       {erro && (

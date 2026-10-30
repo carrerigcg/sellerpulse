@@ -18,8 +18,8 @@ export const metadata: Metadata = { title: "Termos de Uso · SellerPulse" };
  * o painel. O backend grava a prova (versão, data, IP, navegador) e recusa o
  * painel sem ela.
  *
- * Os termos ainda são rascunho, à espera da revisão jurídica. A versão vigente
- * no backend diz isso no nome, e a versão final pede aceite de novo.
+ * O texto completo está em `/termos` e `/privacidade`. Uma versão nova no backend
+ * (`VERSAO_DOS_TERMOS`) pede aceite de novo.
  */
 export default async function AceitePage() {
   const acesso = await getAcesso().catch(() => null);

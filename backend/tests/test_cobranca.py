@@ -124,6 +124,13 @@ def test_o_anual_custa_dez_mensais():
     assert PLANOS["premium"].preco("anual") == Decimal("1399.00")
 
 
+@pytest.mark.parametrize("arquivo", ["termos-de-uso.md", "politica-de-privacidade.md"])
+def test_os_textos_publicados_trazem_a_versao_que_o_aceite_grava(arquivo):
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    texto = (raiz / "frontend" / "content" / "legal" / arquivo).read_text(encoding="utf-8")
+    assert f"**Versão:** {VERSAO_DOS_TERMOS}" in texto
+
+
 def test_os_precos_da_vitrine_batem_com_os_do_backend():
     """A vitrine mostra um número; o checkout cobra outro. Isso não pode divergir."""
     raiz = pathlib.Path(__file__).resolve().parents[2]
