@@ -230,13 +230,18 @@ select ip, hora from registros_de_acesso
 
 **Exclusão da conta: em até 30 dias** (Política, seção 7).
 
-- **Não apague a conta à mão.** `aceites_de_termos` e `checkouts` cascateiam de
-  `sellers`, e apagar a conta leva junto a prova do aceite, que a Política
-  promete por 5 anos. O registro de acesso sobrevive, porque não tem chave
-  estrangeira.
-- Até existir o comando de exclusão que preserva a prova:
-  1. anotar a data do pedido, porque o prazo conta dela;
-  2. cancelar a assinatura, se houver;
-  3. desconectar o Mercado Livre (`DELETE /ml/connection`), o que apaga a
-     credencial na hora;
-  4. responder com a data e o prazo.
+- **Não apague a conta à mão**, pelo painel do Supabase ou por SQL: use o
+  script, que registra a exclusão em `contas_excluidas` e recusa os casos
+  perigosos.
+1. Anotar a data do pedido, porque o prazo conta dela.
+2. Cancelar a assinatura, se houver. O script recusa quem ainda tem cobrança
+   recorrente, porque apagar a conta não para o Asaas.
+3. Com o ok do Guilherme, rodar com a `DATABASE_URL` de produção:
+
+   ```bash
+   backend/.venv/Scripts/python.exe backend/scripts/exclui_conta.py --email <e-mail> --dry-run
+   ```
+
+   Conferir o relatório e repetir com `--apply`. Ficam a prova do aceite, os
+   checkouts e os registros de acesso. A credencial do ML sai junto com o resto.
+4. Responder com a data da exclusão.

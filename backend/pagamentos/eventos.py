@@ -158,6 +158,17 @@ async def _ativa_checkout(conn, checkout_id: str | None, hoje: date) -> str:
             return "checkout-desconhecido"
         return "ja-ativado"
 
+    # O checkout sobrevive à exclusão da conta (0021). Pago depois dela, não há a
+    # quem dar o plano, e gravar em `assinaturas` quebraria a chave estrangeira e
+    # faria o Asaas repetir o aviso para sempre.
+    if not await conn.fetchval("SELECT true FROM sellers WHERE id = $1", registro["seller_id"]):
+        _log.error(
+            "[asaas] checkout %s pago depois da exclusao da conta (seller %s): estornar no Asaas",
+            checkout_id,
+            registro["seller_id"],
+        )
+        return "conta-excluida"
+
     # Dois checkouts pagos do mesmo vendedor (duas abas, pagas as duas): o
     # segundo NÃO sobrescreve o plano vigente de outro checkout. Sobrescrever
     # trocaria os ids na linha, e a assinatura do primeiro seguiria cobrando

@@ -20,7 +20,7 @@ from backend.planos import PLANOS, VERSAO_DOS_TERMOS
 from backend.routers._common import CABECALHO_HISTORICO, limita_ao_historico
 from backend.routers.segmentation import CABECALHO_PRODUTOS_OCULTOS
 
-from .conftest import da_plano
+from .conftest import apaga_usuario, da_plano
 from .test_routers import _item, _order, _order_item
 from .test_routers_ml import (
     SEGREDO,
@@ -53,7 +53,7 @@ async def seller_sem_plano(pg_pool):
         )
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
-        await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+        await apaga_usuario(conn, user_id)
 
 
 async def _no_plano(pool, seller_id, plano, *, aceita=True):
