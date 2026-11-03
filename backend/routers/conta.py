@@ -427,10 +427,10 @@ async def post_cancelar(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
             await asaas.remover_assinatura(assinatura)
         except asaas.AsaasErro as erro:
             _log.error("[asaas] cancelamento recusado: %s", erro)
-            raise recusa(502, "gateway-recusou", "Não foi possível cancelar agora") from erro
+            raise recusa(502, "gateway-recusou", "Não foi possível cancelar agora.") from erro
     elif not _mensal_viva(linha):
         raise recusa(
-            409, "sem-assinatura-recorrente", "Seu plano não tem cobrança mensal para alterar"
+            409, "sem-assinatura-recorrente", "Seu plano não tem cobrança mensal para cancelar."
         )
     elif not linha["asaas_cliente"]:
         # Sem o cliente, daqui não se acha a cobrança, e marcar como cancelado
@@ -438,7 +438,7 @@ async def post_cancelar(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
         raise recusa(
             409,
             "assinatura-nao-localizada",
-            "Não localizamos a sua assinatura no Asaas. Fale com a gente e cancelamos por você.",
+            "Não localizamos a sua assinatura no Asaas, e o cancelamento precisa ser feito por nós.",
         )
     # Com o cliente conhecido e nenhuma assinatura ativa lá, o Asaas já não
     # cobra (o aviso do cancelamento se perdeu): resta encerrar aqui também.

@@ -12,7 +12,7 @@ const EXPLICACAO = {
   vencido:
     "A assinatura ainda está ativa no Asaas. Se não pretende voltar, cancele para não receber novas cobranças.",
   termos:
-    "Se não for aceitar, cancele a cobrança mensal. Sem o aceite, o painel continua indisponível; com o cancelamento, você não é cobrado de novo.",
+    "Se não quiser aceitar, cancele a cobrança mensal. Sem o aceite, o painel continua indisponível; com o cancelamento, você não é cobrado de novo.",
 } as const;
 
 /**

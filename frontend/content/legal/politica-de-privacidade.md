@@ -2,7 +2,7 @@
 
 **Versão:** 2026-11-v1
 
-**Última atualização:** 30 de outubro de 2026
+**Última atualização:** 3 de novembro de 2026
 
 ## 1. Quem somos
 
