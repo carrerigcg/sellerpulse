@@ -119,5 +119,10 @@ export default async function AssinaturaPage() {
 async function SecaoDeDesistencia() {
   const desistencia = await getDesistencia().catch(() => null);
   if (!desistencia?.ate) return null;
-  return <Desistir ate={desistencia.ate.split("-").reverse().join("/")} />;
+  return (
+    <Desistir
+      ate={desistencia.ate.split("-").reverse().join("/")}
+      jaDevolvido={desistencia.ja_devolvido === true}
+    />
+  );
 }

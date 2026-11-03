@@ -116,6 +116,7 @@ export function AcoesDaAssinatura({
                     <button
                       type="button"
                       disabled={ocupado}
+                      autoFocus
                       onClick={() => setConfirmando(null)}
                       className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm font-medium hover:bg-surface"
                     >
@@ -149,6 +150,7 @@ export function AcoesDaAssinatura({
             <button
               type="button"
               disabled={ocupado}
+              autoFocus
               onClick={() => setConfirmando(null)}
               className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm font-medium hover:bg-surface"
             >

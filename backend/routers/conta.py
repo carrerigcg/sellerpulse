@@ -459,6 +459,7 @@ async def post_cancelar(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
 # CDC, art. 49, e seção 8 dos Termos: 7 dias contados do primeiro pagamento.
 DIAS_PARA_DESISTIR = 7
 _PAGOS = frozenset({"CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"})
+_ESTORNADOS = frozenset({"REFUNDED", "REFUND_REQUESTED", "REFUND_IN_PROGRESS"})
 
 
 def _dia_do_pagamento(pagamento: dict) -> date | None:
@@ -470,7 +471,7 @@ def _dia_do_pagamento(pagamento: dict) -> date | None:
 
 
 async def _desistencia(pool, seller_id: uuid.UUID):
-    """`(linha, pagamentos a estornar, último dia para desistir ou None)`.
+    """`(linha, pagamentos do contrato, último dia para desistir ou None)`.
 
     Só os pagamentos do contrato atual: o checkout vigente, ou a assinatura
     vigente. Um cliente que recontratou tem no Asaas os pagamentos dos dois
@@ -478,7 +479,8 @@ async def _desistencia(pool, seller_id: uuid.UUID):
     """
     async with pool.acquire() as conn:
         linha = await conn.fetchrow(
-            "SELECT origem, ciclo, checkout_id, asaas_cliente, asaas_assinatura, cancelada_em "
+            "SELECT origem, ciclo, checkout_id, asaas_cliente, asaas_assinatura, cancelada_em, "
+            "acesso_ate IS NULL OR acesso_ate > now() AS com_acesso "
             "FROM assinaturas WHERE seller_id = $1",
             seller_id,
         )
@@ -499,18 +501,41 @@ async def _desistencia(pool, seller_id: uuid.UUID):
     ]
     # O prazo conta do primeiro pagamento, mesmo que ele já tenha sido estornado.
     dias = [d for p in do_contrato if (d := _dia_do_pagamento(p)) is not None]
-    a_estornar = [p for p in do_contrato if p.get("status") in _PAGOS]
     if not dias:
-        return linha, a_estornar, None
+        return linha, do_contrato, None
     ultimo = min(dias) + timedelta(days=DIAS_PARA_DESISTIR)
-    return linha, a_estornar, ultimo if hoje_do_vendedor() <= ultimo else None
+    return linha, do_contrato, ultimo if hoje_do_vendedor() <= ultimo else None
+
+
+def _o_que_falta(linha, do_contrato: list[dict]) -> tuple[list[dict], list[dict]]:
+    """`(a estornar, já estornados que ainda deixam o acesso aberto)`.
+
+    O segundo é a desistência interrompida entre o estorno e o corte (o
+    processo caiu): o dinheiro voltou, mas o acesso e a marca contra o aviso
+    atrasado não ficaram. A nova tentativa termina o serviço.
+    """
+    a_estornar = [p for p in do_contrato if p.get("status") in _PAGOS]
+    sem_corte = (
+        [p for p in do_contrato if p.get("status") in _ESTORNADOS] if linha["com_acesso"] else []
+    )
+    return a_estornar, sem_corte
 
 
 @router.get("/desistencia")
 async def get_desistencia(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
-    """O último dia para desistir com o valor de volta, ou `None` se não há o que desistir."""
-    _, a_estornar, ultimo = await _desistencia(await get_pool(), seller_id)
-    return {"ate": ultimo.isoformat() if ultimo and a_estornar else None}
+    """O último dia para desistir com o valor de volta, ou `None` se não há o que desistir.
+
+    `ja_devolvido`: o dinheiro já voltou (desistência interrompida, ou estorno
+    feito à mão pelo suporte) e falta só encerrar o acesso. A tela não pode
+    prometer um valor que não vem mais.
+    """
+    linha, do_contrato, ultimo = await _desistencia(await get_pool(), seller_id)
+    if ultimo is None:
+        return {"ate": None}
+    a_estornar, sem_corte = _o_que_falta(linha, do_contrato)
+    if not a_estornar and not sem_corte:
+        return {"ate": None}
+    return {"ate": ultimo.isoformat(), "ja_devolvido": not a_estornar}
 
 
 @router.post("/desistir")
@@ -522,7 +547,7 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
     recebeu o dinheiro de volta ainda pagou pelo período.
     """
     pool = await get_pool()
-    linha, a_estornar, ultimo = await _desistencia(pool, seller_id)
+    linha, do_contrato, ultimo = await _desistencia(pool, seller_id)
     if linha is None or linha["origem"] != "gateway":
         raise recusa(409, "sem-assinatura", "Seu plano não tem pagamento para devolver.")
     if ultimo is None:
@@ -531,7 +556,8 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
             "fora-do-prazo",
             "O prazo de 7 dias para desistir já passou. Você ainda pode cancelar a assinatura.",
         )
-    if not a_estornar:
+    a_estornar, sem_corte = _o_que_falta(linha, do_contrato)
+    if not a_estornar and not sem_corte:
         raise recusa(409, "ja-devolvido", "Os pagamentos desta assinatura já foram devolvidos.")
 
     if _mensal_viva(linha):
@@ -567,16 +593,7 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
                 "A assinatura foi cancelada, mas o estorno não saiu agora. "
                 "Já fomos avisados e vamos devolver o valor.",
             ) from erro
-        # A marca que impede o aviso atrasado deste pagamento de devolver o
-        # acesso (`_pagamento_confirmado`). Mora no log de eventos, sem coluna nova.
-        async with pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO eventos_do_gateway (id, tipo, payload) VALUES ($1, $2, $3::jsonb) "
-                "ON CONFLICT (id) DO NOTHING",
-                f"desistencia:{pagamento['id']}",
-                "DESISTENCIA",
-                json.dumps({"payment": pagamento["id"], "seller": str(seller_id)}),
-            )
+        await _marca_desistencia(pool, pagamento["id"], seller_id)
         # Uma conta que exige autorização de ação crítica deixa o estorno parado
         # até o dono aprovar no painel: o status vai para o log.
         _log.warning(
@@ -584,6 +601,9 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
             pagamento["id"],
             estorno.get("status"),
         )
+
+    for pagamento in sem_corte:
+        await _marca_desistencia(pool, pagamento["id"], seller_id)
 
     async with pool.acquire() as conn:
         # O dinheiro voltou inteiro: não sobra período pago. O `PAYMENT_REFUNDED`
@@ -599,3 +619,16 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
         len(a_estornar),
     )
     return {"estornados": len(a_estornar)}
+
+
+async def _marca_desistencia(pool, pagamento: str, seller_id: uuid.UUID) -> None:
+    """A marca que impede o aviso atrasado deste pagamento de devolver o acesso
+    (`_pagamento_confirmado`). Mora no log de eventos, sem coluna nova."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO eventos_do_gateway (id, tipo, payload) VALUES ($1, $2, $3::jsonb) "
+            "ON CONFLICT (id) DO NOTHING",
+            f"desistencia:{pagamento}",
+            "DESISTENCIA",
+            json.dumps({"payment": pagamento, "seller": str(seller_id)}),
+        )

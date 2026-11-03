@@ -1154,7 +1154,7 @@ async def test_desistencia_aberta_ate_o_7o_dia_depois_do_pagamento(
     await _contratante(pg_pool, seller_id)
     asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor() - timedelta(days=7))]
     resp = client.get("/conta/desistencia", headers=_auth(user_id))
-    assert resp.json() == {"ate": hoje_do_vendedor().isoformat()}
+    assert resp.json() == {"ate": hoje_do_vendedor().isoformat(), "ja_devolvido": False}
 
 
 async def test_desistencia_fechada_no_8o_dia(client, pg_pool, test_seller, asaas_falso):
@@ -1288,7 +1288,9 @@ async def test_desistencia_acha_o_pagamento_pela_assinatura(
     user_id, seller_id = test_seller
     await _contratante(pg_pool, seller_id)
     asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor(), checkout=None)]
-    assert client.get("/conta/desistencia", headers=_auth(user_id)).json()["ate"] is not None
+    oferta = client.get("/conta/desistencia", headers=_auth(user_id)).json()
+    assert oferta["ate"] is not None
+    assert oferta["ja_devolvido"] is False
 
 
 async def test_o_prazo_conta_da_data_mais_cedo_do_pagamento(
@@ -1302,10 +1304,40 @@ async def test_o_prazo_conta_da_data_mais_cedo_do_pagamento(
     assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
 
 
-async def test_desistir_de_novo_diz_que_ja_foi_devolvido(client, pg_pool, test_seller, asaas_falso):
+async def test_desistir_depois_de_um_estorno_sem_corte_termina_o_servico(
+    client, pg_pool, test_seller, asaas_falso
+):
+    """O processo caiu entre o estorno aceito e o corte do acesso: a nova
+    tentativa corta e grava a marca, sem estornar de novo."""
     user_id, seller_id = test_seller
     await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_evt_x", hoje_do_vendedor(), status="REFUNDED")]
+    oferta = client.get("/conta/desistencia", headers=_auth(user_id)).json()
+    assert oferta["ate"] is not None
+    assert oferta["ja_devolvido"] is True
+
+    resp = client.post("/conta/desistir", headers=_auth(user_id))
+
+    assert resp.status_code == 200
+    assert [c for m, c, _ in asaas_falso.pedidos if m == "POST"] == []
+    assert client.get("/conta/acesso", headers=_auth(user_id)).json()["plano"] is None
+    resultado = await eventos.processa(
+        pg_pool,
+        _pagamento("evt_x", hoje_do_vendedor(), assinatura="sub_9", checkout="chk_d"),
+    )
+    assert resultado == "estornado-na-desistencia"
+
+
+async def test_desistencia_concluida_some_da_tela_e_nao_se_repete(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor())]
+    assert client.post("/conta/desistir", headers=_auth(user_id)).status_code == 200
     asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor(), status="REFUNDED")]
+
+    assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
     resp = client.post("/conta/desistir", headers=_auth(user_id))
     assert resp.status_code == 409
     assert resp.json()["detail"]["codigo"] == "ja-devolvido"

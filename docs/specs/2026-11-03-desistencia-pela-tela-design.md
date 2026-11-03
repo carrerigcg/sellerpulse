@@ -45,9 +45,19 @@ isso depende de o cliente escrever e de o dono estornar à mão no painel do Asa
 
 ## Pendências da revisão, que não travam
 
-- Se o processo cair entre o estorno aceito e o corte do acesso, a nova tentativa recebe
-  "já devolvido" e não termina o serviço; um aviso de pagamento atrasado ainda estenderia
-  o acesso. Conserto possível: o "já devolvido" dentro do prazo grava as marcas e corta.
 - Estorno parado à espera de autorização e depois rejeitado deixa a marca e o acesso
   cortado com o pagamento valendo. O status do estorno no log permite conciliar à mão.
-- O foco do teclado se perde ao abrir a confirmação, também no "Cancelar".
+- O foco volta ao `body` quando a confirmação fecha (Voltar, erro, fim da ação). O
+  conserto é uma `ref` no botão que abre. O grupo de botões da confirmação também não
+  tem nome para o leitor de tela.
+
+Resolvidas na branch `fix/desistencia-termina-o-servico`:
+
+- Processo que cai entre o estorno aceito e o corte do acesso: dentro do prazo, com
+  pagamento já estornado e acesso ainda aberto, a tela continua oferecendo a desistência,
+  e a nova tentativa grava as marcas e corta sem estornar de novo. Com o acesso já
+  cortado, segue "já devolvido". O mesmo caminho pega o estorno feito à mão pelo suporte
+  dentro do prazo: o `GET` devolve `ja_devolvido` e a tela troca a promessa do valor
+  por "encerrar o acesso", porque o backend não distingue os dois casos.
+- Foco do teclado: ao abrir a confirmação de "Desistir", "Cancelar" ou da cobrança
+  em `/planos`, e na troca de plano, o foco vai para o botão de voltar, a saída que não confirma nada.

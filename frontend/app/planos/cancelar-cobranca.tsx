@@ -67,6 +67,7 @@ export function CancelarCobranca({ motivo }: { motivo: keyof typeof EXPLICACAO }
           <button
             type="button"
             disabled={ocupado}
+            autoFocus
             onClick={() => setConfirmando(false)}
             className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 font-medium hover:bg-bg"
           >
