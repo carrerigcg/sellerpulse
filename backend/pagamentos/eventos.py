@@ -47,8 +47,23 @@ _DINHEIRO_DEVOLVIDO = frozenset({"PAYMENT_REFUNDED", "PAYMENT_CHARGEBACK_REQUEST
 # Dado pessoal de quem paga, que o Asaas pode repetir no payload. Os dados de
 # cobrança não são guardados no SellerPulse (spec, "Contratar"), e o log de
 # eventos não pode virar a exceção: estas chaves saem antes de gravar.
+#
+# Os links da fatura, do comprovante, do boleto e do checkout abrem, sem login,
+# a página do Asaas com os dados de quem pagou. Nenhum código os lê daqui, e a
+# 0022 tirou os que já estavam gravados.
 _CHAVES_PESSOAIS = frozenset(
-    {"cpfCnpj", "customerData", "creditCard", "creditCardHolderInfo", "phone", "mobilePhone"}
+    {
+        "cpfCnpj",
+        "customerData",
+        "creditCard",
+        "creditCardHolderInfo",
+        "phone",
+        "mobilePhone",
+        "invoiceUrl",
+        "transactionReceiptUrl",
+        "bankSlipUrl",
+        "link",
+    }
 )
 
 
