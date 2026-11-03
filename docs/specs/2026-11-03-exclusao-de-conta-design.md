@@ -25,6 +25,8 @@ chocavam: apagar a conta cascateava de `sellers` e levava a prova junto.
 - **Checkout pago depois da exclusão** não reativa nada: o aviso responde
   `conta-excluida` e o log pede estorno. Sem isso, gravar em `assinaturas` quebraria a
   chave estrangeira e o Asaas repetiria o aviso para sempre.
+- **A linha de `assinaturas` sai com a conta** (Guilherme, 2026-11-03): as datas que importam
+  ficam nos checkouts e nos avisos do Asaas, e guardar a mais iria contra minimizar dados.
 - **O relatório lê do banco as tabelas com `seller_id`**, para tabela nova entrar sem
   ninguém lembrar.
 
