@@ -60,6 +60,15 @@ async def aplica_retencao(pool: asyncpg.Pool) -> dict[str, int]:
     """
     saiu: dict[str, int] = {}
     async with pool.acquire() as conn:
+        # Primeiro, e fora das outras: é a obrigação legal, e uma falha mais adiante
+        # não pode adiá-la. A folga de 1 hora é a do endpoint: `hora` guarda o começo
+        # do período.
+        saiu["registros_de_acesso"] = _total(
+            await conn.execute(
+                "DELETE FROM registros_de_acesso WHERE hora < now() - interval '6 months 1 hour'"
+            )
+        )
+
         async with conn.transaction():
             sem_token = [r["seller_id"] for r in await conn.fetch(_VENCIDOS, "30 days")]
             saiu["credenciais"] = _total(
@@ -90,13 +99,6 @@ async def aplica_retencao(pool: asyncpg.Pool) -> dict[str, int]:
             await conn.execute(
                 "UPDATE sellers SET last_synced_at = NULL WHERE id = ANY($1::uuid[])", sem_dados
             )
-
-        # A mesma folga de 1 hora do endpoint: `hora` guarda o começo do período.
-        saiu["registros_de_acesso"] = _total(
-            await conn.execute(
-                "DELETE FROM registros_de_acesso WHERE hora < now() - interval '6 months 1 hour'"
-            )
-        )
 
         async with conn.transaction():
             prescritas = [
