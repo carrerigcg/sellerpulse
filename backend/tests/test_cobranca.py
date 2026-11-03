@@ -1260,3 +1260,52 @@ async def test_plano_dado_a_mao_nao_tem_desistencia(client, test_seller, asaas_f
     assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
     assert client.post("/conta/desistir", headers=_auth(user_id)).status_code == 409
     assert asaas_falso.pedidos == []
+
+
+async def test_pagamento_confirmado_que_chega_depois_da_desistencia_nao_devolve_o_acesso(
+    client, pg_pool, test_seller, asaas_falso
+):
+    """O aviso do pagamento pode atrasar (fila pausada, Render fora): o botão
+    olha o Asaas na hora, então dá para desistir antes de ele chegar aqui."""
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_evt_tarde", hoje_do_vendedor())]
+    assert client.post("/conta/desistir", headers=_auth(user_id)).status_code == 200
+
+    resultado = await eventos.processa(
+        pg_pool,
+        _pagamento("evt_tarde", hoje_do_vendedor(), assinatura="sub_9", checkout="chk_d"),
+    )
+
+    assert resultado == "estornado-na-desistencia"
+    assert client.get("/conta/acesso", headers=_auth(user_id)).json()["plano"] is None
+
+
+async def test_desistencia_acha_o_pagamento_pela_assinatura(
+    client, pg_pool, test_seller, asaas_falso
+):
+    """Renovação ou pagamento sem `checkoutSession`: a assinatura vigente basta."""
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor(), checkout=None)]
+    assert client.get("/conta/desistencia", headers=_auth(user_id)).json()["ate"] is not None
+
+
+async def test_o_prazo_conta_da_data_mais_cedo_do_pagamento(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    pagamento = _pago("pay_1", hoje_do_vendedor())
+    pagamento["paymentDate"] = (hoje_do_vendedor() - timedelta(days=8)).isoformat()
+    asaas_falso.pagamentos = [pagamento]
+    assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
+
+
+async def test_desistir_de_novo_diz_que_ja_foi_devolvido(client, pg_pool, test_seller, asaas_falso):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor(), status="REFUNDED")]
+    resp = client.post("/conta/desistir", headers=_auth(user_id))
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["codigo"] == "ja-devolvido"

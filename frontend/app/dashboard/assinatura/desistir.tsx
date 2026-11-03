@@ -25,9 +25,10 @@ export function Desistir({ ate }: { ate: string }) {
       // Sem plano, o painel não abre mais: a confirmação mora em /planos.
       router.push("/planos?motivo=desistiu");
     } catch (falha) {
+      // Sem refresh: recarregar pergunta ao Asaas de novo e, se ele estiver fora,
+      // esta seção sai da tela levando junto o erro. A mensagem do estorno
+      // pendente já diz que a assinatura foi cancelada.
       setErro(falha instanceof Error ? falha.message : "Não foi possível desistir agora.");
-      // Um estorno pendente já deixou a assinatura cancelada: a tela mostra isso.
-      router.refresh();
       setOcupado(false);
       setConfirmando(false);
     }

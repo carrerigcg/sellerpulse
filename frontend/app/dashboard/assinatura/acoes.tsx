@@ -133,8 +133,8 @@ export function AcoesDaAssinatura({
       <section className="mt-6 rounded-xl border border-line p-5">
         <h2 className="text-sm font-semibold">Cancelar</h2>
         <p className="mt-1 text-sm text-muted">
-          A cobrança para de renovar e o acesso continua até o fim do período já pago. Os seus
-          dados ficam guardados.
+          A cobrança para de renovar e o acesso continua até o fim do período já pago, sem
+          devolver o que já foi pago. Os seus dados ficam guardados.
         </p>
         {confirmando === "cancelar" ? (
           <div className="mt-3 flex flex-wrap gap-2">

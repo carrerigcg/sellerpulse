@@ -14,6 +14,7 @@ docs/specs/2026-10-29-cobranca-asaas-design.md.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
@@ -499,7 +500,7 @@ async def _desistencia(pool, seller_id: uuid.UUID):
     # O prazo conta do primeiro pagamento, mesmo que ele já tenha sido estornado.
     dias = [d for p in do_contrato if (d := _dia_do_pagamento(p)) is not None]
     a_estornar = [p for p in do_contrato if p.get("status") in _PAGOS]
-    if not dias or not a_estornar:
+    if not dias:
         return linha, a_estornar, None
     ultimo = min(dias) + timedelta(days=DIAS_PARA_DESISTIR)
     return linha, a_estornar, ultimo if hoje_do_vendedor() <= ultimo else None
@@ -508,8 +509,8 @@ async def _desistencia(pool, seller_id: uuid.UUID):
 @router.get("/desistencia")
 async def get_desistencia(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
     """O último dia para desistir com o valor de volta, ou `None` se não há o que desistir."""
-    _, _, ultimo = await _desistencia(await get_pool(), seller_id)
-    return {"ate": ultimo.isoformat() if ultimo else None}
+    _, a_estornar, ultimo = await _desistencia(await get_pool(), seller_id)
+    return {"ate": ultimo.isoformat() if ultimo and a_estornar else None}
 
 
 @router.post("/desistir")
@@ -530,6 +531,8 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
             "fora-do-prazo",
             "O prazo de 7 dias para desistir já passou. Você ainda pode cancelar a assinatura.",
         )
+    if not a_estornar:
+        raise recusa(409, "ja-devolvido", "Os pagamentos desta assinatura já foram devolvidos.")
 
     if _mensal_viva(linha):
         _, assinatura = await _id_da_assinatura(pool, seller_id)
@@ -549,7 +552,7 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
 
     for pagamento in a_estornar:
         try:
-            await asaas.estornar_pagamento(pagamento["id"])
+            estorno = await asaas.estornar_pagamento(pagamento["id"])
         except asaas.AsaasErro as erro:
             _log.error(
                 "[asaas] desistencia: estorno do pagamento %s recusado (seller %s), "
@@ -564,6 +567,23 @@ async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
                 "A assinatura foi cancelada, mas o estorno não saiu agora. "
                 "Já fomos avisados e vamos devolver o valor.",
             ) from erro
+        # A marca que impede o aviso atrasado deste pagamento de devolver o
+        # acesso (`_pagamento_confirmado`). Mora no log de eventos, sem coluna nova.
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO eventos_do_gateway (id, tipo, payload) VALUES ($1, $2, $3::jsonb) "
+                "ON CONFLICT (id) DO NOTHING",
+                f"desistencia:{pagamento['id']}",
+                "DESISTENCIA",
+                json.dumps({"payment": pagamento["id"], "seller": str(seller_id)}),
+            )
+        # Uma conta que exige autorização de ação crítica deixa o estorno parado
+        # até o dono aprovar no painel: o status vai para o log.
+        _log.warning(
+            "[asaas] desistencia: estorno do pagamento %s com status %s",
+            pagamento["id"],
+            estorno.get("status"),
+        )
 
     async with pool.acquire() as conn:
         # O dinheiro voltou inteiro: não sobra período pago. O `PAYMENT_REFUNDED`

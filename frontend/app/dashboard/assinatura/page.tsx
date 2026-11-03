@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { getAcesso, getDesistencia } from "@/lib/api";
 import { NOMES_DOS_PLANOS, diaDe, ultimoDia } from "@/lib/plano";
 import { PRECOS_MENSAIS, formatarPreco, precoAnual } from "@/lib/precos";
@@ -37,11 +39,6 @@ export default async function AssinaturaPage() {
     !assinatura?.recorrente && assinatura?.pago_ate ? ultimoDia(assinatura.pago_ate) : null;
   const acessoAte = assinatura?.acesso_ate ? ultimoDia(assinatura.acesso_ate) : null;
   const proximoPlano = assinatura?.plano_no_proximo_ciclo ?? null;
-  // Pergunta ao Asaas: só para quem contratou pelo site. Se ele não responder,
-  // a tela sai sem o botão, e o caminho é o contato, como antes.
-  const desistencia =
-    assinatura?.origem === "gateway" ? await getDesistencia().catch(() => null) : null;
-  const desistirAte = desistencia?.ate ? desistencia.ate.split("-").reverse().join("/") : null;
 
   return (
     <>
@@ -96,7 +93,12 @@ export default async function AssinaturaPage() {
         )}
       </section>
 
-      {desistirAte && <Desistir ate={desistirAte} />}
+      {assinatura?.origem === "gateway" && (
+        // Em Suspense: a consulta ao Asaas não segura o resto da tela.
+        <Suspense fallback={null}>
+          <SecaoDeDesistencia />
+        </Suspense>
+      )}
       {assinatura?.origem === "gateway" && assinatura.recorrente && (
         <AcoesDaAssinatura plano={plano} proximoPlano={proximoPlano} />
       )}
@@ -108,4 +110,14 @@ export default async function AssinaturaPage() {
       )}
     </>
   );
+}
+
+/**
+ * Pergunta ao Asaas se o prazo de desistência está aberto. Se ele não
+ * responder, a seção não aparece, e o caminho é o contato, como antes.
+ */
+async function SecaoDeDesistencia() {
+  const desistencia = await getDesistencia().catch(() => null);
+  if (!desistencia?.ate) return null;
+  return <Desistir ate={desistencia.ate.split("-").reverse().join("/")} />;
 }

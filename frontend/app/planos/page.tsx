@@ -69,7 +69,7 @@ export default async function PlanosPage({ searchParams }: PageProps<"/planos">)
           >
             <p className="font-semibold">Você desistiu da compra.</p>
             <p className="mt-1 text-muted">
-              Pedimos ao Asaas o estorno do valor inteiro, pelo mesmo meio de pagamento. O prazo
+              Pedimos o estorno do valor inteiro, pelo mesmo meio de pagamento. O prazo
               para ele aparecer depende do seu banco ou cartão. Os seus dados continuam
               guardados: {comoVoltar}
             </p>

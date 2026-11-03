@@ -29,6 +29,14 @@ isso depende de o cliente escrever e de o dono estornar à mão no painel do Asa
   respeitar. O `PAYMENT_REFUNDED` que chega depois só encurta (`LEAST`), e não devolve
   a tolerância.
 - **Alerta ao dono** a cada desistência, no log, como os outros casos que pedem olho.
+- **O aviso atrasado do pagamento não devolve o acesso.** O botão olha o Asaas na hora,
+  então dá para desistir antes de o aviso de pagamento confirmado chegar. Cada estorno
+  grava `desistencia:<pagamento>` em `eventos_do_gateway`, e o aviso desse pagamento é
+  ignorado. Sem coluna nova: a marca sai com a retenção de 5 anos dos eventos.
+- **O status do estorno vai para o log.** Uma conta que exige autorização de ação crítica
+  deixa o estorno parado até o dono aprovar no painel.
+- **Pix do anual no mesmo dia pode ser recusado** por falta de saldo (as taxas não
+  voltam, segundo o Asaas): cai no estorno pendente, e o dono estorna à mão.
 
 ## Fora desta spec
 
