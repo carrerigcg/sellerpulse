@@ -41,7 +41,7 @@ cada um:
   e de cancelamento.
 - **Dados técnicos da cobrança, enviados pelo Asaas:** os códigos que o Asaas
   usa para identificar o cliente, a cobrança e a assinatura, valores, situação,
-  datas, forma de pagamento e links da fatura e do comprovante.
+  datas e forma de pagamento.
 
 **Não guardamos** o seu nome de cobrança, CPF ou CNPJ, endereço de cobrança,
 telefone nem dados do cartão. Você os informa diretamente na página do Asaas. Se

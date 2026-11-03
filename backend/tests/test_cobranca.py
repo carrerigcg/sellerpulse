@@ -60,7 +60,8 @@ class AsaasFalso:
                 200, json={"id": f"chk_{len(self.pedidos)}", "link": "https://asaas.test/c/1"}
             )
         if request.method == "GET" and request.url.path.endswith("/subscriptions"):
-            return httpx.Response(200, json={"data": [{"id": self.assinatura_no_asaas}]})
+            ativas = [{"id": self.assinatura_no_asaas}] if self.assinatura_no_asaas else []
+            return httpx.Response(200, json={"data": ativas})
         return httpx.Response(200, json={"ok": True})
 
 
@@ -825,6 +826,48 @@ async def test_cancelar_no_teste_usa_a_assinatura_ligada_pelo_aviso(
 
     assert resp.status_code == 200
     assert asaas_falso.pedidos == [("DELETE", "/v3/subscriptions/sub_1", None)]
+
+
+async def test_cancelar_quando_o_asaas_nao_tem_assinatura_ativa_encerra_aqui(
+    client, pg_pool, sem_plano, asaas_falso
+):
+    """O Asaas já não cobra (o aviso do cancelamento se perdeu): não há o que
+    remover lá, e a pessoa não pode ficar presa num 409 com o botão na tela."""
+    user_id, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id)
+    await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje_do_vendedor())
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET asaas_cliente = 'cus_1' WHERE seller_id = $1", seller_id
+        )
+    asaas_falso.assinatura_no_asaas = None
+
+    resp = client.post("/conta/cancelar", headers=_auth(user_id))
+
+    assert resp.status_code == 200
+    assert [m for m, _, _ in asaas_falso.pedidos] == ["GET"]
+    linha = await _assinatura(pg_pool, seller_id)
+    assert linha["cancelada_em"] is not None
+    assert linha["acesso_ate"] == linha["pago_ate"]
+    assinatura = client.get("/conta/acesso", headers=_auth(user_id)).json()["assinatura"]
+    assert assinatura["recorrente"] is False
+
+
+async def test_cancelar_sem_os_ids_do_asaas_diz_o_que_fazer(
+    client, pg_pool, sem_plano, asaas_falso
+):
+    """Sem cliente nem assinatura gravados, daqui não se acha a cobrança: a
+    recusa diz que é preciso falar com a gente, e nada é marcado como cancelado."""
+    user_id, seller_id = sem_plano
+    await _checkout_criado(pg_pool, seller_id)
+    await eventos.processa(pg_pool, _checkout_pago(), hoje=hoje_do_vendedor())
+
+    resp = client.post("/conta/cancelar", headers=_auth(user_id))
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["codigo"] == "assinatura-nao-localizada"
+    assert asaas_falso.pedidos == []
+    assert (await _assinatura(pg_pool, seller_id))["cancelada_em"] is None
 
 
 async def test_inadimplente_consegue_cancelar(client, pg_pool, test_seller, asaas_falso):

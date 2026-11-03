@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/brand";
 import { getAcesso } from "@/lib/api";
 import { ResumoDosTermos } from "@/components/planos/resumo-dos-termos";
 import { RegistroDeAcesso } from "@/components/registro-de-acesso";
-import { NOMES_DOS_PLANOS } from "@/lib/plano";
+import { NOMES_DOS_PLANOS, ultimoDia } from "@/lib/plano";
 
 import { CancelarCobranca } from "../planos/cancelar-cobranca";
 import { FormularioDeAceite } from "./formulario";
@@ -29,17 +29,35 @@ export default async function AceitePage() {
   if (acesso.plano === null) redirect("/planos");
   if (acesso.termos.aceito) redirect("/dashboard");
 
+  const nome = NOMES_DOS_PLANOS[acesso.plano];
+  const cancelada = acesso.assinatura?.cancelada === true;
+  const valeAte = acesso.assinatura?.acesso_ate ? ultimoDia(acesso.assinatura.acesso_ate) : null;
+
   return (
     <main className="min-h-screen bg-bg px-4 py-10 text-ink sm:px-6">
       <RegistroDeAcesso />
       <div className="mx-auto max-w-2xl">
         <Wordmark />
-        <h1 className="mt-10 text-2xl font-semibold tracking-tight">
-          Seu plano {NOMES_DOS_PLANOS[acesso.plano]} está ativo
-        </h1>
-        <p className="mt-2 text-muted">
-          Para usar o painel, leia e aceite os Termos de Uso e a Política de Privacidade.
-        </p>
+        {cancelada ? (
+          <>
+            <h1 className="mt-10 text-2xl font-semibold tracking-tight">
+              A cobrança do plano {nome} está cancelada
+            </h1>
+            <p role="status" className="mt-2 text-muted">
+              Você não será mais cobrado. Se aceitar os Termos de Uso e a Política de Privacidade,
+              pode usar o painel {valeAte ? `até ${valeAte}` : "até o fim do período já pago"}.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1 className="mt-10 text-2xl font-semibold tracking-tight">
+              Seu plano {nome} está ativo
+            </h1>
+            <p className="mt-2 text-muted">
+              Para usar o painel, leia e aceite os Termos de Uso e a Política de Privacidade.
+            </p>
+          </>
+        )}
 
         <ResumoDosTermos versao={acesso.termos.versao} />
 
@@ -50,7 +68,7 @@ export default async function AceitePage() {
         {acesso.assinatura?.recorrente && (
           <section className="mt-8 border-t border-line pt-6 text-sm">
             <h2 className="font-semibold">Não quer aceitar?</h2>
-            <CancelarCobranca />
+            <CancelarCobranca motivo="termos" />
           </section>
         )}
       </div>
