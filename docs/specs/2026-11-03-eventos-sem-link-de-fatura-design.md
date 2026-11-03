@@ -1,6 +1,6 @@
 # Eventos do Asaas sem link de fatura
 
-Estado: em revisão. Etapa 6 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
+Estado: no ar desde 2026-11-03 (#41). Os 5 eventos já gravados foram limpos. Etapa 6 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## Por quê
 
