@@ -7,8 +7,11 @@ tirou a chave estrangeira de `aceites_de_termos` e `checkouts` para eles ficarem
 
 Salvaguardas:
 - Recusa conta de demonstração.
-- Recusa quem ainda tem assinatura recorrente no Asaas: apagar a conta não para
-  a cobrança. Cancele antes (`docs/operacao.md`, seção 9).
+- Recusa quem ainda tem assinatura mensal sem cancelamento, com ou sem o id do
+  Asaas: apagar a conta não para a cobrança. Cancele antes (`docs/operacao.md`,
+  seção 9).
+- Recusa quem abriu um link de pagamento na última hora, porque ele ainda pode
+  ser pago.
 - `--dry-run` só relata o que sairia e o que fica. Tudo numa transação.
 
 Uso (da raiz do repo; exige exatamente um dos dois modos):
@@ -78,17 +81,29 @@ async def exclui_conta(conn, email: str, *, aplicar: bool) -> Relatorio:
             raise ExclusaoRecusada(f"nenhuma conta com o e-mail {email}")
         if conta["is_demo"]:
             raise ExclusaoRecusada("é a conta de demonstração")
-        recorrente = await conn.fetchval(
+        # Pelo ciclo, e não pelo id do Asaas: no teste de 7 dias nenhum pagamento
+        # chegou para trazer o id, e a cobrança está viva do mesmo jeito.
+        recorrente = await conn.fetchrow(
             """
-            SELECT asaas_assinatura FROM assinaturas
-             WHERE seller_id = $1 AND asaas_assinatura IS NOT NULL AND cancelada_em IS NULL
+            SELECT asaas_assinatura, asaas_cliente FROM assinaturas
+             WHERE seller_id = $1 AND origem = 'gateway' AND ciclo = 'mensal'
+               AND cancelada_em IS NULL
             """,
             conta["seller_id"],
         )
         if recorrente:
-            raise ExclusaoRecusada(
-                f"assinatura {recorrente} ainda ativa no Asaas: cancele antes de excluir"
-            )
+            qual = recorrente["asaas_assinatura"] or f"do cliente {recorrente['asaas_cliente']}"
+            raise ExclusaoRecusada(f"assinatura {qual} ainda ativa no Asaas: cancele antes")
+        # O link de pagamento vale 60 minutos (`minutesToExpire`, em asaas.py). Pago
+        # depois da exclusão, criaria uma recorrência sem conta.
+        if await conn.fetchval(
+            """
+            SELECT true FROM checkouts
+             WHERE seller_id = $1 AND pago_em IS NULL AND criado_em > now() - interval '1 hour'
+            """,
+            conta["seller_id"],
+        ):
+            raise ExclusaoRecusada("há um link de pagamento aberto: espere 1 hora")
 
         relatorio = Relatorio(conta["user_id"], conta["seller_id"])
         for tabela in await _tabelas_com_seller(conn):

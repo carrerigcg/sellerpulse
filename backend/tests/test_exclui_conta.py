@@ -19,7 +19,8 @@ async def conta(pg_pool, test_seller):
     await _insere_legado(pg_pool, seller_id, _pedido(1))
     async with pg_pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO checkouts (id, seller_id, plano, ciclo) VALUES ('chk', $1, 'essencial', 'mensal')",
+            "INSERT INTO checkouts (id, seller_id, plano, ciclo, criado_em) "
+            "VALUES ('chk', $1, 'essencial', 'mensal', now() - interval '2 hours')",
             seller_id,
         )
         await conn.execute(
@@ -93,19 +94,50 @@ async def test_recusa_quem_ainda_paga_assinatura(pg_pool, conta):
     _, seller_id = conta
     async with pg_pool.acquire() as conn:
         await conn.execute(
-            "UPDATE assinaturas SET asaas_assinatura = 'sub_1' WHERE seller_id = $1", seller_id
+            "UPDATE assinaturas SET origem = 'gateway', ciclo = 'mensal', asaas_assinatura = 'sub_1' "
+            "WHERE seller_id = $1",
+            seller_id,
         )
         with pytest.raises(ExclusaoRecusada, match="cancele"):
             await exclui_conta(conn, EMAIL, aplicar=True)
         assert await conn.fetchval("SELECT count(*) FROM sellers WHERE id = $1", seller_id) == 1
 
 
+async def test_recusa_o_teste_de_7_dias_sem_o_id_da_assinatura(pg_pool, conta):
+    _, seller_id = conta
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET origem = 'gateway', ciclo = 'mensal', asaas_cliente = 'cus_1' "
+            "WHERE seller_id = $1",
+            seller_id,
+        )
+        with pytest.raises(ExclusaoRecusada, match="cus_1"):
+            await exclui_conta(conn, EMAIL, aplicar=True)
+
+
+async def test_recusa_link_de_pagamento_aberto(pg_pool, conta):
+    _, seller_id = conta
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO checkouts (id, seller_id, plano, ciclo) "
+            "VALUES ('chk_novo', $1, 'essencial', 'mensal')",
+            seller_id,
+        )
+        with pytest.raises(ExclusaoRecusada, match="link"):
+            await exclui_conta(conn, EMAIL, aplicar=True)
+        await conn.execute(
+            "UPDATE checkouts SET criado_em = now() - interval '2 hours' WHERE seller_id = $1",
+            seller_id,
+        )
+        assert (await exclui_conta(conn, EMAIL, aplicar=True)).aplicado
+
+
 async def test_assinatura_cancelada_nao_impede(pg_pool, conta):
     _, seller_id = conta
     async with pg_pool.acquire() as conn:
         await conn.execute(
-            "UPDATE assinaturas SET asaas_assinatura = 'sub_1', cancelada_em = now() "
-            "WHERE seller_id = $1",
+            "UPDATE assinaturas SET origem = 'gateway', ciclo = 'mensal', "
+            "asaas_assinatura = 'sub_1', cancelada_em = now() WHERE seller_id = $1",
             seller_id,
         )
         assert (await exclui_conta(conn, EMAIL, aplicar=True)).aplicado

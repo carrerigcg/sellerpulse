@@ -16,8 +16,11 @@ chocavam: apagar a conta cascateava de `sellers` e levava a prova junto.
   ligam o aceite a quem pagou sem guardar nome nem e-mail aqui.
 - **`contas_excluidas` liga o seller ao usuário** e marca a data, que é onde começam os
   5 anos e por onde se acham os registros de acesso numa contestação. Só identificadores.
-- **Recusa quem ainda tem assinatura recorrente:** apagar a conta não para a cobrança.
-  Cancelar no Asaas fica com quem opera, como no passo a passo de estorno.
+- **Recusa quem ainda tem assinatura mensal sem cancelamento**, pelo ciclo e não pelo id do
+  Asaas, que no teste de 7 dias ainda não chegou. Apagar a conta não para a cobrança.
+  Cancelar fica com quem opera, como no passo a passo de estorno.
+- **Recusa quem abriu um link de pagamento na última hora**: ele vale 60 minutos e ainda
+  pode ser pago.
 - **Recusa a conta de demonstração**, e `--dry-run` mostra o que sai antes de apagar.
 - **Checkout pago depois da exclusão** não reativa nada: o aviso responde
   `conta-excluida` e o log pede estorno. Sem isso, gravar em `assinaturas` quebraria a

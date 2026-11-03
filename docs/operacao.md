@@ -233,9 +233,10 @@ select ip, hora from registros_de_acesso
 - **Não apague a conta à mão**, pelo painel do Supabase ou por SQL: use o
   script, que registra a exclusão em `contas_excluidas` e recusa os casos
   perigosos.
+
 1. Anotar a data do pedido, porque o prazo conta dela.
 2. Cancelar a assinatura, se houver. O script recusa quem ainda tem cobrança
-   recorrente, porque apagar a conta não para o Asaas.
+   mensal, mesmo no teste de 7 dias, porque apagar a conta não para o Asaas.
 3. Com o ok do Guilherme, rodar com a `DATABASE_URL` de produção:
 
    ```bash
