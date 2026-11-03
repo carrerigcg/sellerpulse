@@ -48,6 +48,8 @@ class AsaasFalso:
         self.pedidos: list[tuple[str, str, dict | None]] = []
         self.status = 200
         self.assinatura_no_asaas = "sub_api"
+        self.pagamentos: list[dict] = []
+        self.estorno_falha = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         corpo = json.loads(request.content) if request.content else None
@@ -59,6 +61,13 @@ class AsaasFalso:
             return httpx.Response(
                 200, json={"id": f"chk_{len(self.pedidos)}", "link": "https://asaas.test/c/1"}
             )
+        if request.method == "GET" and request.url.path.endswith("/payments"):
+            assert request.url.params["customer"]
+            return httpx.Response(200, json={"data": self.pagamentos})
+        if request.method == "POST" and request.url.path.endswith("/refund"):
+            if self.estorno_falha:
+                return httpx.Response(400, json={"errors": [{"description": "recusado"}]})
+            return httpx.Response(200, json={"status": "REFUNDED"})
         if request.method == "GET" and request.url.path.endswith("/subscriptions"):
             ativas = [{"id": self.assinatura_no_asaas}] if self.assinatura_no_asaas else []
             return httpx.Response(200, json={"data": ativas})
@@ -1106,3 +1115,148 @@ async def test_estorno_acha_o_vendedor_pelo_checkout_quando_os_ids_nao_chegaram(
 
     estorno = _pagamento("evt_r", HOJE, tipo="PAYMENT_REFUNDED", assinatura=None, cliente=None)
     assert await eventos.processa(pg_pool, estorno) == "acesso-encurtado"
+
+
+# ---------- desistência (arrependimento de 7 dias) ----------
+
+
+def _pago(id_, dia: date, *, checkout="chk_d", status="CONFIRMED", assinatura="sub_9") -> dict:
+    return {
+        "id": id_,
+        "status": status,
+        "value": 79.9,
+        "confirmedDate": dia.isoformat(),
+        "checkoutSession": checkout,
+        "subscription": assinatura,
+    }
+
+
+async def _contratante(pool, seller_id, *, ciclo="mensal"):
+    async with pool.acquire() as conn:
+        await da_plano(conn, seller_id, "exclusive")
+        await conn.execute(
+            """
+            UPDATE assinaturas SET origem = 'gateway', ciclo = $2, checkout_id = 'chk_d',
+                   asaas_cliente = 'cus_1', asaas_assinatura = $3,
+                   pago_ate = now() + interval '25 days', acesso_ate = now() + interval '32 days'
+             WHERE seller_id = $1
+            """,
+            seller_id,
+            ciclo,
+            "sub_9" if ciclo == "mensal" else None,
+        )
+
+
+async def test_desistencia_aberta_ate_o_7o_dia_depois_do_pagamento(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor() - timedelta(days=7))]
+    resp = client.get("/conta/desistencia", headers=_auth(user_id))
+    assert resp.json() == {"ate": hoje_do_vendedor().isoformat()}
+
+
+async def test_desistencia_fechada_no_8o_dia(client, pg_pool, test_seller, asaas_falso):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor() - timedelta(days=8))]
+    assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
+    resp = client.post("/conta/desistir", headers=_auth(user_id))
+    assert resp.status_code == 409
+    assert resp.json()["detail"]["codigo"] == "fora-do-prazo"
+    assert [m for m, _, _ in asaas_falso.pedidos if m != "GET"] == []
+
+
+async def test_no_teste_sem_pagamento_nao_ha_desistencia(client, pg_pool, test_seller, asaas_falso):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor(), status="PENDING")]
+    assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
+
+
+async def test_pagamento_de_outro_contrato_nao_abre_a_desistencia(
+    client, pg_pool, test_seller, asaas_falso
+):
+    """Recontratação: o pagamento recente de um checkout antigo não é deste contrato."""
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [
+        _pago("pay_velho", hoje_do_vendedor(), checkout="chk_antigo", assinatura="sub_antiga")
+    ]
+    assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
+
+
+async def test_desistir_encerra_estorna_e_corta_o_acesso(client, pg_pool, test_seller, asaas_falso):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor() - timedelta(days=2))]
+
+    resp = client.post("/conta/desistir", headers=_auth(user_id))
+
+    assert resp.status_code == 200
+    escritas = [(m, c) for m, c, _ in asaas_falso.pedidos if m != "GET"]
+    assert escritas == [
+        ("DELETE", "/v3/subscriptions/sub_9"),
+        ("POST", "/v3/payments/pay_1/refund"),
+    ]
+    linha = await _assinatura(pg_pool, seller_id)
+    assert linha["cancelada_em"] is not None
+    assert linha["acesso_ate"] <= datetime.now(UTC)
+    assert client.get("/conta/acesso", headers=_auth(user_id)).json()["plano"] is None
+
+
+async def test_o_estorno_que_chega_depois_nao_devolve_o_acesso(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor())]
+    client.post("/conta/desistir", headers=_auth(user_id))
+    await eventos.processa(
+        pg_pool,
+        {
+            "id": "evt_ref",
+            "event": "PAYMENT_REFUNDED",
+            "payment": {"id": "pay_1", "subscription": "sub_9", "customer": "cus_1"},
+        },
+    )
+    assert client.get("/conta/acesso", headers=_auth(user_id)).json()["plano"] is None
+
+
+async def test_desistir_do_anual_estorna_o_pagamento_unico(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id, ciclo="anual")
+    asaas_falso.pagamentos = [
+        _pago("pay_a", hoje_do_vendedor() - timedelta(days=1), status="RECEIVED", assinatura=None)
+    ]
+    resp = client.post("/conta/desistir", headers=_auth(user_id))
+    assert resp.status_code == 200
+    escritas = [(m, c) for m, c, _ in asaas_falso.pedidos if m != "GET"]
+    assert escritas == [("POST", "/v3/payments/pay_a/refund")]
+
+
+async def test_estorno_recusado_deixa_cancelado_e_avisa(client, pg_pool, test_seller, asaas_falso):
+    """A recorrência já foi encerrada: a conta fica cancelada como num cancelamento
+    comum, com o período pago, e a recusa diz que o estorno ficou pendente."""
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    asaas_falso.pagamentos = [_pago("pay_1", hoje_do_vendedor())]
+    asaas_falso.estorno_falha = True
+
+    resp = client.post("/conta/desistir", headers=_auth(user_id))
+
+    assert resp.status_code == 502
+    assert resp.json()["detail"]["codigo"] == "estorno-pendente"
+    linha = await _assinatura(pg_pool, seller_id)
+    assert linha["cancelada_em"] is not None
+    assert linha["acesso_ate"] == linha["pago_ate"]
+
+
+async def test_plano_dado_a_mao_nao_tem_desistencia(client, test_seller, asaas_falso):
+    user_id, _ = test_seller
+    assert client.get("/conta/desistencia", headers=_auth(user_id)).json() == {"ate": None}
+    assert client.post("/conta/desistir", headers=_auth(user_id)).status_code == 409
+    assert asaas_falso.pedidos == []

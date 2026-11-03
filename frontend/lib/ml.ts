@@ -143,6 +143,16 @@ export async function trocarPlano(plano: Contratacao["plano"]): Promise<void> {
   }
 }
 
+export async function desistirDaCompra(): Promise<void> {
+  const resposta = await fetch(`${BASE}/conta/desistir`, {
+    method: "POST",
+    headers: await autorizacao(),
+  });
+  if (!resposta.ok) {
+    throw new Error(await mensagemDeRecusa(resposta, "Não foi possível desistir agora."));
+  }
+}
+
 export async function cancelarAssinatura(): Promise<void> {
   const resposta = await fetch(`${BASE}/conta/cancelar`, {
     method: "POST",

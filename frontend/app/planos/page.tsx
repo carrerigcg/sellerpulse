@@ -26,6 +26,7 @@ export default async function PlanosPage({ searchParams }: PageProps<"/planos">)
   const motivo = (await searchParams).motivo;
   const venceu = motivo === "vencido";
   const encerrou = motivo === "encerrado";
+  const desistiu = motivo === "desistiu";
   const vendasAbertas = vitrineComVendasAbertas();
   const comoVoltar = vendasAbertas
     ? "assine de novo e tudo volta como estava."
@@ -58,6 +59,20 @@ export default async function PlanosPage({ searchParams }: PageProps<"/planos">)
               .
             </p>
             {cobrancaViva && <CancelarCobranca motivo="vencido" />}
+          </div>
+        )}
+
+        {desistiu && (
+          <div
+            role="status"
+            className="mt-8 rounded-xl border border-line bg-surface px-4 py-3 text-sm leading-relaxed"
+          >
+            <p className="font-semibold">Você desistiu da compra.</p>
+            <p className="mt-1 text-muted">
+              Pedimos ao Asaas o estorno do valor inteiro, pelo mesmo meio de pagamento. O prazo
+              para ele aparecer depende do seu banco ou cartão. Os seus dados continuam
+              guardados: {comoVoltar}
+            </p>
           </div>
         )}
 
