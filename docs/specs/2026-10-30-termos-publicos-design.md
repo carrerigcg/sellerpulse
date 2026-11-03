@@ -1,6 +1,6 @@
 # Termos de Uso e Política de Privacidade publicados
 
-Estado: no ar desde 2026-10-30 (#37). Um teste recusa o texto enquanto houver
+Estado: no ar desde 2026-10-30 (#37); pendências da revisão fechadas em 2026-11-03 (#44). Um teste recusa o texto enquanto houver
 `[DADO: ...]`. Publicar não abre as vendas.
 
 ## Por quê
