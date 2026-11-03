@@ -1,6 +1,6 @@
 # Exclusão de conta a pedido
 
-Estado: em revisão. Etapa 7 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
+Estado: no ar desde 2026-11-03 (#40). Nenhuma conta real excluída ainda. Etapa 7 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## Por quê
 
