@@ -60,11 +60,17 @@ def _suite_nunca_fala_com_producao():
     """
     anteriores = {
         chave: os.environ.get(chave)
-        for chave in ("DATABASE_URL", "DEMO_SELLER_ID", "DEMO_REFRESH_IN_PROCESS")
+        for chave in (
+            "DATABASE_URL",
+            "DEMO_SELLER_ID",
+            "DEMO_REFRESH_IN_PROCESS",
+            "RETENCAO_IN_PROCESS",
+        )
     }
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
     os.environ.pop("DEMO_SELLER_ID", None)
     os.environ["DEMO_REFRESH_IN_PROCESS"] = "0"
+    os.environ["RETENCAO_IN_PROCESS"] = "0"
     yield
     for chave, anterior in anteriores.items():
         if anterior is None:

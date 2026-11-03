@@ -141,7 +141,8 @@ com a LGPD.
   ativo. A credencial do Mercado Livre é apagada 30 dias depois do fim do plano.
 - **Ao desconectar o Mercado Livre**, apagamos imediatamente a credencial de
   acesso e paramos de buscar dados novos. Os dados já importados continuam,
-  para você não perder o histórico, até você pedir a exclusão.
+  para você não perder o histórico, até você pedir a exclusão ou completar
+  12 meses sem plano ativo.
 - **Ao pedir a exclusão da conta**, apagamos a conta e os dados ligados a ela em
   até **30 dias**. Cópias de segurança dos fornecedores, se existirem, expiram no prazo de cada um.
 - **Mantemos pelo prazo legal** o que a lei obrigar ou o que for preciso para
