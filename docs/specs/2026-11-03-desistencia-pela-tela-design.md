@@ -1,6 +1,6 @@
 # Desistência pela tela
 
-Estado: em revisão. Etapa 10 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
+Estado: no ar desde 2026-11-03 (#45); estorno real ainda não provado. Etapa 10 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## Por quê
 
