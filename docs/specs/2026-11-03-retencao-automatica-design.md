@@ -18,6 +18,10 @@ de acesso por 6 meses e a prova de conta excluída por 5 anos.
   período pago. Plano dado à mão (`acesso_ate` nulo) e a demonstração não vencem.
 - **Aos 12 meses sai o dado da loja, não a conta.** Quem voltar reconecta, e a marca
   d'água volta a nulo para a ingestão inicial trazer o histórico de novo.
+- **Sem a credencial, a conta volta a "não conectada"** (`ml_seller_id` nulo), para a tela
+  oferecer a conexão e o worker não tentar sincronizar sem token.
+- **Uma transação por etapa**, e a lista de vencidos trava a linha da assinatura: um
+  pagamento que chegue no meio da limpeza espera e não perde os dados.
 - **Lista fechada do que sai e do que fica**, com um teste que cai quando uma tabela nova
   com `seller_id` não entra em nenhuma das duas.
 - **Prova de conta excluída sai aos 5 anos**, contados de `contas_excluidas.excluida_em`.

@@ -56,6 +56,7 @@ async def test_toda_tabela_de_vendedor_tem_destino_decidido(pg_pool):
     [
         ("29 days", 1, 1),
         ("31 days", 0, 1),
+        ("11 months 28 days", 0, 1),
         ("13 months", 0, 0),
         (None, 1, 1),
     ],
@@ -70,6 +71,19 @@ async def test_prazos_contam_do_fim_do_plano(pg_pool, test_seller, fim, token, p
     # A conta e a prova ficam sempre.
     assert await _conta(pg_pool, "assinaturas", seller_id) == 1
     assert await _conta(pg_pool, "aceites_de_termos", seller_id) == 1
+
+
+async def test_sem_a_credencial_a_tela_volta_a_oferecer_a_conexao(pg_pool, test_seller):
+    _, seller_id = test_seller
+    await _com_token_e_pedido(pg_pool, seller_id)
+    async with pg_pool.acquire() as conn:
+        await conn.execute("UPDATE sellers SET ml_seller_id = 987 WHERE id = $1", seller_id)
+    await _fim_do_plano(pg_pool, seller_id, "31 days")
+    await retencao.aplica_retencao(pg_pool)
+    async with pg_pool.acquire() as conn:
+        assert (
+            await conn.fetchval("SELECT ml_seller_id FROM sellers WHERE id = $1", seller_id) is None
+        )
 
 
 async def test_sem_os_dados_a_volta_traz_a_ingestao_inicial(pg_pool, test_seller):
@@ -110,10 +124,11 @@ async def test_registro_de_acesso_e_prova_prescritos(pg_pool):
     async with pg_pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO registros_de_acesso (user_id, ip, hora) VALUES "
-            "($1, 'velho', now() - interval '6 months 2 hours'), ($1, 'novo', now())",
+            "($1, 'velho', now() - interval '6 months 2 hours'), "
+            "($1, 'quase', now() - interval '5 months 28 days')",
             user_id,
         )
-        for seller_id, quando in ((velho, "5 years 1 day"), (recente, "4 years")):
+        for seller_id, quando in ((velho, "5 years 1 day"), (recente, "4 years 11 months")):
             await conn.execute(
                 "INSERT INTO contas_excluidas (seller_id, user_id, excluida_em) "
                 f"VALUES ($1, $2, now() - interval '{quando}')",
@@ -122,6 +137,12 @@ async def test_registro_de_acesso_e_prova_prescritos(pg_pool):
             )
             await conn.execute(
                 "INSERT INTO aceites_de_termos (seller_id, versao) VALUES ($1, 'v')", seller_id
+            )
+            await conn.execute(
+                "INSERT INTO checkouts (id, seller_id, plano, ciclo) "
+                "VALUES ($1, $2, 'essencial', 'mensal')",
+                f"chk_{seller_id}",
+                seller_id,
             )
         try:
             saiu = await retencao.aplica_retencao(pg_pool)
@@ -138,14 +159,24 @@ async def test_registro_de_acesso_e_prova_prescritos(pg_pool):
                     [velho, recente],
                 )
             }
+            checkouts = {
+                r["seller_id"]
+                for r in await conn.fetch(
+                    "SELECT seller_id FROM checkouts WHERE seller_id = ANY($1::uuid[])",
+                    [velho, recente],
+                )
+            }
         finally:
             await conn.execute("DELETE FROM registros_de_acesso WHERE user_id = $1", user_id)
             await conn.execute("DELETE FROM contas_excluidas WHERE user_id = $1", user_id)
-            await conn.execute(
-                "DELETE FROM aceites_de_termos WHERE seller_id = ANY($1::uuid[])", [velho, recente]
-            )
-    assert ips == ["novo"]
+            for tabela in ("aceites_de_termos", "checkouts"):
+                await conn.execute(
+                    f"DELETE FROM {tabela} WHERE seller_id = ANY($1::uuid[])", [velho, recente]
+                )
+    # O Marco Civil pede ao menos 6 meses: o quase vencido fica.
+    assert ips == ["quase"]
     assert restam == {recente}
+    assert checkouts == {recente}
     assert saiu["contas_excluidas"] == 1
 
 

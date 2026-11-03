@@ -43,38 +43,53 @@ FICAM = ("sellers", "assinaturas", "aceites_de_termos", "checkouts", "contas_exc
 
 UM_DIA = 24 * 60 * 60
 
+# FOR UPDATE: o pagamento de uma recontratação que chegue no meio da limpeza
+# espera ela terminar e, depois, encontra o prazo já renovado na própria linha.
 _VENCIDOS = """
     SELECT a.seller_id FROM assinaturas a JOIN sellers s ON s.id = a.seller_id
      WHERE NOT s.is_demo AND a.acesso_ate < now() - $1::text::interval
+       FOR UPDATE OF a
 """
 
 
 async def aplica_retencao(pool: asyncpg.Pool) -> dict[str, int]:
-    """Apaga o que passou do prazo e devolve quantas linhas saíram de cada lugar."""
-    saiu: dict[str, int] = {}
-    async with pool.acquire() as conn, conn.transaction():
-        sem_token = [r["seller_id"] for r in await conn.fetch(_VENCIDOS, "30 days")]
-        saiu["credenciais"] = _total(
-            await conn.execute(
-                "DELETE FROM oauth_tokens WHERE seller_id = ANY($1::uuid[])", sem_token
-            )
-        )
+    """Apaga o que passou do prazo e devolve quantas linhas saíram de cada lugar.
 
-        sem_dados = [r["seller_id"] for r in await conn.fetch(_VENCIDOS, "12 months")]
-        for tabela in DADOS_DA_LOJA:
-            total = _total(
+    Uma transação por etapa: um vendedor grande que estoure o tempo não pode
+    desfazer também a limpeza do registro de acesso, que é obrigação legal.
+    """
+    saiu: dict[str, int] = {}
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            sem_token = [r["seller_id"] for r in await conn.fetch(_VENCIDOS, "30 days")]
+            saiu["credenciais"] = _total(
                 await conn.execute(
-                    f"DELETE FROM {tabela} WHERE seller_id = ANY($1::uuid[])",  # noqa: S608
-                    sem_dados,
+                    "DELETE FROM oauth_tokens WHERE seller_id = ANY($1::uuid[])", sem_token
                 )
             )
-            if total:
-                saiu[tabela] = total
-        # Sem a marca d'água, quem voltar e reconectar recebe a ingestão inicial, e
-        # não um delta sobre um histórico que já não existe.
-        await conn.execute(
-            "UPDATE sellers SET last_synced_at = NULL WHERE id = ANY($1::uuid[])", sem_dados
-        )
+            # A tela diz "conectado" pelo `ml_seller_id`. Sem zerar, quem voltasse a
+            # pagar veria "Conectado como X", sem o botão de conectar, e o worker
+            # falharia sem credencial. O callback grava de novo e pede a ingestão.
+            await conn.execute(
+                "UPDATE sellers SET ml_seller_id = NULL WHERE id = ANY($1::uuid[])", sem_token
+            )
+
+        async with conn.transaction():
+            sem_dados = [r["seller_id"] for r in await conn.fetch(_VENCIDOS, "12 months")]
+            for tabela in DADOS_DA_LOJA:
+                total = _total(
+                    await conn.execute(
+                        f"DELETE FROM {tabela} WHERE seller_id = ANY($1::uuid[])",  # noqa: S608
+                        sem_dados,
+                    )
+                )
+                if total:
+                    saiu[tabela] = total
+            # Sem a marca d'água, quem voltar e reconectar recebe a ingestão inicial,
+            # e não um delta sobre um histórico que já não existe.
+            await conn.execute(
+                "UPDATE sellers SET last_synced_at = NULL WHERE id = ANY($1::uuid[])", sem_dados
+            )
 
         # A mesma folga de 1 hora do endpoint: `hora` guarda o começo do período.
         saiu["registros_de_acesso"] = _total(
@@ -83,21 +98,22 @@ async def aplica_retencao(pool: asyncpg.Pool) -> dict[str, int]:
             )
         )
 
-        prescritas = [
-            r["seller_id"]
-            for r in await conn.fetch(
-                "DELETE FROM contas_excluidas WHERE excluida_em < now() - interval '5 years' "
-                "RETURNING seller_id"
-            )
-        ]
-        for tabela in ("aceites_de_termos", "checkouts"):
-            saiu[tabela] = _total(
-                await conn.execute(
-                    f"DELETE FROM {tabela} WHERE seller_id = ANY($1::uuid[])",  # noqa: S608
-                    prescritas,
+        async with conn.transaction():
+            prescritas = [
+                r["seller_id"]
+                for r in await conn.fetch(
+                    "DELETE FROM contas_excluidas WHERE excluida_em < now() - interval '5 years' "
+                    "RETURNING seller_id"
                 )
-            )
-        saiu["contas_excluidas"] = len(prescritas)
+            ]
+            for tabela in ("aceites_de_termos", "checkouts"):
+                saiu[tabela] = _total(
+                    await conn.execute(
+                        f"DELETE FROM {tabela} WHERE seller_id = ANY($1::uuid[])",  # noqa: S608
+                        prescritas,
+                    )
+                )
+            saiu["contas_excluidas"] = len(prescritas)
     return {chave: total for chave, total in saiu.items() if total}
 
 
