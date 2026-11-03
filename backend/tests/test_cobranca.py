@@ -21,7 +21,7 @@ from backend.pagamentos import asaas, eventos
 from backend.pagamentos.prazos import fim_do_periodo, hoje_do_vendedor, meia_noite_do_vendedor
 from backend.planos import PLANOS, VERSAO_DOS_TERMOS
 
-from .conftest import da_plano
+from .conftest import apaga_usuario, da_plano
 from .test_routers_ml import SEGREDO, _auth, _cabecalho, _conectado
 from .test_routers_ml import client as _client_ml
 
@@ -94,7 +94,7 @@ async def sem_plano(pg_pool):
         )
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
-        await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+        await apaga_usuario(conn, user_id)
 
 
 def _contratacao(**muda) -> dict:

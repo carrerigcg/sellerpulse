@@ -101,6 +101,17 @@ async def da_plano(conn, seller_id, plano: str = "exclusive", *, aceita: bool = 
         )
 
 
+async def apaga_usuario(conn, user_id) -> None:
+    """Apaga o usuário de teste e o que sobrevive a ele de propósito (0021).
+
+    A prova do aceite e o checkout não cascateiam mais da conta. Sem limpar os
+    órfãos, o `chk_1` de um teste colide com o do seguinte.
+    """
+    await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+    for tabela in ("aceites_de_termos", "checkouts"):
+        await conn.execute(f"DELETE FROM {tabela} WHERE seller_id NOT IN (SELECT id FROM sellers)")
+
+
 @pytest.fixture
 async def test_seller(pg_pool):
     """Cria um auth.users + sellers de teste, devolve (user_id, seller_id).
@@ -125,7 +136,7 @@ async def test_seller(pg_pool):
         await da_plano(conn, seller_id, "premium")
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
-        await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+        await apaga_usuario(conn, user_id)
 
 
 @pytest.fixture
@@ -142,7 +153,7 @@ async def outro_seller(pg_pool):
         await da_plano(conn, seller_id)
     yield user_id, seller_id
     async with pg_pool.acquire() as conn:
-        await conn.execute("DELETE FROM auth.users WHERE id = $1", user_id)
+        await apaga_usuario(conn, user_id)
 
 
 @pytest.fixture
