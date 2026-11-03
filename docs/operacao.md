@@ -183,3 +183,60 @@ porque o Git Bash reescreve as barras invertidas nos argumentos.
 
 Configuração nova de hook só vale numa sessão nova, ou quando o Claude Code
 recarrega o `.claude/settings.json`.
+
+## 9. Estorno, contestação e exclusão a pedido
+
+O que os Termos (seções 8 e 12) e a Política (seção 7) prometem, e como
+cumprir. Mexer na conta Asaas é do Guilherme. Escrita no banco segue a seção 6.
+
+**Achar a conta.** O pedido chega por e-mail ou WhatsApp. Leitura, livre:
+
+```sql
+select s.id as seller_id, u.id as user_id, a.plano, a.ciclo, a.pago_ate,
+       a.acesso_ate, a.cancelada_em
+  from auth.users u
+  join sellers s on s.user_id = u.id
+  left join assinaturas a on a.seller_id = s.id
+ where u.email = '<e-mail do pedido>';
+```
+
+**Arrependimento, em até 7 dias** da contratação ou do primeiro pagamento:
+valor integral, pelo mesmo meio.
+
+1. Conferir a data no Asaas. Passou de 7 dias: vai para "Fora do prazo".
+2. **Mensal: cancelar a assinatura antes.** Pela tela "Minha assinatura" ou
+   removendo a assinatura no Asaas. Estornar sem cancelar deixa a próxima
+   cobrança de pé.
+3. Estornar a cobrança inteira no painel do Asaas.
+4. O aviso `PAYMENT_REFUNDED` encurta o acesso para hoje mais a tolerância de
+   7 dias (`_dinheiro_devolvido`, em `backend/pagamentos/eventos.py`). Conferir
+   `acesso_ate` com a consulta acima.
+5. Responder a pessoa com o valor e o prazo do Asaas para o dinheiro voltar.
+
+**Fora do prazo.** Os Termos não preveem reembolso, salvo o que a lei exigir ou
+falha nossa que impeça o uso. O estorno proporcional do anual ainda não está
+nos Termos: até a frase entrar, revisada pelo advogado, ele não é prometido.
+
+**Contestação no cartão** (`PAYMENT_CHARGEBACK_REQUESTED`). O acesso já é
+encurtado sozinho e o log do Render registra `[asaas] PAYMENT_CHARGEBACK_REQUESTED`.
+Defender pelo Asaas, no prazo dele, com:
+
+```sql
+select versao, aceito_em, ip, user_agent from aceites_de_termos
+ where seller_id = '<seller_id>' order by aceito_em;
+select ip, hora from registros_de_acesso
+ where user_id = '<user_id>' order by hora desc limit 50;
+```
+
+**Exclusão da conta: em até 30 dias** (Política, seção 7).
+
+- **Não apague a conta à mão.** `aceites_de_termos` e `checkouts` cascateiam de
+  `sellers`, e apagar a conta leva junto a prova do aceite, que a Política
+  promete por 5 anos. O registro de acesso sobrevive, porque não tem chave
+  estrangeira.
+- Até existir o comando de exclusão que preserva a prova:
+  1. anotar a data do pedido, porque o prazo conta dela;
+  2. cancelar a assinatura, se houver;
+  3. desconectar o Mercado Livre (`DELETE /ml/connection`), o que apaga a
+     credencial na hora;
+  4. responder com a data e o prazo.
