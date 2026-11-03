@@ -293,6 +293,14 @@ async def _dono(
 
 
 async def _pagamento_confirmado(conn, pagamento: dict, hoje: date) -> str:
+    # Desistência feita antes de este aviso chegar (o botão olha o Asaas na
+    # hora): o pagamento já foi devolvido, e estender o prazo daria de graça o
+    # período inteiro a quem recebeu o dinheiro de volta.
+    if await conn.fetchval(
+        "SELECT true FROM eventos_do_gateway WHERE id = $1",
+        f"desistencia:{pagamento.get('id')}",
+    ):
+        return "estornado-na-desistencia"
     assinatura = _id_de(pagamento.get("subscription"))
     cliente = _id_de(pagamento.get("customer"))
     checkout_id = pagamento.get("checkoutSession")

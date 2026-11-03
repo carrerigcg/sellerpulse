@@ -14,10 +14,11 @@ docs/specs/2026-10-29-cobranca-asaas-design.md.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request
@@ -451,3 +452,150 @@ async def post_cancelar(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
             seller_id,
         )
     return {"acesso_ate": _iso(linha["pago_ate"])}
+
+
+# ---------- desistência (arrependimento de 7 dias) ----------
+
+# CDC, art. 49, e seção 8 dos Termos: 7 dias contados do primeiro pagamento.
+DIAS_PARA_DESISTIR = 7
+_PAGOS = frozenset({"CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"})
+
+
+def _dia_do_pagamento(pagamento: dict) -> date | None:
+    # A data mais cedo que o Asaas der: o prazo conta a favor de quem desiste
+    # só se não for empurrado para depois do pagamento de verdade.
+    dias = [pagamento.get(c) for c in ("confirmedDate", "paymentDate", "clientPaymentDate")]
+    validos = [date.fromisoformat(d) for d in dias if d]
+    return min(validos) if validos else None
+
+
+async def _desistencia(pool, seller_id: uuid.UUID):
+    """`(linha, pagamentos a estornar, último dia para desistir ou None)`.
+
+    Só os pagamentos do contrato atual: o checkout vigente, ou a assinatura
+    vigente. Um cliente que recontratou tem no Asaas os pagamentos dos dois
+    contratos, e o pagamento antigo não abre o prazo do novo.
+    """
+    async with pool.acquire() as conn:
+        linha = await conn.fetchrow(
+            "SELECT origem, ciclo, checkout_id, asaas_cliente, asaas_assinatura, cancelada_em "
+            "FROM assinaturas WHERE seller_id = $1",
+            seller_id,
+        )
+    if linha is None or linha["origem"] != "gateway" or not linha["asaas_cliente"]:
+        return linha, [], None
+    try:
+        todos = await asaas.pagamentos_do_cliente(linha["asaas_cliente"])
+    except asaas.AsaasErro as erro:
+        _log.error("[asaas] consulta de pagamentos recusada: %s", erro)
+        raise recusa(
+            502, "gateway-recusou", "Não foi possível consultar os pagamentos agora."
+        ) from erro
+    do_contrato = [
+        p
+        for p in todos
+        if (linha["checkout_id"] and p.get("checkoutSession") == linha["checkout_id"])
+        or (linha["asaas_assinatura"] and p.get("subscription") == linha["asaas_assinatura"])
+    ]
+    # O prazo conta do primeiro pagamento, mesmo que ele já tenha sido estornado.
+    dias = [d for p in do_contrato if (d := _dia_do_pagamento(p)) is not None]
+    a_estornar = [p for p in do_contrato if p.get("status") in _PAGOS]
+    if not dias:
+        return linha, a_estornar, None
+    ultimo = min(dias) + timedelta(days=DIAS_PARA_DESISTIR)
+    return linha, a_estornar, ultimo if hoje_do_vendedor() <= ultimo else None
+
+
+@router.get("/desistencia")
+async def get_desistencia(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
+    """O último dia para desistir com o valor de volta, ou `None` se não há o que desistir."""
+    _, a_estornar, ultimo = await _desistencia(await get_pool(), seller_id)
+    return {"ate": ultimo.isoformat() if ultimo and a_estornar else None}
+
+
+@router.post("/desistir")
+async def post_desistir(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
+    """Encerra a recorrência, estorna os pagamentos do contrato e corta o acesso.
+
+    Nessa ordem: sem a recorrência encerrada, um estorno feito antes deixaria a
+    próxima cobrança viva. O acesso só acaba depois do estorno, porque quem não
+    recebeu o dinheiro de volta ainda pagou pelo período.
+    """
+    pool = await get_pool()
+    linha, a_estornar, ultimo = await _desistencia(pool, seller_id)
+    if linha is None or linha["origem"] != "gateway":
+        raise recusa(409, "sem-assinatura", "Seu plano não tem pagamento para devolver.")
+    if ultimo is None:
+        raise recusa(
+            409,
+            "fora-do-prazo",
+            "O prazo de 7 dias para desistir já passou. Você ainda pode cancelar a assinatura.",
+        )
+    if not a_estornar:
+        raise recusa(409, "ja-devolvido", "Os pagamentos desta assinatura já foram devolvidos.")
+
+    if _mensal_viva(linha):
+        _, assinatura = await _id_da_assinatura(pool, seller_id)
+        if assinatura is not None:
+            try:
+                await asaas.remover_assinatura(assinatura)
+            except asaas.AsaasErro as erro:
+                _log.error("[asaas] desistencia: cancelamento recusado: %s", erro)
+                raise recusa(502, "gateway-recusou", "Não foi possível desistir agora.") from erro
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE assinaturas SET cancelada_em = COALESCE(cancelada_em, now()), "
+            "acesso_ate = LEAST(acesso_ate, pago_ate), plano_no_proximo_ciclo = NULL "
+            "WHERE seller_id = $1",
+            seller_id,
+        )
+
+    for pagamento in a_estornar:
+        try:
+            estorno = await asaas.estornar_pagamento(pagamento["id"])
+        except asaas.AsaasErro as erro:
+            _log.error(
+                "[asaas] desistencia: estorno do pagamento %s recusado (seller %s), "
+                "estornar no painel do Asaas: %s",
+                pagamento["id"],
+                seller_id,
+                erro,
+            )
+            raise recusa(
+                502,
+                "estorno-pendente",
+                "A assinatura foi cancelada, mas o estorno não saiu agora. "
+                "Já fomos avisados e vamos devolver o valor.",
+            ) from erro
+        # A marca que impede o aviso atrasado deste pagamento de devolver o
+        # acesso (`_pagamento_confirmado`). Mora no log de eventos, sem coluna nova.
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO eventos_do_gateway (id, tipo, payload) VALUES ($1, $2, $3::jsonb) "
+                "ON CONFLICT (id) DO NOTHING",
+                f"desistencia:{pagamento['id']}",
+                "DESISTENCIA",
+                json.dumps({"payment": pagamento["id"], "seller": str(seller_id)}),
+            )
+        # Uma conta que exige autorização de ação crítica deixa o estorno parado
+        # até o dono aprovar no painel: o status vai para o log.
+        _log.warning(
+            "[asaas] desistencia: estorno do pagamento %s com status %s",
+            pagamento["id"],
+            estorno.get("status"),
+        )
+
+    async with pool.acquire() as conn:
+        # O dinheiro voltou inteiro: não sobra período pago. O `PAYMENT_REFUNDED`
+        # que chega depois só encurta (`LEAST`), e não devolve a tolerância.
+        await conn.execute(
+            "UPDATE assinaturas SET acesso_ate = now(), pago_ate = LEAST(pago_ate, now()) "
+            "WHERE seller_id = $1",
+            seller_id,
+        )
+    _log.warning(
+        "[asaas] desistencia do seller %s: %d pagamento(s) estornado(s)",
+        seller_id,
+        len(a_estornar),
+    )
+    return {"estornados": len(a_estornar)}

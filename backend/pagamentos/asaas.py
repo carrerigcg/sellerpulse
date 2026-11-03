@@ -148,3 +148,18 @@ async def assinaturas_ativas_do_cliente(cliente: str) -> list[str]:
     """
     resposta = await _pede("GET", f"/subscriptions?customer={cliente}&status=ACTIVE")
     return [item["id"] for item in resposta.get("data", []) if item.get("id")]
+
+
+async def pagamentos_do_cliente(cliente: str) -> list[dict]:
+    """Os pagamentos de um cliente do Asaas, de qualquer situação.
+
+    Quem chama separa os do contrato atual: um cliente que recontratou tem os
+    pagamentos dos dois contratos aqui.
+    """
+    resposta = await _pede("GET", f"/payments?customer={cliente}&limit=100")
+    return resposta.get("data", [])
+
+
+async def estornar_pagamento(pagamento: str) -> dict:
+    """Estorno do valor inteiro, pelo mesmo meio do pagamento."""
+    return await _pede("POST", f"/payments/{pagamento}/refund")

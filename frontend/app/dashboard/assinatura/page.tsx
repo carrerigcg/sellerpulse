@@ -1,9 +1,12 @@
-import { getAcesso } from "@/lib/api";
+import { Suspense } from "react";
+
+import { getAcesso, getDesistencia } from "@/lib/api";
 import { NOMES_DOS_PLANOS, diaDe, ultimoDia } from "@/lib/plano";
 import { PRECOS_MENSAIS, formatarPreco, precoAnual } from "@/lib/precos";
 
 import { AcoesDaAssinatura } from "./acoes";
 import { CabecalhoSimples } from "./cabecalho";
+import { Desistir } from "./desistir";
 
 /**
  * Minha assinatura: o plano, até quando está pago, e trocar ou cancelar.
@@ -90,6 +93,12 @@ export default async function AssinaturaPage() {
         )}
       </section>
 
+      {assinatura?.origem === "gateway" && (
+        // Em Suspense: a consulta ao Asaas não segura o resto da tela.
+        <Suspense fallback={null}>
+          <SecaoDeDesistencia />
+        </Suspense>
+      )}
       {assinatura?.origem === "gateway" && assinatura.recorrente && (
         <AcoesDaAssinatura plano={plano} proximoPlano={proximoPlano} />
       )}
@@ -101,4 +110,14 @@ export default async function AssinaturaPage() {
       )}
     </>
   );
+}
+
+/**
+ * Pergunta ao Asaas se o prazo de desistência está aberto. Se ele não
+ * responder, a seção não aparece, e o caminho é o contato, como antes.
+ */
+async function SecaoDeDesistencia() {
+  const desistencia = await getDesistencia().catch(() => null);
+  if (!desistencia?.ate) return null;
+  return <Desistir ate={desistencia.ate.split("-").reverse().join("/")} />;
 }
