@@ -1,6 +1,6 @@
 # Retenção automática
 
-Estado: em revisão. Etapa 8 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
+Estado: código no ar desde 2026-11-03 (#42). Desligado até `RETENCAO_IN_PROCESS=1` no Render. Etapa 8 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## Por quê
 
