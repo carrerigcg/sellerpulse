@@ -25,6 +25,9 @@ de acesso por 6 meses e a prova de conta excluída por 5 anos.
 - **Lista fechada do que sai e do que fica**, com um teste que cai quando uma tabela nova
   com `seller_id` não entra em nenhuma das duas.
 - **Prova de conta excluída sai aos 5 anos**, contados de `contas_excluidas.excluida_em`.
+- **Eventos do Asaas saem aos 5 anos do recebimento** (`recebido_em`): são os "registros
+  da cobrança" que a Política guarda por 5 anos. O evento não tem `seller_id`, então o
+  prazo é o mesmo para todos, com ou sem conta.
 
 ## Medido em produção (2026-11-03)
 
@@ -33,4 +36,4 @@ credencial nem pedidos; a conta do dono tem plano manual.
 
 ## Fora desta spec
 
-- Retenção de `eventos_do_gateway` (etapa 5).
+- Cópias de segurança: o Supabase Free não tem, e o backup ficou para depois.

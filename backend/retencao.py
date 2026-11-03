@@ -6,6 +6,7 @@
   reconecta e a ingestão traz o histórico de novo.
 - O registro de acesso sai aos 6 meses, mesmo de quem não voltou a entrar.
 - A prova do aceite e os checkouts de conta excluída saem aos 5 anos.
+- Os eventos do Asaas saem aos 5 anos do recebimento.
 
 "Fim do plano" é `assinaturas.acesso_ate`. Plano dado à mão (`acesso_ate` nulo) e a
 conta de demonstração nunca vencem. Desenho em
@@ -116,6 +117,14 @@ async def aplica_retencao(pool: asyncpg.Pool) -> dict[str, int]:
                     )
                 )
             saiu["contas_excluidas"] = len(prescritas)
+
+        # Os "registros da cobrança" que a Política guarda por 5 anos. O evento
+        # não tem vendedor: o prazo conta do recebimento, para todos.
+        saiu["eventos_do_gateway"] = _total(
+            await conn.execute(
+                "DELETE FROM eventos_do_gateway WHERE recebido_em < now() - interval '5 years'"
+            )
+        )
     return {chave: total for chave, total in saiu.items() if total}
 
 

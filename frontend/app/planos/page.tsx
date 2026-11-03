@@ -57,7 +57,7 @@ export default async function PlanosPage({ searchParams }: PageProps<"/planos">)
               </a>
               .
             </p>
-            {cobrancaViva && <CancelarCobranca />}
+            {cobrancaViva && <CancelarCobranca motivo="vencido" />}
           </div>
         )}
 

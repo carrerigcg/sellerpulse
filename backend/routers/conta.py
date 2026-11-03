@@ -284,6 +284,15 @@ class Troca(BaseModel):
     plano: NomeDoPlano
 
 
+def _mensal_viva(linha) -> bool:
+    return (
+        linha is not None
+        and linha["origem"] == "gateway"
+        and linha["ciclo"] == "mensal"
+        and linha["cancelada_em"] is None
+    )
+
+
 async def _id_da_assinatura(pool, seller_id: uuid.UUID):
     """`(linha, id da assinatura no Asaas)` de uma assinatura mensal não cancelada.
 
@@ -298,12 +307,7 @@ async def _id_da_assinatura(pool, seller_id: uuid.UUID):
             "cancelada_em, plano_no_proximo_ciclo FROM assinaturas WHERE seller_id = $1",
             seller_id,
         )
-    if (
-        linha is None
-        or linha["origem"] != "gateway"
-        or linha["ciclo"] != "mensal"
-        or linha["cancelada_em"] is not None
-    ):
+    if not _mensal_viva(linha):
         return linha, None
     if linha["asaas_assinatura"]:
         return linha, linha["asaas_assinatura"]
@@ -417,12 +421,27 @@ async def post_cancelar(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
     cobrança.
     """
     pool = await get_pool()
-    linha, assinatura = await _assinatura_recorrente(pool, seller_id)
-    try:
-        await asaas.remover_assinatura(assinatura)
-    except asaas.AsaasErro as erro:
-        _log.error("[asaas] cancelamento recusado: %s", erro)
-        raise recusa(502, "gateway-recusou", "Não foi possível cancelar agora") from erro
+    linha, assinatura = await _id_da_assinatura(pool, seller_id)
+    if assinatura is not None:
+        try:
+            await asaas.remover_assinatura(assinatura)
+        except asaas.AsaasErro as erro:
+            _log.error("[asaas] cancelamento recusado: %s", erro)
+            raise recusa(502, "gateway-recusou", "Não foi possível cancelar agora.") from erro
+    elif not _mensal_viva(linha):
+        raise recusa(
+            409, "sem-assinatura-recorrente", "Seu plano não tem cobrança mensal para cancelar."
+        )
+    elif not linha["asaas_cliente"]:
+        # Sem o cliente, daqui não se acha a cobrança, e marcar como cancelado
+        # esconderia o botão de uma cobrança que pode continuar viva.
+        raise recusa(
+            409,
+            "assinatura-nao-localizada",
+            "Não localizamos a sua assinatura no Asaas, e o cancelamento precisa ser feito por nós.",
+        )
+    # Com o cliente conhecido e nenhuma assinatura ativa lá, o Asaas já não
+    # cobra (o aviso do cancelamento se perdeu): resta encerrar aqui também.
     async with pool.acquire() as conn:
         # Não espera o webhook: quem cancelou precisa ver o prazo certo já.
         # O `SUBSCRIPTION_DELETED` que vier depois faz a mesma conta.

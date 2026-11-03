@@ -27,7 +27,8 @@ export function ResumoDosTermos({ versao }: { versao: string }) {
         </li>
         <li>
           O plano mensal renova sozinho a cada mês, e o anual vale por 12 meses. Você cancela
-          quando quiser, e o acesso continua até o fim do período já pago.
+          quando quiser, e o acesso continua até o fim do período já pago, desde que os
+          termos vigentes estejam aceitos.
         </li>
       </ul>
       <p className="text-xs text-muted">

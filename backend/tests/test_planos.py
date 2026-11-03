@@ -377,6 +377,29 @@ async def test_sincronizacao_diaria_pula_quem_nao_tem_plano(
     assert [r["seller_id"] for r in alvos] == [com_plano]
 
 
+async def test_sincronizacao_diaria_pula_quem_nao_aceitou_os_termos(
+    client, monkeypatch, pg_pool, test_seller
+):
+    # Quem recusou a versão nova não usa o painel: importar seus pedidos seria
+    # tratar dado sem o contrato que autoriza o tratamento.
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    _, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(days=2))
+    # Aceitou uma versão antiga: é o caso real de quem recusa a nova.
+    async with pg_pool.acquire() as conn:
+        await conn.execute("DELETE FROM aceites_de_termos WHERE seller_id = $1", seller_id)
+        await conn.execute(
+            "INSERT INTO aceites_de_termos (seller_id, versao) VALUES ($1, 'versao-antiga')",
+            seller_id,
+        )
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.json()["sellers"] == 0
+    async with pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 0
+
+
 # ---------- /conta: acesso e aceite ----------
 
 

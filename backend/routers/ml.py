@@ -31,7 +31,7 @@ from backend.deps import (
 from backend.jobs import queue
 from backend.ml import oauth
 from backend.ml.tokens import PostgresTokenStore
-from backend.planos import Recurso
+from backend.planos import VERSAO_DOS_TERMOS, Recurso
 from src.ml_client import MLClient
 from src.session_auth import OAuthError, exchange_code_for_tokens, sanitize_oauth_error
 
@@ -253,8 +253,9 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
         # proposito: o criterio que importa e "da pra sincronizar", e e esse.
         # Sem plano, nao sincroniza: e cota da API do ML gasta com conta que
         # nao paga. Plano vencido conta como sem plano, pela mesma regra de
-        # `le_plano_e_aceite`. O dado ingerido fica, e volta a atualizar com o
-        # plano.
+        # `le_plano_e_aceite`. Sem o aceite da versao vigente tambem nao: quem
+        # recusou os Termos nao autorizou o tratamento dos dados novos. O dado
+        # ingerido fica, e volta a atualizar com o plano e o aceite.
         sellers = await conn.fetch(
             """
             SELECT s.id, s.last_synced_at
@@ -262,7 +263,10 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
               JOIN assinaturas a ON a.seller_id = s.id
              WHERE s.ml_seller_id IS NOT NULL
                AND (a.acesso_ate IS NULL OR a.acesso_ate > now())
-            """
+               AND EXISTS (SELECT 1 FROM aceites_de_termos t
+                            WHERE t.seller_id = s.id AND t.versao = $1)
+            """,
+            VERSAO_DOS_TERMOS,
         )
 
     agora = datetime.now(UTC)

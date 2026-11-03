@@ -1,15 +1,27 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { linkDeEmail } from "@/lib/contato";
 import { cancelarAssinatura } from "@/lib/ml";
+
+// Quem chega aqui decide o texto: o inadimplente pode voltar a pagar; quem
+// recusou os Termos precisa saber que o painel segue fechado sem o aceite.
+const EXPLICACAO = {
+  vencido:
+    "A assinatura ainda está ativa no Asaas. Se não pretende voltar, cancele para não receber novas cobranças.",
+  termos:
+    "Se não quiser aceitar, cancele a cobrança mensal. Sem o aceite, o painel continua indisponível; com o cancelamento, você não é cobrado de novo.",
+} as const;
 
 /**
  * Parar a cobrança de quem não chega ao painel, onde fica o "Cancelar": quem ficou
  * inadimplente e quem não aceitou uma versão nova dos Termos. A assinatura continua
  * viva no Asaas: sem este botão, a única saída seria pedir a alguém.
  */
-export function CancelarCobranca() {
+export function CancelarCobranca({ motivo }: { motivo: keyof typeof EXPLICACAO }) {
+  const router = useRouter();
   const [confirmando, setConfirmando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [feito, setFeito] = useState(false);
@@ -21,6 +33,9 @@ export function CancelarCobranca() {
     try {
       await cancelarAssinatura();
       setFeito(true);
+      // No aceite, a página do servidor troca o "plano ativo" pelo prazo que
+      // sobrou. No vencido, nada muda nela, e a confirmação abaixo fica.
+      if (motivo === "termos") router.refresh();
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : "Não foi possível cancelar.");
     } finally {
@@ -38,10 +53,7 @@ export function CancelarCobranca() {
 
   return (
     <div className="mt-3">
-      <p className="text-muted">
-        A assinatura ainda está ativa no Asaas. Se não pretende voltar, cancele para não receber
-        novas cobranças.
-      </p>
+      <p className="text-muted">{EXPLICACAO[motivo]}</p>
       {confirmando ? (
         <div className="mt-2 flex flex-wrap gap-2">
           <button
@@ -72,7 +84,11 @@ export function CancelarCobranca() {
       )}
       {erro && (
         <p role="alert" className="mt-2 rounded-lg bg-negative/10 px-3 py-2 text-negative">
-          {erro}
+          {erro}{" "}
+          <a href={linkDeEmail("Cancelar a cobrança")} className="font-medium underline">
+            Fale com a gente
+          </a>
+          .
         </p>
       )}
     </div>

@@ -38,24 +38,30 @@ Guilherme pediu para implementar os termos reais logo depois de fechar as vendas
 - **"Não guardamos nome do comprador" foi medido em produção** (2026-10-30): em 2.071
   pedidos, `raw_json->'buyer'` só tem `id` e `nickname`.
 
-## Pendências da revisão, que não travam a publicação
+## Pendências da revisão
 
-- Em `/aceite`, o texto de `CancelarCobranca` foi escrito para o inadimplente ("se não
-  pretende voltar"), não diz que o painel segue indisponível e, depois de cancelar, a
-  tela ainda mostra "plano ativo".
-- O resumo em `/aceite` diz que o acesso continua até o fim do período pago, o que só
-  vale para quem aceita.
-- Mensal sem assinatura localizada no Asaas vê o botão e recebe 409.
-- `sync-todos` não confere o aceite: quem recusou segue importado até `acesso_ate`.
-- O destino do valor pago de quem tem plano anual e recusa uma versão nova: advogado.
+Resolvidas em 2026-11-03:
 
-## O que trava a abertura das vendas
+- Em `/aceite`, o cancelamento tem texto próprio (o painel segue fechado sem o aceite) e,
+  depois de cancelar, a tela troca o "plano ativo" pelo prazo que sobrou.
+- O resumo diz que o acesso até o fim do período pago depende dos termos vigentes aceitos,
+  como a seção 14 dos Termos.
+- Mensal sem assinatura localizada no Asaas: se o cliente é conhecido e o Asaas não tem
+  assinatura ativa, o cancelamento encerra aqui também; sem o cliente, a recusa diz para
+  falar com a gente, e nada é marcado como cancelado.
+- `sync-todos` só sincroniza quem aceitou a versão vigente, como o callback e o `/ml/sync`.
 
-O Decreto 7.962/2013, art. 2º, pede a identificação do fornecedor no site de comércio
-eletrônico, com CPF ou CNPJ e endereço. Só com o nome, o texto pode não atender a essa
-regra, e o advogado precisa dizer o que fazer. O caminho provável é um CNPJ com
-endereço comercial, que entra aqui sem expor dados pessoais. A nota fiscal também está
-sem definição do contador: o texto só diz que segue a legislação.
+Continua com o advogado: o destino do valor pago de quem tem plano anual e recusa uma
+versão nova.
+
+## Identificação do fornecedor e nota fiscal
+
+- **Advogado (2026-10-30):** leu os textos e aprovou. Sem CPF nem CNPJ no site por
+  enquanto; o CNPJ entra quando o faturamento crescer, com endereço comercial. Isso tira
+  o Decreto 7.962/2013, art. 2º, da lista do que trava a abertura das vendas.
+- **Nota fiscal (2026-10-30):** recibo por e-mail agora, em nome da pessoa física; nota
+  automática pelo Asaas quando o CNPJ abrir. O contador confirma a data de 2027 em São
+  Paulo. A cláusula 7.8 dos Termos segue genérica ("segue a legislação") até lá.
 
 ## Compromissos do texto que o sistema ainda não cumpre sozinho
 

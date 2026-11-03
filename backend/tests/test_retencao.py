@@ -185,3 +185,31 @@ def test_e_opt_in(monkeypatch):
     assert not retencao.retencao_habilitada()
     monkeypatch.setenv("RETENCAO_IN_PROCESS", "1")
     assert retencao.retencao_habilitada()
+
+
+async def test_eventos_do_asaas_saem_depois_de_5_anos(pg_pool):
+    # A Política guarda "os registros da cobrança" por 5 anos; o evento não tem
+    # vendedor, então o prazo conta do recebimento.
+    async with pg_pool.acquire() as conn:
+        for evento, quando in (("evt_velho", "5 years 1 day"), ("evt_quase", "4 years 11 months")):
+            await conn.execute(
+                "INSERT INTO eventos_do_gateway (id, tipo, payload, recebido_em) "
+                f"VALUES ($1, 'PAYMENT_RECEIVED', '{{}}'::jsonb, now() - interval '{quando}')",
+                evento,
+            )
+        try:
+            saiu = await retencao.aplica_retencao(pg_pool)
+            restam = [
+                r["id"]
+                for r in await conn.fetch(
+                    "SELECT id FROM eventos_do_gateway WHERE id = ANY($1::text[])",
+                    ["evt_velho", "evt_quase"],
+                )
+            ]
+        finally:
+            await conn.execute(
+                "DELETE FROM eventos_do_gateway WHERE id = ANY($1::text[])",
+                ["evt_velho", "evt_quase"],
+            )
+    assert restam == ["evt_quase"]
+    assert saiu["eventos_do_gateway"] == 1
