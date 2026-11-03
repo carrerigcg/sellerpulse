@@ -1,6 +1,6 @@
 # Desistência pela tela
 
-Estado: no ar desde 2026-11-03 (#45); estorno real ainda não provado. Etapa 10 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
+Estado: no ar desde 2026-11-03 (#45, término da desistência interrompida no #46); estorno real ainda não provado. Etapa 10 de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## Por quê
 
@@ -51,7 +51,7 @@ isso depende de o cliente escrever e de o dono estornar à mão no painel do Asa
   conserto é uma `ref` no botão que abre. O grupo de botões da confirmação também não
   tem nome para o leitor de tela.
 
-Resolvidas na branch `fix/desistencia-termina-o-servico`:
+Resolvidas no #46:
 
 - Processo que cai entre o estorno aceito e o corte do acesso: dentro do prazo, com
   pagamento já estornado e acesso ainda aberto, a tela continua oferecendo a desistência,
