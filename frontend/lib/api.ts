@@ -204,8 +204,12 @@ async function codigoDoErro(resposta: Response): Promise<string | null> {
  */
 export const getAcesso = cache(() => buscar<Acesso>("/conta/acesso", {}));
 
-/** Último dia (AAAA-MM-DD) para desistir com o valor de volta, ou `null`. */
-export const getDesistencia = () => buscar<{ ate: string | null }>("/conta/desistencia", {});
+/**
+ * Último dia (AAAA-MM-DD) para desistir com o valor de volta, ou `null`.
+ * `ja_devolvido`: o valor já voltou e falta só encerrar o acesso.
+ */
+export const getDesistencia = () =>
+  buscar<{ ate: string | null; ja_devolvido?: boolean }>("/conta/desistencia", {});
 
 export function getCancelamentos(dateFrom: string, dateTo: string) {
   return buscar<Cancelamentos>("/metrics/cancelamentos", { date_from: dateFrom, date_to: dateTo });

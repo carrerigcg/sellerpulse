@@ -9,9 +9,10 @@ import { desistirDaCompra } from "@/lib/ml";
 /**
  * O direito de arrependimento (seção 8 dos Termos): só aparece enquanto o
  * backend diz que o prazo está aberto. `ate` chega pronto do servidor, como
- * texto.
+ * texto. Com `jaDevolvido`, o dinheiro já voltou (estorno interrompido ou
+ * feito à mão) e a tela não promete devolver de novo: só encerra o acesso.
  */
-export function Desistir({ ate }: { ate: string }) {
+export function Desistir({ ate, jaDevolvido }: { ate: string; jaDevolvido: boolean }) {
   const router = useRouter();
   const [confirmando, setConfirmando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
@@ -38,8 +39,9 @@ export function Desistir({ ate }: { ate: string }) {
     <section className="mt-6 rounded-xl border border-line p-5">
       <h2 className="text-sm font-semibold">Desistir da compra</h2>
       <p className="mt-1 text-sm text-muted">
-        Você pode desistir até {ate} e receber de volta o valor inteiro, pelo mesmo meio de
-        pagamento. O acesso ao painel termina na hora, e os seus dados ficam guardados.
+        {jaDevolvido
+          ? "O valor desta assinatura já foi devolvido. Falta encerrar o acesso ao painel, que termina na hora; os seus dados ficam guardados."
+          : `Você pode desistir até ${ate} e receber de volta o valor inteiro, pelo mesmo meio de pagamento. O acesso ao painel termina na hora, e os seus dados ficam guardados.`}
       </p>
       {confirmando ? (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -49,11 +51,16 @@ export function Desistir({ ate }: { ate: string }) {
             onClick={desistir}
             className="inline-flex min-h-11 items-center rounded-lg bg-negative px-3 text-sm font-medium text-white disabled:opacity-40"
           >
-            {ocupado ? "Desistindo…" : "Confirmar e pedir o valor de volta"}
+            {ocupado
+              ? "Desistindo…"
+              : jaDevolvido
+                ? "Confirmar e encerrar o acesso"
+                : "Confirmar e pedir o valor de volta"}
           </button>
           <button
             type="button"
             disabled={ocupado}
+            autoFocus
             onClick={() => setConfirmando(false)}
             className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm font-medium hover:bg-surface"
           >
@@ -66,7 +73,7 @@ export function Desistir({ ate }: { ate: string }) {
           onClick={() => setConfirmando(true)}
           className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm font-medium text-negative hover:bg-surface"
         >
-          Desistir e receber o valor de volta
+          {jaDevolvido ? "Encerrar o acesso" : "Desistir e receber o valor de volta"}
         </button>
       )}
       {erro && (
