@@ -42,3 +42,12 @@ isso depende de o cliente escrever e de o dono estornar à mão no painel do Asa
 
 - Estorno proporcional do anual depois dos 7 dias (advogado).
 - E-mail de confirmação da desistência: depende do domínio (etapa 9).
+
+## Pendências da revisão, que não travam
+
+- Se o processo cair entre o estorno aceito e o corte do acesso, a nova tentativa recebe
+  "já devolvido" e não termina o serviço; um aviso de pagamento atrasado ainda estenderia
+  o acesso. Conserto possível: o "já devolvido" dentro do prazo grava as marcas e corta.
+- Estorno parado à espera de autorização e depois rejeitado deixa a marca e o acesso
+  cortado com o pagamento valendo. O status do estorno no log permite conciliar à mão.
+- O foco do teclado se perde ao abrir a confirmação, também no "Cancelar".
