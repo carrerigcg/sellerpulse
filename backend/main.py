@@ -16,6 +16,8 @@ from backend.db import close_pool, get_pool
 from backend.demo_refresh import regenera_demo_se_vencida
 from backend.logging_setup import configura_logging
 from backend.ml.tokens import valida_chave_de_cifra
+from backend.retencao import loop_diario as retencao_loop
+from backend.retencao import retencao_habilitada
 from backend.routers import conta, custos, demo, metrics, ml, pagamentos, segmentation
 from backend.worker.runner import loop as worker_loop
 from backend.worker.runner import worker_habilitado
@@ -129,6 +131,12 @@ async def lifespan(app: FastAPI):
         if worker_habilitado():
             tarefa = asyncio.create_task(worker_loop(pool, parar=parar), name="sellerpulse-worker")
 
+        tarefa_retencao: asyncio.Task | None = None
+        if retencao_habilitada():
+            tarefa_retencao = asyncio.create_task(
+                retencao_loop(pool, parar=parar), name="sellerpulse-retencao"
+            )
+
         tarefa_demo: asyncio.Task | None = None
         if demo_refresh_habilitado():
             tarefa_demo = asyncio.create_task(_refresca_demo(pool), name="sellerpulse-demo-refresh")
@@ -140,6 +148,9 @@ async def lifespan(app: FastAPI):
                 # Espera de verdade: task vazada deixaria o processo pendurado no
                 # shutdown, e o Render mataria o container a forca no deploy.
                 await tarefa
+            if tarefa_retencao is not None:
+                parar.set()
+                await tarefa_retencao
             if tarefa_demo is not None:
                 # Diferente do worker, esta task nao tem evento de parada: ela e uma
                 # transacao unica que nao da pra interromper num ponto seguro. Entao
