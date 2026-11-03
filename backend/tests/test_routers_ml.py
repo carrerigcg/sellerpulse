@@ -290,6 +290,58 @@ async def test_disconnect_de_outro_seller_nao_afeta_o_meu(
     assert await tokens_mod.PostgresTokenStore(pg_pool, seller_b).load() is not None
 
 
+async def test_disconnect_volta_a_oferecer_a_conexao_e_sai_da_fila(
+    client, monkeypatch, pg_pool, test_seller
+):
+    """Sem credencial, a tela tem que mostrar o botao de conectar e o agendador
+    nao pode enfileirar job que so vai falhar com SemConexaoML."""
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    user_id, seller_id = test_seller
+    await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(days=2))
+
+    assert client.delete("/ml/connection", headers=_auth(user_id)).status_code == 204
+
+    assert client.get("/ml/sync/status", headers=_auth(user_id)).json()["conectado"] is False
+    assert client.post("/ml/sync-todos", headers=_cabecalho()).json()["enfileirados"] == 0
+    assert client.post("/ml/sync", headers=_auth(user_id)).status_code == 409
+
+
+def _conecta_pelo_callback(client, seller_id) -> None:
+    with responses_lib.RequestsMock() as rsps:
+        _mock_ml_conexao(rsps)
+        client.get(
+            "/ml/callback",
+            params={"code": "TG-c", "state": oauth.emite_state(str(seller_id))},
+            follow_redirects=False,
+        )
+
+
+async def test_reconectar_depois_de_desconectar_pede_backfill_novo(client, pg_pool, test_seller):
+    """O backfill que ainda esperava na fila nao pode ocupar a vaga de job ativo:
+    sem credencial ele so falharia, e o callback da reconexao perderia o seu."""
+    user_id, seller_id = test_seller
+    _conecta_pelo_callback(client, seller_id)
+    client.delete("/ml/connection", headers=_auth(user_id))
+
+    async with pg_pool.acquire() as conn:
+        assert (
+            await conn.fetchval(
+                "SELECT count(*) FROM sync_jobs WHERE seller_id = $1 AND status = 'queued'",
+                seller_id,
+            )
+            == 0
+        )
+
+    _conecta_pelo_callback(client, seller_id)
+
+    assert client.get("/ml/sync/status", headers=_auth(user_id)).json()["conectado"] is True
+    async with pg_pool.acquire() as conn:
+        ativos = await conn.fetch(
+            "SELECT kind FROM sync_jobs WHERE seller_id = $1 AND status = 'queued'", seller_id
+        )
+    assert [r["kind"] for r in ativos] == ["backfill"]
+
+
 # ---------- sync ----------
 
 

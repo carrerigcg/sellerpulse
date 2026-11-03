@@ -139,7 +139,20 @@ async def disconnect(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> N
     destruir, so porque ele desplugou a integracao.
     """
     pool = await get_pool()
-    await PostgresTokenStore(pool, seller_id).delete()
+    async with pool.acquire() as conn, conn.transaction():
+        await conn.execute("DELETE FROM oauth_tokens WHERE seller_id = $1", seller_id)
+        # A tela e o agendador dizem "conectado" pelo `ml_seller_id`. Sem zerar,
+        # o vendedor ficaria sem o botao de conectar e a fila seguiria recebendo
+        # job que so falha sem credencial. O callback grava de novo.
+        await conn.execute("UPDATE sellers SET ml_seller_id = NULL WHERE id = $1", seller_id)
+        # Job que ainda esperava ocuparia a vaga de job ativo e engoliria o
+        # backfill da reconexao. O que ja esta rodando termina ou falha sozinho.
+        await conn.execute(
+            "UPDATE sync_jobs SET status = 'failed', finished_at = now(), "
+            "erro = 'conta do Mercado Livre desconectada' "
+            "WHERE seller_id = $1 AND status = 'queued'",
+            seller_id,
+        )
 
 
 # Abaixo disso, um login nao dispara sincronizacao: o dado esta fresco o
