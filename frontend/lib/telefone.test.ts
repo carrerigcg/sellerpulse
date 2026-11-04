@@ -45,15 +45,22 @@ describe("metadadosDeContato", () => {
     });
   });
 
-  it("mantém a hora do aceite que já existia", () => {
-    expect(
-      metadadosDeContato("11987654321", true, "2026-10-01T10:00:00.000Z", agora)
-        .whatsapp_aceito_em,
-    ).toBe("2026-10-01T10:00:00.000Z");
+  const anterior = { telefone: "11987654321", aceitoEm: "2026-10-01T10:00:00.000Z" };
+
+  it("mantém a hora do aceite que já existia para o mesmo número", () => {
+    expect(metadadosDeContato("11987654321", true, anterior, agora).whatsapp_aceito_em).toBe(
+      "2026-10-01T10:00:00.000Z",
+    );
+  });
+
+  it("número novo pede aceite novo: a data antiga era de outro número", () => {
+    expect(metadadosDeContato("21999990000", true, anterior, agora).whatsapp_aceito_em).toBe(
+      "2026-11-04T15:00:00.000Z",
+    );
   });
 
   it("sem a caixa marcada, não há aceite", () => {
-    expect(metadadosDeContato("11987654321", false, "2026-10-01T10:00:00.000Z", agora))
+    expect(metadadosDeContato("11987654321", false, anterior, agora))
       .toEqual({ telefone: "11987654321", whatsapp_aceito_em: null });
   });
 

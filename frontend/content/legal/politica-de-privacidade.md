@@ -35,10 +35,10 @@ cada um:
 - **Celular, se você informar.** É opcional. Serve para falarmos com você
   sobre a sua conta. Mensagens por WhatsApp só com o seu aceite, dado em
   separado, e guardamos a data dele. Você troca ou apaga o número, e retira o
-  aceite, em "Conta e segurança".
+  aceite, em "Segurança", no menu do painel.
 - **Verificação em duas etapas, se você ativar.** A chave do app autenticador
-  fica guardada pelo provedor de autenticação; nós não a vemos depois de
-  ativada.
+  fica guardada pelo provedor de autenticação; não a exibimos nem a usamos
+  depois de ativada.
 
 ### 3.2 Dados da contratação e da assinatura
 - **Prova do aceite dos Termos:** versão aceita, data e hora, endereço IP e
@@ -125,7 +125,7 @@ Usamos fornecedores para operar o serviço:
 | Vercel | hospedagem do site | Estados Unidos e rede global |
 | Asaas | cobrança: recebe diretamente de você os dados de pagamento | empresa brasileira; conforme a política do Asaas |
 | Mercado Livre | origem dos dados; a conexão é autorizada por você | conforme a política do Mercado Livre |
-| Google (Gmail) e WhatsApp | suporte, quando você nos procura por esses canais | conforme a política de cada um |
+| Google (Gmail) e WhatsApp | suporte, quando você nos procura por esses canais, e mensagens por WhatsApp a quem aceitou recebê-las | conforme a política de cada um |
 
 
 

@@ -1,13 +1,22 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { codigoValido } from "@/lib/duas-etapas";
+import {
+  type ContatoSalvo,
+  formataTelefone,
+  metadadosDeContato,
+  normalizaTelefone,
+} from "@/lib/telefone";
 import { createClient } from "@/lib/supabase/client";
-import { formataTelefone, metadadosDeContato, normalizaTelefone } from "@/lib/telefone";
 
 type Novo = { id: string; qr: string; chave: string };
+type Estado =
+  | { tipo: "carregando" }
+  | { tipo: "erro" }
+  | { tipo: "pronto"; contato: ContatoSalvo; fator: string | null };
 
 const BOTAO =
   "inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm font-medium hover:bg-surface disabled:opacity-40";
@@ -16,23 +25,39 @@ const BOTAO_PRINCIPAL =
 const CAMPO =
   "mt-1.5 w-full max-w-xs rounded-lg border border-line px-3 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20";
 
+/** Leva o foco a um elemento que acabou de aparecer, depois da renderização. */
+function focaDepois(ref: React.RefObject<HTMLElement | null>) {
+  requestAnimationFrame(() => ref.current?.focus());
+}
+
 export function ContatoEDuasEtapas() {
-  const [carregado, setCarregado] = useState(false);
-  const [telefone, setTelefone] = useState("");
-  const [aceite, setAceite] = useState<string | null>(null);
-  const [fator, setFator] = useState<string | null>(null);
+  const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
 
   const carrega = useCallback(async () => {
-    const supabase = createClient();
-    const [{ data: usuario }, { data: fatores }] = await Promise.all([
-      supabase.auth.getUser(),
-      supabase.auth.mfa.listFactors(),
-    ]);
-    const meta = usuario.user?.user_metadata ?? {};
-    setTelefone(typeof meta.telefone === "string" ? formataTelefone(meta.telefone) : "");
-    setAceite(typeof meta.whatsapp_aceito_em === "string" ? meta.whatsapp_aceito_em : null);
-    setFator(fatores?.totp.find((f) => f.status === "verified")?.id ?? null);
-    setCarregado(true);
+    try {
+      const supabase = createClient();
+      const [usuario, fatores] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.auth.mfa.listFactors(),
+      ]);
+      // Sem resposta, não dá para afirmar "Desativada" nem "sem telefone":
+      // salvar a partir daí apagaria o número de verdade.
+      if (usuario.error || !usuario.data.user || fatores.error || !fatores.data) {
+        setEstado({ tipo: "erro" });
+        return;
+      }
+      const meta = usuario.data.user.user_metadata ?? {};
+      setEstado({
+        tipo: "pronto",
+        contato: {
+          telefone: typeof meta.telefone === "string" ? meta.telefone : null,
+          aceitoEm: typeof meta.whatsapp_aceito_em === "string" ? meta.whatsapp_aceito_em : null,
+        },
+        fator: fatores.data.totp.find((f) => f.status === "verified")?.id ?? null,
+      });
+    } catch {
+      setEstado({ tipo: "erro" });
+    }
   }, []);
 
   useEffect(() => {
@@ -40,41 +65,57 @@ export function ContatoEDuasEtapas() {
     carrega();
   }, [carrega]);
 
-  if (!carregado) return <p className="mt-6 text-sm text-muted">Carregando…</p>;
-
+  if (estado.tipo === "carregando") {
+    return (
+      <p role="status" className="mt-6 text-sm text-muted">
+        Carregando…
+      </p>
+    );
+  }
+  if (estado.tipo === "erro") {
+    return (
+      <div role="alert" className="mt-6 rounded-xl border border-line p-5">
+        <p className="text-sm">Não foi possível carregar os dados da sua conta agora.</p>
+        <button
+          type="button"
+          onClick={() => {
+            setEstado({ tipo: "carregando" });
+            carrega();
+          }}
+          className={`mt-3 ${BOTAO}`}
+        >
+          Tentar de novo
+        </button>
+      </div>
+    );
+  }
   return (
     <>
-      <Contato telefoneInicial={telefone} aceiteInicial={aceite} aoSalvar={carrega} />
-      <DuasEtapas fator={fator} aoMudar={carrega} />
+      <Contato salvo={estado.contato} aoSalvar={carrega} />
+      <DuasEtapas fator={estado.fator} aoMudar={carrega} />
     </>
   );
 }
 
-function Contato({
-  telefoneInicial,
-  aceiteInicial,
-  aoSalvar,
-}: {
-  telefoneInicial: string;
-  aceiteInicial: string | null;
-  aoSalvar: () => Promise<void>;
-}) {
-  const [telefone, setTelefone] = useState(telefoneInicial);
-  const [querWhatsapp, setQuerWhatsapp] = useState(aceiteInicial !== null);
+function Contato({ salvo, aoSalvar }: { salvo: ContatoSalvo; aoSalvar: () => Promise<void> }) {
+  const [telefone, setTelefone] = useState(salvo.telefone ? formataTelefone(salvo.telefone) : "");
+  const [querWhatsapp, setQuerWhatsapp] = useState(salvo.aceitoEm !== null);
   const [ocupado, setOcupado] = useState(false);
   const [mensagem, setMensagem] = useState<{ tom: "ok" | "erro"; texto: string } | null>(null);
+  const semTelefone = !telefone.trim();
+  const invalido = mensagem?.tom === "erro" && mensagem.texto.startsWith("Use DDD");
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     setMensagem(null);
-    const digitos = telefone.trim() ? normalizaTelefone(telefone) : null;
-    if (telefone.trim() && !digitos) {
+    const digitos = semTelefone ? null : normalizaTelefone(telefone);
+    if (!semTelefone && !digitos) {
       setMensagem({ tom: "erro", texto: "Use DDD + número, como (11) 98765-4321." });
       return;
     }
     setOcupado(true);
     const { error } = await createClient().auth.updateUser({
-      data: metadadosDeContato(digitos, querWhatsapp, aceiteInicial, new Date()),
+      data: metadadosDeContato(digitos, querWhatsapp, salvo, new Date()),
     });
     setOcupado(false);
     if (error) {
@@ -86,8 +127,10 @@ function Contato({
   }
 
   return (
-    <section className="mt-6 rounded-xl border border-line p-5">
-      <h2 className="text-sm font-semibold">Telefone de contato</h2>
+    <section className="mt-6 rounded-xl border border-line p-5" aria-labelledby="titulo-contato">
+      <h2 id="titulo-contato" className="text-sm font-semibold">
+        Telefone de contato
+      </h2>
       <p className="mt-1 text-sm text-muted">
         Opcional. Usamos só para falar com você sobre a sua conta.
       </p>
@@ -102,28 +145,42 @@ function Contato({
             inputMode="tel"
             autoComplete="tel-national"
             value={telefone}
+            aria-invalid={invalido || undefined}
+            aria-describedby={invalido ? "telefone-dica telefone-erro" : "telefone-dica"}
             onChange={(e) => {
               setTelefone(e.target.value);
               if (!e.target.value.trim()) setQuerWhatsapp(false);
             }}
             className={CAMPO}
           />
+          <p id="telefone-dica" className="mt-1.5 text-xs text-muted">
+            DDD + número. Deixe vazio e salve para apagar.
+          </p>
         </div>
-        <label className={`flex items-start gap-2 text-sm ${telefone.trim() ? "" : "text-muted"}`}>
+        <label className={`flex items-start gap-2 text-sm ${semTelefone ? "text-muted" : ""}`}>
           <input
             type="checkbox"
             checked={querWhatsapp}
-            disabled={!telefone.trim()}
+            disabled={semTelefone}
+            aria-describedby={semTelefone ? "whatsapp-dica" : undefined}
             onChange={(e) => setQuerWhatsapp(e.target.checked)}
             className="mt-0.5 h-4 w-4 accent-accent"
           />
-          <span>Aceito receber mensagens do SellerPulse por WhatsApp nesse número.</span>
+          <span>
+            Aceito receber mensagens do SellerPulse por WhatsApp nesse número.
+            {semTelefone && (
+              <span id="whatsapp-dica" className="block text-xs">
+                Preencha o celular para escolher.
+              </span>
+            )}
+          </span>
         </label>
         <button type="submit" disabled={ocupado} className={BOTAO}>
           {ocupado ? "Salvando…" : "Salvar"}
         </button>
         {mensagem && (
           <p
+            id={mensagem.tom === "erro" ? "telefone-erro" : undefined}
             role={mensagem.tom === "erro" ? "alert" : "status"}
             className={`text-sm ${mensagem.tom === "erro" ? "text-negative" : "text-positive"}`}
           >
@@ -142,9 +199,21 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
   const [codigo, setCodigo] = useState("");
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const titulo = useRef<HTMLHeadingElement>(null);
+  const campo = useRef<HTMLInputElement>(null);
+
+  function volta() {
+    setNovo(null);
+    setDesativando(false);
+    setCodigo("");
+    setErro(null);
+    focaDepois(titulo);
+  }
 
   async function comecar() {
     setErro(null);
+    setAviso(null);
     setOcupado(true);
     const supabase = createClient();
     // Um fator criado e não confirmado (a pessoa fechou a tela) é apagado,
@@ -163,6 +232,7 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
       return;
     }
     setNovo({ id: data.id, qr: data.totp.qr_code, chave: data.totp.secret });
+    focaDepois(campo);
   }
 
   async function confirmar(e: React.FormEvent) {
@@ -185,7 +255,9 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
     }
     setNovo(null);
     setCodigo("");
+    setAviso("Verificação em duas etapas ativada.");
     await aoMudar();
+    focaDepois(titulo);
     router.refresh();
   }
 
@@ -220,7 +292,9 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
     await supabase.auth.refreshSession();
     setDesativando(false);
     setCodigo("");
+    setAviso("Verificação em duas etapas desativada.");
     await aoMudar();
+    focaDepois(titulo);
     router.refresh();
   }
 
@@ -230,11 +304,14 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
         Código do app
       </label>
       <input
+        ref={campo}
         id="codigo-do-app"
         type="text"
         inputMode="numeric"
         autoComplete="one-time-code"
         value={codigo}
+        aria-invalid={erro ? true : undefined}
+        aria-describedby={erro ? "duas-etapas-erro" : undefined}
         onChange={(e) => setCodigo(e.target.value)}
         className={CAMPO}
       />
@@ -242,8 +319,18 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
   );
 
   return (
-    <section className="mt-6 rounded-xl border border-line p-5">
-      <h2 className="text-sm font-semibold">Verificação em duas etapas</h2>
+    <section className="mt-6 rounded-xl border border-line p-5" aria-labelledby="titulo-duas-etapas">
+      <h2
+        id="titulo-duas-etapas"
+        ref={titulo}
+        tabIndex={-1}
+        className="text-sm font-semibold outline-none"
+      >
+        Verificação em duas etapas
+      </h2>
+      <p role="status" className="sr-only">
+        {aviso}
+      </p>
 
       {fator ? (
         <>
@@ -258,18 +345,10 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
               </p>
               {campoDoCodigo}
               <div className="flex flex-wrap gap-2">
-                <button type="submit" disabled={ocupado} className={BOTAO}>
+                <button type="submit" disabled={ocupado} className={`${BOTAO} text-negative`}>
                   {ocupado ? "Desativando…" : "Desativar"}
                 </button>
-                <button
-                  type="button"
-                  disabled={ocupado}
-                  onClick={() => {
-                    setDesativando(false);
-                    setErro(null);
-                  }}
-                  className={BOTAO}
-                >
+                <button type="button" disabled={ocupado} onClick={volta} className={BOTAO}>
                   Manter ativa
                 </button>
               </div>
@@ -277,7 +356,11 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
           ) : (
             <button
               type="button"
-              onClick={() => setDesativando(true)}
+              onClick={() => {
+                setAviso(null);
+                setDesativando(true);
+                focaDepois(campo);
+              }}
               className={`mt-3 ${BOTAO} text-negative`}
             >
               Desativar
@@ -313,16 +396,7 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
             <button type="submit" disabled={ocupado} className={BOTAO_PRINCIPAL}>
               {ocupado ? "Confirmando…" : "Ativar"}
             </button>
-            <button
-              type="button"
-              disabled={ocupado}
-              onClick={() => {
-                setNovo(null);
-                setCodigo("");
-                setErro(null);
-              }}
-              className={BOTAO}
-            >
+            <button type="button" disabled={ocupado} onClick={volta} className={BOTAO}>
               Voltar
             </button>
           </div>
@@ -333,14 +407,23 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
             Desativada. Com ela ativa, quem descobrir a sua senha ainda precisa do código do
             seu celular para entrar.
           </p>
-          <button type="button" disabled={ocupado} onClick={comecar} className={`mt-3 ${BOTAO_PRINCIPAL}`}>
+          <button
+            type="button"
+            disabled={ocupado}
+            onClick={comecar}
+            className={`mt-3 ${BOTAO_PRINCIPAL}`}
+          >
             {ocupado ? "Preparando…" : "Ativar"}
           </button>
         </>
       )}
 
       {erro && (
-        <p role="alert" className="mt-3 rounded-lg bg-negative/10 px-3 py-2 text-sm text-negative">
+        <p
+          id="duas-etapas-erro"
+          role="alert"
+          className="mt-3 rounded-lg bg-negative/10 px-3 py-2 text-sm text-negative"
+        >
           {erro}
         </p>
       )}

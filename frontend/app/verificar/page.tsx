@@ -28,11 +28,17 @@ export default function VerificarPage() {
     (async () => {
       const { data: nivel } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
       if (!faltaOCodigo(nivel)) {
-        router.replace(nivel ? destinoDepoisDoLogin() : "/login");
+        // Sem sessão o Supabase devolve os níveis nulos, não `null`.
+        router.replace(nivel?.currentLevel ? destinoSemVolta() : "/login");
         return;
       }
-      const { data } = await supabase.auth.mfa.listFactors();
-      setFator(data?.totp.find((f) => f.status === "verified")?.id ?? null);
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      const id = data?.totp.find((f) => f.status === "verified")?.id ?? null;
+      if (error || !id) {
+        setErro("Não foi possível preparar a verificação agora. Recarregue a página.");
+        return;
+      }
+      setFator(id);
     })();
   }, [router]);
 
@@ -53,7 +59,7 @@ export default function VerificarPage() {
       setCarregando(false);
       return;
     }
-    router.push(destinoDepoisDoLogin());
+    router.push(destinoSemVolta());
     router.refresh();
   }
 
@@ -99,6 +105,12 @@ export default function VerificarPage() {
       </p>
     </AuthShell>
   );
+}
+
+/** O destino do login, menos esta própria página: `?proximo=/verificar` daria volta sem fim. */
+function destinoSemVolta(): string {
+  const destino = destinoDepoisDoLogin();
+  return destino.startsWith("/verificar") ? "/dashboard" : destino;
 }
 
 function PainelVerificar() {

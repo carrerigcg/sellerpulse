@@ -27,16 +27,26 @@ export function formataTelefone(digitos: string): string {
   return `(${ddd}) ${resto.slice(0, meio)}-${resto.slice(meio)}`;
 }
 
+export type ContatoSalvo = { telefone: string | null; aceitoEm: string | null };
+
 /**
  * Os metadados que o Supabase Auth guarda. O aceite do WhatsApp é a data e
  * hora em que foi dado: sem telefone, não há aceite; desmarcado, some.
+ *
+ * O aceite é "nesse número": trocar o número com a caixa marcada é um aceite
+ * novo, com a data de agora. Reaproveitar a data antiga atestaria um aceite
+ * dado antes de o número existir no cadastro.
  */
 export function metadadosDeContato(
   telefone: string | null,
   querWhatsapp: boolean,
-  aceiteAnterior: string | null,
+  anterior: ContatoSalvo | null,
   agora: Date,
 ): { telefone: string | null; whatsapp_aceito_em: string | null } {
   if (!telefone || !querWhatsapp) return { telefone, whatsapp_aceito_em: null };
-  return { telefone, whatsapp_aceito_em: aceiteAnterior ?? agora.toISOString() };
+  const mesmoNumero = anterior?.telefone === telefone;
+  return {
+    telefone,
+    whatsapp_aceito_em: (mesmoNumero && anterior?.aceitoEm) || agora.toISOString(),
+  };
 }

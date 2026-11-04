@@ -155,6 +155,11 @@ export function mensagemDeFalhaAoCarregar(e: unknown, oQue = "os dados"): string
   if (e instanceof ApiError && e.codigo === "fora-do-plano") {
     return "Este período está fora do histórico do seu plano. Escolha datas mais recentes.";
   }
+  // Sessão aberta antes de a verificação em duas etapas ser ativada em outro
+  // aparelho: o backend já pede o código, e "sessão expirou" mentiria.
+  if (e instanceof ApiError && e.codigo === "segundo-fator") {
+    return "Esta sessão ainda não passou pelo código do app autenticador. Saia e entre de novo.";
+  }
   return e instanceof ApiError && e.status === 401
     ? "Sua sessão expirou. Entre de novo."
     : `Não foi possível carregar ${oQue}. O backend está no ar?`;
