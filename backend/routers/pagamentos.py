@@ -63,6 +63,6 @@ def _cliente_do(evento: dict) -> str | None:
     """
     for chave in ("payment", "subscription"):
         objeto = evento.get(chave)
-        if isinstance(objeto, dict) and (cliente := eventos._id_de(objeto.get("customer"))):
+        if isinstance(objeto, dict) and (cliente := eventos.id_de(objeto.get("customer"))):
             return cliente
     return None

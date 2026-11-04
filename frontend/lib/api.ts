@@ -211,7 +211,13 @@ export const getAcesso = cache(() => buscar<Acesso>("/conta/acesso", {}));
 export const getDesistencia = () =>
   buscar<{ ate: string | null; ja_devolvido?: boolean }>("/conta/desistencia", {});
 
-export type Pagamento = { dia: string; valor: number; comprovante: string; devolvido: boolean };
+/** `devolvendo`: o estorno foi pedido, e o dinheiro ainda não voltou. */
+export type Pagamento = {
+  dia: string;
+  valor: number;
+  comprovante: string;
+  situacao: "pago" | "devolvendo" | "devolvido";
+};
 
 /** Os pagamentos com comprovante, do mais recente ao mais antigo, lidos do Asaas na hora. */
 export const getPagamentos = () => buscar<{ pagamentos: Pagamento[] }>("/conta/pagamentos", {});

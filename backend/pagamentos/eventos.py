@@ -76,7 +76,7 @@ def sem_dados_pessoais(valor):
     return valor
 
 
-def _id_de(valor) -> str | None:
+def id_de(valor) -> str | None:
     """O Asaas manda referência ora como string, ora como objeto com `id`."""
     if isinstance(valor, dict):
         return valor.get("id")
@@ -106,7 +106,7 @@ async def processa(pool: asyncpg.Pool, evento: dict, *, hoje: date | None = None
             return "repetido"
 
         if tipo == "CHECKOUT_PAID":
-            return await _ativa_checkout(conn, _id_de(evento.get("checkout")), hoje)
+            return await _ativa_checkout(conn, id_de(evento.get("checkout")), hoje)
         if tipo in _PAGAMENTO_CONFIRMADO:
             return await _pagamento_confirmado(conn, evento.get("payment") or {}, hoje)
         if tipo == "SUBSCRIPTION_CREATED":
@@ -258,16 +258,16 @@ async def _assinatura_criada(conn, assinatura: dict) -> str:
     pagamento trazer o id.
     """
     checkout_id = assinatura.get("checkoutSession")
-    cliente = _id_de(assinatura.get("customer"))
+    cliente = id_de(assinatura.get("customer"))
     if checkout_id:
-        conhecido = await _anota_ids(conn, checkout_id, cliente, _id_de(assinatura))
+        conhecido = await _anota_ids(conn, checkout_id, cliente, id_de(assinatura))
         return "assinatura-ligada" if conhecido else "assinatura-sem-dono"
     resultado = await conn.execute(
         """
         UPDATE assinaturas SET asaas_assinatura = $1
          WHERE asaas_cliente = $2 AND asaas_assinatura IS NULL AND cancelada_em IS NULL
         """,
-        _id_de(assinatura),
+        id_de(assinatura),
         cliente,
     )
     return "assinatura-ligada" if resultado.endswith(" 1") else "assinatura-sem-dono"
@@ -301,8 +301,8 @@ async def _pagamento_confirmado(conn, pagamento: dict, hoje: date) -> str:
         f"desistencia:{pagamento.get('id')}",
     ):
         return "estornado-na-desistencia"
-    assinatura = _id_de(pagamento.get("subscription"))
-    cliente = _id_de(pagamento.get("customer"))
+    assinatura = id_de(pagamento.get("subscription"))
+    cliente = id_de(pagamento.get("customer"))
     checkout_id = pagamento.get("checkoutSession")
 
     # O primeiro pagamento de um checkout nosso prova a compra: anota os ids e
@@ -372,7 +372,7 @@ async def _assinatura_encerrada(conn, assinatura: dict) -> str:
                                cancelada_em = COALESCE(cancelada_em, now())
         WHERE asaas_assinatura = $1
         """,
-        _id_de(assinatura),
+        id_de(assinatura),
     )
     return "encerrada" if resultado.endswith(" 1") else "assinatura-desconhecida"
 
@@ -380,9 +380,9 @@ async def _assinatura_encerrada(conn, assinatura: dict) -> str:
 async def _dinheiro_devolvido(conn, pagamento: dict, tipo: str) -> str:
     linha = await _dono(
         conn,
-        _id_de(pagamento.get("subscription")),
+        id_de(pagamento.get("subscription")),
         pagamento.get("checkoutSession"),
-        _id_de(pagamento.get("customer")),
+        id_de(pagamento.get("customer")),
     )
     if linha is None:
         return "pagamento-sem-dono"
