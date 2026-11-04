@@ -1,25 +1,33 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  linkDeRecuperacao,
   mensagemDaSenhaNova,
   mensagemDoEnvio,
   motivoDoLinkInvalido,
-  tokenDeRecuperacao,
 } from "./recuperacao";
 
-describe("tokenDeRecuperacao", () => {
-  it("lê o código do link do e-mail", () => {
-    expect(tokenDeRecuperacao("?token_hash=abc123&type=recovery")).toBe("abc123");
+describe("linkDeRecuperacao", () => {
+  it("lê o código do modelo próprio do e-mail (token_hash)", () => {
+    expect(linkDeRecuperacao("?token_hash=abc123&type=recovery")).toEqual({
+      tipo: "token",
+      valor: "abc123",
+    });
   });
 
-  it("recusa link de outro tipo: confirmar cadastro não troca senha", () => {
-    expect(tokenDeRecuperacao("?token_hash=abc123&type=signup")).toBeNull();
+  it("recusa token_hash de outro tipo: confirmar cadastro não troca senha", () => {
+    expect(linkDeRecuperacao("?token_hash=abc123&type=signup")).toBeNull();
+  });
+
+  it("lê o código do modelo padrão do Supabase (PKCE)", () => {
+    expect(linkDeRecuperacao("?code=xyz789")).toEqual({ tipo: "codigo", valor: "xyz789" });
   });
 
   it("recusa a página aberta sem código", () => {
-    expect(tokenDeRecuperacao("")).toBeNull();
-    expect(tokenDeRecuperacao("?type=recovery")).toBeNull();
-    expect(tokenDeRecuperacao("?token_hash=&type=recovery")).toBeNull();
+    expect(linkDeRecuperacao("")).toBeNull();
+    expect(linkDeRecuperacao("?type=recovery")).toBeNull();
+    expect(linkDeRecuperacao("?token_hash=&type=recovery")).toBeNull();
+    expect(linkDeRecuperacao("?code=")).toBeNull();
   });
 });
 
@@ -74,6 +82,12 @@ describe("motivoDoLinkInvalido", () => {
     expect(motivoDoLinkInvalido({ code: "otp_expired", message: "x", status: 403 })).toMatch(
       /venceu ou já foi usado/,
     );
+  });
+
+  it("link do modelo padrão lembra que precisa ser o mesmo navegador", () => {
+    expect(
+      motivoDoLinkInvalido({ code: "flow_state_not_found", message: "x" }, "codigo"),
+    ).toMatch(/mesmo navegador/);
   });
 
   it("queda de conexão não culpa o link, que continua valendo", () => {
