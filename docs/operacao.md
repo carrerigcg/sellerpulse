@@ -246,3 +246,28 @@ select ip, hora from registros_de_acesso
    Conferir o relatório e repetir com `--apply`. Ficam a prova do aceite, os
    checkouts e os registros de acesso. A credencial do ML sai junto com o resto.
 4. Responder com a data da exclusão.
+
+**Perdeu o app autenticador.** O pedido chega pelo link "Fale com a gente" da
+tela `/verificar`. Sem o código, a pessoa não entra, e não há código de
+recuperação (spec `2026-11-04-telefone-e-verificacao-em-duas-etapas`).
+
+1. Confirmar a identidade: a resposta tem de sair do e-mail da conta. Pedido
+   vindo de outro endereço não vale, porque é justamente o caso de quem tem a
+   senha e não tem o celular.
+2. Ler o fator, livre:
+
+   ```sql
+   select f.id, f.status, f.created_at
+     from auth.mfa_factors f join auth.users u on u.id = f.user_id
+    where u.email = '<e-mail do pedido>';
+   ```
+
+3. Com o ok do Guilherme, apagar:
+
+   ```sql
+   delete from auth.mfa_factors
+    where user_id = (select id from auth.users where email = '<e-mail do pedido>');
+   ```
+
+4. Responder que a verificação foi desligada e que pode ativar de novo em
+   "Conta e segurança".

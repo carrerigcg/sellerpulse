@@ -13,12 +13,15 @@ import {
 } from "@/components/auth-ui";
 import { destinoDepoisDoLogin } from "@/lib/proximo";
 import { createClient } from "@/lib/supabase/client";
+import { metadadosDeContato, normalizaTelefone } from "@/lib/telefone";
 
 const MIN_SENHA = 6;
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [querWhatsapp, setQuerWhatsapp] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [confirmePorEmail, setConfirmePorEmail] = useState(false);
@@ -27,12 +30,23 @@ export default function SignupPage() {
   async function criarConta(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
+    // Opcional: vazio passa; preenchido, tem de fechar DDD + número.
+    const digitos = telefone.trim() ? normalizaTelefone(telefone) : null;
+    if (telefone.trim() && !digitos) {
+      setErro("Esse telefone não parece válido. Use DDD + número, como (11) 98765-4321.");
+      return;
+    }
     setCarregando(true);
     const supabase = createClient();
+    // Sem sessão até confirmar o e-mail, não há como chamar o backend: o
+    // telefone vai nos metadados do próprio cadastro (spec, decisão 2).
     const { data, error } = await supabase.auth.signUp({
       email,
       password: senha,
-      options: { emailRedirectTo: `${window.location.origin}/login` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/login`,
+        data: metadadosDeContato(digitos, querWhatsapp, null, new Date()),
+      },
     });
 
     if (error) {
@@ -101,6 +115,32 @@ export default function SignupPage() {
           onChange={setSenha}
           hint={`Mínimo de ${MIN_SENHA} caracteres.`}
         />
+        <TextField
+          id="telefone"
+          label="Celular (opcional)"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel-national"
+          required={false}
+          value={telefone}
+          onChange={(v) => {
+            setTelefone(v);
+            if (!v.trim()) setQuerWhatsapp(false);
+          }}
+          hint="Para falarmos com você se algo der errado na sua conta."
+        />
+        <label
+          className={`flex items-start gap-2 text-sm ${telefone.trim() ? "" : "text-muted"}`}
+        >
+          <input
+            type="checkbox"
+            checked={querWhatsapp}
+            disabled={!telefone.trim()}
+            onChange={(e) => setQuerWhatsapp(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-accent"
+          />
+          <span>Aceito receber mensagens do SellerPulse por WhatsApp nesse número.</span>
+        </label>
         {erro && <Alert tone="erro">{erro}</Alert>}
         <PrimaryButton disabled={carregando}>
           {carregando ? "Criando conta..." : "Criar conta"}

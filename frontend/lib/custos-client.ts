@@ -36,7 +36,17 @@ function url(sku: string): string {
 }
 
 async function falha(resposta: Response): Promise<never> {
-  if (resposta.status === 401) throw new Error("Sua sessão expirou. Entre de novo.");
+  if (resposta.status === 401) {
+    // Mesma distinção de `mensagemDeFalhaAoCarregar`: falta o código do app,
+    // não a sessão.
+    const corpo = await resposta.json().catch(() => null);
+    if (corpo?.detail?.codigo === "segundo-fator") {
+      throw new Error(
+        "Esta sessão ainda não passou pelo código do app autenticador. Saia e entre de novo.",
+      );
+    }
+    throw new Error("Sua sessão expirou. Entre de novo.");
+  }
   if (resposta.status === 404) throw new Error("Produto não encontrado na sua conta.");
   if (resposta.status === 422) throw new Error("Valor inválido.");
   throw new Error("Não foi possível salvar agora.");

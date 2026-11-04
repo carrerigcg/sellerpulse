@@ -64,6 +64,8 @@ export function TextField({
   onChange,
   minLength,
   hint,
+  required = true,
+  inputMode,
 }: {
   id: string;
   label: string;
@@ -73,6 +75,8 @@ export function TextField({
   onChange: (v: string) => void;
   minLength?: number;
   hint?: string;
+  required?: boolean;
+  inputMode?: "numeric" | "tel";
 }) {
   return (
     <div>
@@ -83,13 +87,19 @@ export function TextField({
         id={id}
         type={type}
         autoComplete={autoComplete}
-        required
+        required={required}
+        inputMode={inputMode}
+        aria-describedby={hint ? `${id}-dica` : undefined}
         minLength={minLength}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="mt-1.5 w-full rounded-lg border border-line px-3 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
       />
-      {hint && <p className="mt-1.5 text-xs text-muted">{hint}</p>}
+      {hint && (
+        <p id={`${id}-dica`} className="mt-1.5 text-xs text-muted">
+          {hint}
+        </p>
+      )}
     </div>
   );
 }

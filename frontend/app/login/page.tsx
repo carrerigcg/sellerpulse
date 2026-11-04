@@ -12,6 +12,7 @@ import {
   TextField,
 } from "@/components/auth-ui";
 import { mensagemDeLogin, registraErroDeAuth } from "@/lib/auth-errors";
+import { faltaOCodigo } from "@/lib/duas-etapas";
 import { destinoDepoisDoLogin } from "@/lib/proximo";
 import { createClient } from "@/lib/supabase/client";
 
@@ -36,6 +37,13 @@ export default function LoginPage() {
         registraErroDeAuth("login", error);
         setErro(mensagemDeLogin(error));
         setCarregando(false);
+        return;
+      }
+      // Quem ativou o app autenticador ainda passa pelo código. O `proximo`
+      // vai junto, para a pessoa chegar aonde ia.
+      const { data: nivel } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (faltaOCodigo(nivel)) {
+        router.push(`/verificar${window.location.search}`);
         return;
       }
       router.push(destinoDepoisDoLogin());

@@ -1,6 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { faltaOCodigo } from "@/lib/duas-etapas";
+
 /**
  * Protege /dashboard, /aceite e /assinar: sem sessão Supabase válida, redireciona para /login.
  *
@@ -50,6 +52,18 @@ export async function proxy(request: NextRequest) {
     url.pathname = "/login";
     // Para onde a pessoa ia: o login devolve para lá (`lib/proximo.ts`), em
     // vez de largar no painel quem tinha clicado em "Assinar".
+    url.search = "";
+    url.searchParams.set("proximo", request.nextUrl.pathname + request.nextUrl.search);
+    return NextResponse.redirect(url);
+  }
+
+  // Senha certa e app autenticador ativo, sem o código ainda: quem fechou a
+  // aba no meio do login não entra. O backend recusa essa sessão do mesmo
+  // jeito (401 `segundo-fator`); isto é o caminho, não a trava.
+  const { data: nivel } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (faltaOCodigo(nivel)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/verificar";
     url.search = "";
     url.searchParams.set("proximo", request.nextUrl.pathname + request.nextUrl.search);
     return NextResponse.redirect(url);
