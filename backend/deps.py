@@ -37,12 +37,33 @@ async def resolve_seller_id(pool: asyncpg.Pool, user_id: str) -> uuid.UUID:
     return row["id"]
 
 
+async def _claims_verificadas(pool: asyncpg.Pool, token: str) -> dict:
+    """Valida o token e, de quem ativou o segundo fator, exige o código.
+
+    O Supabase marca `aal: "aal2"` no token de quem passou pelo app
+    autenticador. Sem esta trava, a verificação em duas etapas seria só de
+    tela: com a senha, o token `aal1` chamaria a API direto (spec
+    docs/specs/2026-11-04-telefone-e-verificacao-em-duas-etapas-design.md).
+    """
+    claims = decode_supabase_jwt(token)
+    if claims.get("aal") != "aal2":
+        async with pool.acquire() as conn:
+            tem_fator = await conn.fetchval(
+                "SELECT EXISTS (SELECT 1 FROM auth.mfa_factors "
+                "WHERE user_id = $1 AND status = 'verified')",
+                uuid.UUID(claims["sub"]),
+            )
+        if tem_fator:
+            raise recusa(401, "segundo-fator", "Confirme o código do app autenticador")
+    return claims
+
+
 async def get_current_seller_id(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> uuid.UUID:
     """Dependency dos endpoints: valida o Bearer token e devolve o seller_id."""
-    claims = decode_supabase_jwt(credentials.credentials)
     pool = await get_pool()
+    claims = await _claims_verificadas(pool, credentials.credentials)
     return await resolve_seller_id(pool, claims["sub"])
 
 
@@ -50,7 +71,8 @@ async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> uuid.UUID:
     """Só o token: para o que precisa continuar valendo sem `sellers`."""
-    return uuid.UUID(decode_supabase_jwt(credentials.credentials)["sub"])
+    claims = await _claims_verificadas(await get_pool(), credentials.credentials)
+    return uuid.UUID(claims["sub"])
 
 
 @dataclass(frozen=True)

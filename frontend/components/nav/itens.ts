@@ -9,6 +9,7 @@ import {
   IconeExportar,
   IconeInicio,
   IconeProdutos,
+  IconeSeguranca,
 } from "./icones";
 
 export type ItemDeNavegacao = {
@@ -51,6 +52,7 @@ export const GRUPOS_DASHBOARD: GrupoDeNavegacao[] = [
       { href: "/dashboard/custos", rotulo: "Custos", Icone: IconeCustos },
       { href: "/dashboard/conectar", rotulo: "Conectar conta", Icone: IconeConectar },
       { href: "/dashboard/assinatura", rotulo: "Assinatura", Icone: IconeAssinatura },
+      { href: "/dashboard/seguranca", rotulo: "Segurança", Icone: IconeSeguranca },
     ],
   },
 ];

@@ -11,3 +11,12 @@ create table if not exists auth.users (
     id    uuid primary key default gen_random_uuid(),
     email text
 );
+
+-- O segundo fator (TOTP) do Supabase Auth: o backend recusa token `aal1` de
+-- quem tem um fator verificado. No Supabase a tabela tem mais colunas e enums.
+create table if not exists auth.mfa_factors (
+    id          uuid primary key default gen_random_uuid(),
+    user_id     uuid not null references auth.users(id) on delete cascade,
+    factor_type text not null,
+    status      text not null
+);

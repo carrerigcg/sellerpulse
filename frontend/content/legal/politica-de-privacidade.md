@@ -2,7 +2,7 @@
 
 **Versão:** 2026-11-v1
 
-**Última atualização:** 3 de novembro de 2026
+**Última atualização:** 4 de novembro de 2026
 
 ## 1. Quem somos
 
@@ -32,6 +32,13 @@ cada um:
 - E-mail e senha. A senha é guardada pelo provedor de autenticação em forma
   irreversível (hash); nós não temos acesso a ela.
 - Datas de cadastro e de acesso.
+- **Celular, se você informar.** É opcional. Serve para falarmos com você
+  sobre a sua conta. Mensagens por WhatsApp só com o seu aceite, dado em
+  separado, e guardamos a data dele. Você troca ou apaga o número, e retira o
+  aceite, em "Conta e segurança".
+- **Verificação em duas etapas, se você ativar.** A chave do app autenticador
+  fica guardada pelo provedor de autenticação; nós não a vemos depois de
+  ativada.
 
 ### 3.2 Dados da contratação e da assinatura
 - **Prova do aceite dos Termos:** versão aceita, data e hora, endereço IP e
@@ -44,7 +51,7 @@ cada um:
   datas e forma de pagamento.
 
 **Não guardamos** o seu nome de cobrança, CPF ou CNPJ, endereço de cobrança,
-telefone nem dados do cartão. Você os informa diretamente na página do Asaas. Se
+telefone de cobrança nem dados do cartão. Você os informa diretamente na página do Asaas. Se
 um aviso do Asaas trouxer CPF ou CNPJ, telefone ou dados de cartão, esses campos
 são descartados antes de gravar.
 
@@ -92,6 +99,9 @@ ferramentas de análise de comportamento.
 | finalidade | dados | base legal (LGPD, art. 7º) |
 | --- | --- | --- |
 | Criar e manter a sua conta | e-mail, senha | execução de contrato (V) |
+| Falar com você sobre a sua conta | celular, se informado | execução de contrato (V) |
+| Enviar mensagens por WhatsApp | celular, data do aceite | consentimento (I) |
+| Verificação em duas etapas, se ativada | chave do app autenticador | execução de contrato (V) |
 | Contratar, cobrar e controlar o acesso ao plano | assinatura, dados técnicos da cobrança | execução de contrato (V) |
 | Provar o aceite dos Termos | versão, data, IP, navegador | exercício regular de direitos (VI) |
 | Guardar os registros de acesso à aplicação | data, hora, IP | obrigação legal (II): Marco Civil, art. 15 |
@@ -177,6 +187,8 @@ atendimento.
   bloqueiam o acesso direto aos dados de outro vendedor.
 - Os avisos de pagamento só são aceitos com um token secreto do Asaas.
 - O acesso administrativo é restrito.
+- Você pode ativar a verificação em duas etapas: além da senha, o acesso pede
+  o código de um app autenticador no seu celular.
 
 Nenhum sistema é infalível. Em caso de incidente de segurança que possa
 causar risco ou dano relevante, comunicaremos você e a ANPD, nos termos da
