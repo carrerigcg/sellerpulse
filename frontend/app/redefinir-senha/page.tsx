@@ -54,7 +54,7 @@ export default function RedefinirSenhaPage() {
   useEffect(() => {
     if (conferiu.current) return;
     conferiu.current = true;
-    const link = linkDeRecuperacao(window.location.search);
+    const link = linkDeRecuperacao(window.location.search, window.location.hash);
     // O código sai da barra de endereço antes de qualquer cliente Supabase
     // nascer: não fica no histórico, não vaza pelo Referer e o cliente padrão
     // não tenta trocá-lo por conta própria.
@@ -64,6 +64,14 @@ export default function RedefinirSenhaPage() {
         setEtapa({
           nome: "link-invalido",
           motivo: "Este endereço não tem um link de recuperação válido.",
+        });
+        return;
+      }
+      if (link.tipo === "erro") {
+        registraErroDeAuth("recuperacao:link-recusado", link.valor);
+        setEtapa({
+          nome: "link-invalido",
+          motivo: "Este link venceu ou já foi usado. Cada link funciona uma vez só.",
         });
         return;
       }

@@ -23,6 +23,16 @@ describe("linkDeRecuperacao", () => {
     expect(linkDeRecuperacao("?code=xyz789")).toEqual({ tipo: "codigo", valor: "xyz789" });
   });
 
+  it("link que o Supabase recusou (vencido ou usado) volta com o erro, não como 'sem link'", () => {
+    expect(
+      linkDeRecuperacao("?error=access_denied&error_code=otp_expired&error_description=x"),
+    ).toEqual({ tipo: "erro", valor: "otp_expired" });
+    expect(linkDeRecuperacao("", "#error=access_denied&error_code=otp_expired")).toEqual({
+      tipo: "erro",
+      valor: "otp_expired",
+    });
+  });
+
   it("recusa a página aberta sem código", () => {
     expect(linkDeRecuperacao("")).toBeNull();
     expect(linkDeRecuperacao("?type=recovery")).toBeNull();

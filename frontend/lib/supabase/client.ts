@@ -26,6 +26,7 @@ export function createClientSemLerAUrl() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { isSingleton: false, auth: { detectSessionInUrl: false } },
+    // Uso único: não renova a sessão em paralelo com o cliente padrão.
+    { isSingleton: false, auth: { detectSessionInUrl: false, autoRefreshToken: false } },
   );
 }

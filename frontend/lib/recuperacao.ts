@@ -14,11 +14,21 @@ export const MIN_SENHA = 6;
 /** O que importa de um erro do Supabase Auth. */
 export type ErroDeAuth = { code?: string; status?: number; name?: string; message: string };
 
-export type LinkDeRecuperacao = { tipo: "token" | "codigo"; valor: string };
+export type LinkDeRecuperacao = { tipo: "token" | "codigo" | "erro"; valor: string };
 
-/** O código que o link do e-mail trouxe, ou `null` se a página abriu sem link. */
-export function linkDeRecuperacao(search: string): LinkDeRecuperacao | null {
+/**
+ * O que o link do e-mail trouxe, ou `null` se a página abriu sem link.
+ *
+ * No modelo padrão, quem confere o link é o Supabase, antes de a página
+ * abrir: vencido ou já usado, ele redireciona para cá só com `error_code`, na
+ * query ou depois do `#`. Isso é um link recusado, e não uma página sem link.
+ */
+export function linkDeRecuperacao(search: string, hash = ""): LinkDeRecuperacao | null {
   const params = new URLSearchParams(search);
+  const doHash = new URLSearchParams(hash.replace(/^#/, ""));
+  const erro =
+    params.get("error_code") || params.get("error") || doHash.get("error_code") || doHash.get("error");
+  if (erro) return { tipo: "erro", valor: erro };
   const token = params.get("token_hash");
   if (token && params.get("type") === "recovery") return { tipo: "token", valor: token };
   const codigo = params.get("code");
@@ -85,7 +95,7 @@ export function mensagemDoEnvio(erro: ErroDeAuth | null): MensagemDoEnvio {
  */
 export function motivoDoLinkInvalido(
   erro: ErroDeAuth,
-  tipo: LinkDeRecuperacao["tipo"] = "token",
+  tipo: Exclude<LinkDeRecuperacao["tipo"], "erro"> = "token",
 ): string {
   if (falhaDeRede(erro)) {
     return "Não foi possível conectar. Verifique sua internet e abra o link do e-mail de novo.";
