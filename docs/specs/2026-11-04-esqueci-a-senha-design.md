@@ -1,6 +1,6 @@
 # Esqueci a senha
 
-Estado: telas mergeadas em 2026-11-04 (#50). Ajuste para o modelo padrão do e-mail na branch `fix/recuperacao-link-padrao`. Falta o teste com um link de verdade.
+Estado: mergeado em 2026-11-04 (#50 e #51), no ar na Vercel. Falta o teste com um link de verdade (pedir e abrir no mesmo navegador, com a conta do Guilherme). O envio para clientes depende do domínio e do Resend.
 
 ## O pedido
 
