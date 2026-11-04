@@ -1,6 +1,6 @@
 # Avisos por e-mail do Asaas e comprovantes na tela
 
-Estado: em revisão na branch `feat/avisos-e-comprovantes`.
+Estado: mergeado em 2026-11-04 (#47); chamada real ao Asaas ainda não provada.
 
 ## O problema
 
