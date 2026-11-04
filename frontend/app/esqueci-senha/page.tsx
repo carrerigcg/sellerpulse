@@ -12,8 +12,9 @@ import { createClient } from "@/lib/supabase/client";
 /**
  * Pedir o link para criar uma senha nova.
  *
- * O link do e-mail vai para `/redefinir-senha` pelo modelo do e-mail no painel
- * do Supabase (spec, decisão 3), e não por um `redirectTo` daqui.
+ * O `redirectTo` leva o link do modelo padrão do Supabase para
+ * `/redefinir-senha`. Ele precisa estar na lista de URLs liberadas; fora dela,
+ * o Supabase manda para o Site URL e o link cai na página inicial.
  */
 export default function EsqueciSenhaPage() {
   const [email, setEmail] = useState("");
@@ -25,7 +26,9 @@ export default function EsqueciSenhaPage() {
     setResposta(null);
     setEnviando(true);
     try {
-      const { error } = await createClient().auth.resetPasswordForEmail(email.trim());
+      const { error } = await createClient().auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/redefinir-senha`,
+      });
       if (error) registraErroDeAuth("recuperacao", error);
       setResposta(mensagemDoEnvio(error));
     } catch (erro) {

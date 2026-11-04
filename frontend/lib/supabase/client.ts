@@ -12,3 +12,21 @@ export function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 }
+
+/**
+ * Cliente que não lê a URL sozinho, para `/redefinir-senha` trocar o `?code=`
+ * do link de recuperação com as próprias mãos.
+ *
+ * O cliente padrão troca o código na criação e, se a troca falhar, segue com
+ * a sessão que já estava aberta: a tela não saberia se a sessão veio do link
+ * ou de alguém que deixou o computador logado. Trocando aqui, o erro chega.
+ * A sessão nova vai para os mesmos cookies, e o cliente padrão a enxerga.
+ */
+export function createClientSemLerAUrl() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    // Uso único: não renova a sessão em paralelo com o cliente padrão.
+    { isSingleton: false, auth: { detectSessionInUrl: false, autoRefreshToken: false } },
+  );
+}

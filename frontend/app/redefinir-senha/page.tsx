@@ -10,11 +10,11 @@ import { linkDeEmail } from "@/lib/contato";
 import { codigoValido, faltaOCodigo } from "@/lib/duas-etapas";
 import {
   MIN_SENHA,
+  linkDeRecuperacao,
   mensagemDaSenhaNova,
   motivoDoLinkInvalido,
-  tokenDeRecuperacao,
 } from "@/lib/recuperacao";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, createClientSemLerAUrl } from "@/lib/supabase/client";
 
 type Etapa =
   | { nome: "conferindo" }
@@ -54,26 +54,38 @@ export default function RedefinirSenhaPage() {
   useEffect(() => {
     if (conferiu.current) return;
     conferiu.current = true;
-    const token = tokenDeRecuperacao(window.location.search);
-    // O código sai da barra de endereço: não fica no histórico nem vaza
-    // para outro site pelo Referer.
+    const link = linkDeRecuperacao(window.location.search, window.location.hash);
+    // O código sai da barra de endereço antes de qualquer cliente Supabase
+    // nascer: não fica no histórico, não vaza pelo Referer e o cliente padrão
+    // não tenta trocá-lo por conta própria.
     window.history.replaceState(null, "", window.location.pathname);
     (async () => {
-      if (!token) {
+      if (!link) {
         setEtapa({
           nome: "link-invalido",
           motivo: "Este endereço não tem um link de recuperação válido.",
         });
         return;
       }
+      if (link.tipo === "erro") {
+        registraErroDeAuth("recuperacao:link-recusado", link.valor);
+        setEtapa({
+          nome: "link-invalido",
+          motivo: "Este link venceu ou já foi usado. Cada link funciona uma vez só.",
+        });
+        return;
+      }
       try {
-        const supabase = createClient();
-        const { error } = await supabase.auth.verifyOtp({ token_hash: token, type: "recovery" });
+        const { error } =
+          link.tipo === "token"
+            ? await createClient().auth.verifyOtp({ token_hash: link.valor, type: "recovery" })
+            : await createClientSemLerAUrl().auth.exchangeCodeForSession(link.valor);
         if (error) {
           registraErroDeAuth("recuperacao:link", error);
-          setEtapa({ nome: "link-invalido", motivo: motivoDoLinkInvalido(error) });
+          setEtapa({ nome: "link-invalido", motivo: motivoDoLinkInvalido(error, link.tipo) });
           return;
         }
+        const supabase = createClient();
         // Com o app autenticador ativo, o Supabase só troca a senha depois do
         // código: o e-mail sozinho não pode levar a conta.
         const { data: nivel } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();

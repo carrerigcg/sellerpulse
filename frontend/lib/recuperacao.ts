@@ -2,9 +2,11 @@
  * Recuperar a senha esquecida, pelo Supabase Auth (spec
  * `docs/specs/2026-11-04-esqueci-a-senha-design.md`).
  *
- * O link do e-mail traz o código (`token_hash`) direto para `/redefinir-senha`,
- * e não pelo fluxo PKCE padrão: o PKCE só funciona no navegador que pediu, e
- * quem pede no computador costuma abrir o e-mail no celular.
+ * O link do e-mail chega de dois jeitos:
+ * - `token_hash`: o modelo próprio do e-mail, que funciona em qualquer
+ *   aparelho. O Supabase só deixa editar o modelo com SMTP próprio.
+ * - `code`: o modelo padrão, pelo fluxo PKCE. Só funciona no navegador que
+ *   pediu o link, porque a outra metade do código ficou guardada nele.
  */
 
 export const MIN_SENHA = 6;
@@ -12,11 +14,26 @@ export const MIN_SENHA = 6;
 /** O que importa de um erro do Supabase Auth. */
 export type ErroDeAuth = { code?: string; status?: number; name?: string; message: string };
 
-/** O código do link do e-mail, só se o link for de recuperação de senha. */
-export function tokenDeRecuperacao(search: string): string | null {
+export type LinkDeRecuperacao = { tipo: "token" | "codigo" | "erro"; valor: string };
+
+/**
+ * O que o link do e-mail trouxe, ou `null` se a página abriu sem link.
+ *
+ * No modelo padrão, quem confere o link é o Supabase, antes de a página
+ * abrir: vencido ou já usado, ele redireciona para cá só com `error_code`, na
+ * query ou depois do `#`. Isso é um link recusado, e não uma página sem link.
+ */
+export function linkDeRecuperacao(search: string, hash = ""): LinkDeRecuperacao | null {
   const params = new URLSearchParams(search);
-  if (params.get("type") !== "recovery") return null;
-  return params.get("token_hash") || null;
+  const doHash = new URLSearchParams(hash.replace(/^#/, ""));
+  const erro =
+    params.get("error_code") || params.get("error") || doHash.get("error_code") || doHash.get("error");
+  if (erro) return { tipo: "erro", valor: erro };
+  const token = params.get("token_hash");
+  if (token && params.get("type") === "recovery") return { tipo: "token", valor: token };
+  const codigo = params.get("code");
+  if (codigo) return { tipo: "codigo", valor: codigo };
+  return null;
 }
 
 /** O pedido nem chegou ao Supabase: nada foi gasto nem decidido do lado de lá. */
@@ -76,9 +93,15 @@ export function mensagemDoEnvio(erro: ErroDeAuth | null): MensagemDoEnvio {
  * Por que o link do e-mail não abriu. Queda de conexão não gasta o código:
  * dizer "já foi usado" mandaria a pessoa pedir outro link à toa.
  */
-export function motivoDoLinkInvalido(erro: ErroDeAuth): string {
+export function motivoDoLinkInvalido(
+  erro: ErroDeAuth,
+  tipo: Exclude<LinkDeRecuperacao["tipo"], "erro"> = "token",
+): string {
   if (falhaDeRede(erro)) {
     return "Não foi possível conectar. Verifique sua internet e abra o link do e-mail de novo.";
+  }
+  if (tipo === "codigo") {
+    return "Este link venceu, já foi usado ou foi aberto em outro navegador. Abra o link no mesmo navegador em que pediu, ou peça outro.";
   }
   return "Este link venceu ou já foi usado. Cada link funciona uma vez só.";
 }

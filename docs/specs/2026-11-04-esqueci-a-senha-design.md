@@ -1,6 +1,6 @@
 # Esqueci a senha
 
-Estado: em PR na branch `feat/esqueci-a-senha`. Falta trocar o modelo do e-mail no Supabase e o teste com um link de verdade.
+Estado: telas mergeadas em 2026-11-04 (#50). Ajuste para o modelo padrão do e-mail na branch `fix/recuperacao-link-padrao`. Falta o teste com um link de verdade.
 
 ## O pedido
 
@@ -33,16 +33,21 @@ o envio de verdade (Resend) quando o domínio sair.
      para quem nunca vai receber deixaria a pessoa esperando um e-mail que não
      chega. Custo aceito: até o Resend, esse erro só aparece quando a conta
      existe, o que revela a existência dela. São 3 contas e não há divulgação.
-3. **O link do e-mail traz o código (`token_hash`) direto para o site**,
-   `{{ .SiteURL }}/redefinir-senha?token_hash=...&type=recovery`, e a tela chama
-   `verifyOtp`.
-   - O link padrão do Supabase usa PKCE: só funciona no mesmo navegador que
-     pediu. Quem pede no computador e abre o e-mail no celular cairia em erro.
-   - Isso pede trocar o modelo do e-mail "Reset Password" no painel do
-     Supabase. Configuração de produção: só com o ok do Guilherme.
-   - O link usa o `SiteURL`, e não o `redirectTo`. Se o `redirectTo` não
-     estiver na lista liberada, o Supabase troca em silêncio pelo `SiteURL` e
-     o link quebraria. Com o `SiteURL`, a lista liberada não muda.
+3. **O link do e-mail chega de dois jeitos, e `/redefinir-senha` aceita os dois.**
+   - **Hoje, modelo padrão do Supabase (`?code=`, fluxo PKCE).** Sem SMTP
+     próprio, o painel não deixa editar o modelo do e-mail (visto em
+     2026-11-04). O `resetPasswordForEmail` manda `redirectTo` para
+     `/redefinir-senha`, que está coberto pela lista liberada
+     (`https://frontend-three-rosy-iwes33l1kk.vercel.app/**`). Limite: só
+     funciona no navegador em que a pessoa pediu o link, porque a outra metade
+     do código fica guardada nele. Em outro aparelho, a tela diz isso.
+   - **Com SMTP próprio (Resend), modelo com `token_hash`.** Funciona em
+     qualquer aparelho. Basta trocar o modelo pelo texto abaixo; o código já
+     aceita.
+   - O `?code=` é trocado por um cliente que não lê a URL sozinho
+     (`createClientSemLerAUrl`). O cliente padrão trocaria o código ao nascer
+     e, se falhasse, seguiria com a sessão já aberta: a tela deixaria trocar a
+     senha de quem deixou o computador logado.
 4. **`/redefinir-senha`:**
    - Sem `token_hash` com `type=recovery` na URL, mostra que o link não vale
      e oferece pedir outro. Não aceita trocar a senha só com uma sessão
@@ -59,7 +64,7 @@ o envio de verdade (Resend) quando o domínio sair.
    para o painel.
 7. **Link "Esqueceu a senha?" no login**, ao lado do campo de senha.
 
-## Modelo do e-mail (painel do Supabase, Authentication > Emails > Reset Password)
+## Modelo do e-mail, para quando houver SMTP próprio (Authentication > Emails > Reset Password)
 
 Assunto: `Redefinir a senha do SellerPulse`
 
@@ -70,8 +75,8 @@ Assunto: `Redefinir a senha do SellerPulse`
 <p>O link só funciona uma vez e vence em pouco tempo. Se não foi você quem pediu, ignore este e-mail: a sua senha continua a mesma.</p>
 ```
 
-Antes de trocar o modelo, confirmar que o `Site URL` (Authentication > URL
-Configuration) é o endereço de produção da Vercel.
+O `Site URL` (Authentication > URL Configuration) foi conferido em 2026-11-04:
+é o endereço de produção da Vercel.
 
 ## Fora desta entrega
 
