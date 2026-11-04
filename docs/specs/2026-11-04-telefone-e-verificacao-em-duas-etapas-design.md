@@ -1,6 +1,6 @@
 # Telefone no cadastro e verificação em duas etapas
 
-Estado: em implementação na branch `feat/telefone-e-duas-etapas`.
+Estado: mergeado em 2026-11-04 (#49). Falta o teste de tela com conta real (ativar, entrar com código, desativar) e a revisão do texto da política pelo advogado.
 
 ## O pedido
 
