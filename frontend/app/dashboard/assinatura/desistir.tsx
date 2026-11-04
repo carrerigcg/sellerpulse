@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { linkDeEmail } from "@/lib/contato";
+import { useFocoDeVolta } from "@/lib/foco";
 import { desistirDaCompra } from "@/lib/ml";
 
 /**
@@ -17,6 +18,7 @@ export function Desistir({ ate, jaDevolvido }: { ate: string; jaDevolvido: boole
   const [confirmando, setConfirmando] = useState(false);
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const refDe = useFocoDeVolta(confirmando ? "desistir" : null);
 
   async function desistir() {
     setOcupado(true);
@@ -44,7 +46,7 @@ export function Desistir({ ate, jaDevolvido }: { ate: string; jaDevolvido: boole
           : `Você pode desistir até ${ate} e receber de volta o valor inteiro, pelo mesmo meio de pagamento. O acesso ao painel termina na hora, e os seus dados ficam guardados.`}
       </p>
       {confirmando ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div role="group" aria-label="Confirmar a desistência" className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={ocupado}
@@ -69,6 +71,7 @@ export function Desistir({ ate, jaDevolvido }: { ate: string; jaDevolvido: boole
         </div>
       ) : (
         <button
+          ref={refDe("desistir")}
           type="button"
           onClick={() => setConfirmando(true)}
           className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm font-medium text-negative hover:bg-surface"

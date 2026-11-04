@@ -133,7 +133,15 @@ async function SecaoDePagamentos() {
           <li key={p.comprovante} className="flex flex-wrap items-center justify-between gap-x-4 py-1">
             <span>
               {p.dia.split("-").reverse().join("/")} · {formatarPreco(p.valor)}
-              {p.devolvido && <span className="text-muted"> · devolvido</span>}
+              {/* Cada valor testado por si: um campo ausente (backend antigo
+                  no ar) não pode virar a afirmação de um estorno. */}
+              {p.situacao === "devolvido" && <span className="text-muted"> · devolvido</span>}
+              {p.situacao === "devolvendo" && (
+                <>
+                  {" "}
+                  <span className="whitespace-nowrap text-muted">· devolução em andamento</span>
+                </>
+              )}
             </span>
             <a
               href={p.comprovante}

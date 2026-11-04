@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { useFocoDeVolta } from "@/lib/foco";
 import { cancelarAssinatura, trocarPlano } from "@/lib/ml";
 import { NOMES_DOS_PLANOS, PLANOS_A_VENDA, type NomeDoPlano } from "@/lib/plano";
 import { PRECOS_MENSAIS, formatarPreco } from "@/lib/precos";
@@ -27,6 +28,7 @@ export function AcoesDaAssinatura({
   const [aviso, setAviso] = useState<string | null>(null);
   // O que está esperando confirmação: um plano, ou o cancelamento.
   const [confirmando, setConfirmando] = useState<NomeDoPlano | "cancelar" | null>(null);
+  const refDe = useFocoDeVolta(confirmando);
 
   const opcoes = PLANOS_A_VENDA.filter((p) => p !== plano && p !== proximoPlano);
 
@@ -87,6 +89,7 @@ export function AcoesDaAssinatura({
                   </span>
                   {confirmando !== p && (
                     <button
+                      ref={refDe(p)}
                       type="button"
                       disabled={ocupado}
                       onClick={() => setConfirmando(p)}
@@ -97,7 +100,11 @@ export function AcoesDaAssinatura({
                   )}
                 </div>
                 {confirmando === p && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div
+                    role="group"
+                    aria-label={`Confirmar a troca para o ${NOMES_DOS_PLANOS[p]}`}
+                    className="mt-2 flex flex-wrap gap-2"
+                  >
                     <button
                       type="button"
                       disabled={ocupado}
@@ -138,7 +145,7 @@ export function AcoesDaAssinatura({
           devolver o que já foi pago. Os seus dados ficam guardados.
         </p>
         {confirmando === "cancelar" ? (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div role="group" aria-label="Confirmar o cancelamento" className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               disabled={ocupado}
@@ -159,6 +166,7 @@ export function AcoesDaAssinatura({
           </div>
         ) : (
           <button
+            ref={refDe("cancelar")}
             type="button"
             onClick={() => setConfirmando("cancelar")}
             className="mt-3 inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-sm font-medium text-negative hover:bg-surface"

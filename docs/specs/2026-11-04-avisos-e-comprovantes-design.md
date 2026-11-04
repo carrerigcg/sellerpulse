@@ -58,9 +58,9 @@ O suporte do Asaas confirmou em 2026-11-04:
   existe um cliente só, o da compra de teste.
 - Paginação: `pagamentos_do_cliente` traz até 100 pagamentos, oito anos de
   mensalidade.
-- "devolvido" já aparece com o estorno pedido ou em andamento, antes de o
-  dinheiro voltar. No cartão o intervalo é curto. Distinguir exige o backend
-  mandar o estado.
+- Resolvido na branch `fix/assinatura-acabamentos`: o backend manda `situacao`
+  (`pago`, `devolvendo`, `devolvido`), e a tela mostra "devolução em andamento"
+  enquanto o estorno está pedido ou em andamento. "devolvido" só com `REFUNDED`.
 - A lista é por cliente do Asaas, sem o filtro de contrato. Se o Checkout
   reaproveitar o cliente de um pagador que paga duas lojas (um contador), uma
   loja veria os recibos da outra, com os dados do mesmo pagador. Não foi

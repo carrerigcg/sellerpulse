@@ -1450,7 +1450,10 @@ async def test_minha_assinatura_mostra_os_comprovantes(client, pg_pool, test_sel
     sem_valor = _pago("pay_3", hoje)
     sem_valor["transactionReceiptUrl"] = "https://asaas.test/r/3"
     del sem_valor["value"]
-    asaas_falso.pagamentos = [antigo, novo, pendente, sem_valor]
+    # Estorno pedido: o dinheiro ainda não voltou, e a tela não pode dizer que voltou.
+    devolvendo = _pago("pay_4", hoje - timedelta(days=1), status="REFUND_REQUESTED")
+    devolvendo["transactionReceiptUrl"] = "https://asaas.test/r/4"
+    asaas_falso.pagamentos = [antigo, novo, pendente, sem_valor, devolvendo]
 
     resp = client.get("/conta/pagamentos", headers=_auth(user_id))
 
@@ -1461,13 +1464,19 @@ async def test_minha_assinatura_mostra_os_comprovantes(client, pg_pool, test_sel
                 "dia": hoje.isoformat(),
                 "valor": 79.9,
                 "comprovante": "https://asaas.test/r/1",
-                "devolvido": False,
+                "situacao": "pago",
+            },
+            {
+                "dia": (hoje - timedelta(days=1)).isoformat(),
+                "valor": 79.9,
+                "comprovante": "https://asaas.test/r/4",
+                "situacao": "devolvendo",
             },
             {
                 "dia": (hoje - timedelta(days=40)).isoformat(),
                 "valor": 79.9,
                 "comprovante": "https://asaas.test/r/0",
-                "devolvido": True,
+                "situacao": "devolvido",
             },
         ]
     }
@@ -1512,3 +1521,19 @@ async def test_lista_de_avisos_vazia_nao_da_o_cliente_por_resolvido(
     assert [c for m, c, _ in _pedidos_de_avisos(asaas_falso) if m == "GET"] == [
         "/v3/customers/cus_1/notifications"
     ] * 2
+
+
+async def test_sem_chave_do_asaas_os_comprovantes_respondem_502(
+    client, pg_pool, test_seller, asaas_falso, monkeypatch
+):
+    """É o Asaas que não está disponível, como quando ele cai: 502, não 500."""
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+
+    def sem_chave():
+        raise asaas.AsaasNaoConfigurado("ASAAS_API_KEY não está configurada")
+
+    monkeypatch.setattr(asaas, "_cliente", sem_chave)
+    resp = client.get("/conta/pagamentos", headers=_auth(user_id))
+    assert resp.status_code == 502
+    assert resp.json()["detail"]["codigo"] == "gateway-recusou"

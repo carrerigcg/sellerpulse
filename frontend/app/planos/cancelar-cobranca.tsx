@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { linkDeEmail } from "@/lib/contato";
+import { useFocoDeVolta } from "@/lib/foco";
 import { cancelarAssinatura } from "@/lib/ml";
 
 // Quem chega aqui decide o texto: o inadimplente pode voltar a pagar; quem
@@ -26,6 +27,7 @@ export function CancelarCobranca({ motivo }: { motivo: keyof typeof EXPLICACAO }
   const [ocupado, setOcupado] = useState(false);
   const [feito, setFeito] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const refDe = useFocoDeVolta(confirmando ? "cancelar" : null);
 
   async function cancelar() {
     setOcupado(true);
@@ -38,6 +40,8 @@ export function CancelarCobranca({ motivo }: { motivo: keyof typeof EXPLICACAO }
       if (motivo === "termos") router.refresh();
     } catch (falha) {
       setErro(falha instanceof Error ? falha.message : "Não foi possível cancelar.");
+      // Fechar devolve o foco ao botão que abriu (`useFocoDeVolta`).
+      setConfirmando(false);
     } finally {
       setOcupado(false);
     }
@@ -55,7 +59,7 @@ export function CancelarCobranca({ motivo }: { motivo: keyof typeof EXPLICACAO }
     <div className="mt-3">
       <p className="text-muted">{EXPLICACAO[motivo]}</p>
       {confirmando ? (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div role="group" aria-label="Confirmar o cancelamento" className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={ocupado}
@@ -76,6 +80,7 @@ export function CancelarCobranca({ motivo }: { motivo: keyof typeof EXPLICACAO }
         </div>
       ) : (
         <button
+          ref={refDe("cancelar")}
           type="button"
           onClick={() => setConfirmando(true)}
           className="mt-2 inline-flex min-h-11 items-center rounded-lg border border-line px-3 font-medium text-negative hover:bg-bg"

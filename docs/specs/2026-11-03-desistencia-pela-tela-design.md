@@ -47,9 +47,14 @@ isso depende de o cliente escrever e de o dono estornar à mão no painel do Asa
 
 - Estorno parado à espera de autorização e depois rejeitado deixa a marca e o acesso
   cortado com o pagamento valendo. O status do estorno no log permite conciliar à mão.
-- O foco volta ao `body` quando a confirmação fecha (Voltar, erro, fim da ação). O
-  conserto é uma `ref` no botão que abre. O grupo de botões da confirmação também não
-  tem nome para o leitor de tela.
+- Resolvido na branch `fix/assinatura-acabamentos`: quando a confirmação fecha pelo
+  Voltar ou por um erro, o foco volta ao botão que a abriu (`frontend/lib/foco.ts`), e o
+  grupo de botões da confirmação tem nome para o leitor de tela.
+- Lacuna que fica: depois de uma troca de plano ou de um cancelamento que deu certo, o
+  botão que abriu sai da tela com o `router.refresh()`, e o foco cai no `body`. O aviso
+  `role="status"` anuncia o resultado. Conserto possível: focar o aviso.
+- O teste do foco cobre só a regra (`quemRecebeOFoco`); a ligação com o DOM não tem
+  teste de componente, porque o front não tem testing-library.
 
 Resolvidas no #46:
 

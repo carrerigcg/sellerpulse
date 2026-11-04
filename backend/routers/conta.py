@@ -460,6 +460,9 @@ async def post_cancelar(seller_id: uuid.UUID = Depends(get_current_seller_id)) -
 DIAS_PARA_DESISTIR = 7
 _PAGOS = frozenset({"CONFIRMED", "RECEIVED", "RECEIVED_IN_CASH"})
 _ESTORNADOS = frozenset({"REFUNDED", "REFUND_REQUESTED", "REFUND_IN_PROGRESS"})
+# Só o REFUNDED diz que o dinheiro voltou. Com o estorno pedido ou em
+# andamento, dizer "devolvido" afirmaria o que ainda não aconteceu.
+_DEVOLVENDO = _ESTORNADOS - {"REFUNDED"}
 
 
 def _dia_do_pagamento(pagamento: dict) -> date | None:
@@ -543,7 +546,7 @@ async def get_pagamentos(
     tarefas.add_task(avisos.garante, pool, cliente)
     try:
         todos = await asaas.pagamentos_do_cliente(cliente)
-    except asaas.AsaasErro as erro:
+    except (asaas.AsaasErro, asaas.AsaasNaoConfigurado) as erro:
         _log.error("[asaas] consulta de pagamentos recusada: %s", erro)
         raise recusa(
             502, "gateway-recusou", "Não foi possível consultar os pagamentos agora."
@@ -553,7 +556,7 @@ async def get_pagamentos(
             "dia": dia.isoformat(),
             "valor": p.get("value"),
             "comprovante": p["transactionReceiptUrl"],
-            "devolvido": p.get("status") in _ESTORNADOS,
+            "situacao": _situacao(p.get("status")),
         }
         for p in todos
         # Sem valor, a linha sairia "R$ 0,00": ausência não vira zero.
@@ -563,6 +566,14 @@ async def get_pagamentos(
     ]
     pagamentos.sort(key=lambda p: p["dia"], reverse=True)
     return {"pagamentos": pagamentos}
+
+
+def _situacao(status: str | None) -> str:
+    if status == "REFUNDED":
+        return "devolvido"
+    if status in _DEVOLVENDO:
+        return "devolvendo"
+    return "pago"
 
 
 @router.get("/desistencia")
