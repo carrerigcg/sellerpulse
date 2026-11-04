@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 
-import { getAcesso, getDesistencia } from "@/lib/api";
+import { getAcesso, getDesistencia, getPagamentos } from "@/lib/api";
 import { NOMES_DOS_PLANOS, diaDe, ultimoDia } from "@/lib/plano";
 import { PRECOS_MENSAIS, formatarPreco, precoAnual } from "@/lib/precos";
 
@@ -108,7 +108,45 @@ export default async function AssinaturaPage() {
           página de planos.
         </p>
       )}
+      {assinatura?.origem === "gateway" && (
+        <Suspense fallback={null}>
+          <SecaoDePagamentos />
+        </Suspense>
+      )}
     </>
+  );
+}
+
+/**
+ * Os comprovantes, onde o recibo da primeira compra fica: o Asaas não o manda
+ * por e-mail, porque o cliente que o checkout cria nasce com os avisos
+ * desligados. Se o Asaas não responder, a seção não aparece.
+ */
+async function SecaoDePagamentos() {
+  const resposta = await getPagamentos().catch(() => null);
+  if (!resposta || resposta.pagamentos.length === 0) return null;
+  return (
+    <section className="mt-6 rounded-xl border border-line p-5">
+      <h2 className="text-sm font-semibold">Pagamentos</h2>
+      <ul className="mt-2 divide-y divide-line text-sm">
+        {resposta.pagamentos.map((p) => (
+          <li key={p.comprovante} className="flex flex-wrap items-center justify-between gap-x-4 py-1">
+            <span>
+              {p.dia.split("-").reverse().join("/")} · {formatarPreco(p.valor)}
+              {p.devolvido && <span className="text-muted"> · devolvido</span>}
+            </span>
+            <a
+              href={p.comprovante}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+            >
+              Ver comprovante<span className="sr-only"> (abre em nova aba)</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

@@ -160,6 +160,31 @@ async def pagamentos_do_cliente(cliente: str) -> list[dict]:
     return resposta.get("data", [])
 
 
+async def ligar_avisos_por_email(cliente: str) -> int:
+    """Liga cada aviso do cliente, com e-mail para ele. Devolve quantos mudaram.
+
+    Um por vez, pelo `PUT /notifications/{id}` que o suporte do Asaas indicou.
+    Se cair no meio, a próxima tentativa só mexe no que ainda falta.
+    """
+    resposta = await _pede("GET", f"/customers/{cliente}/notifications")
+    todos = resposta.get("data") or []
+    if not todos:
+        # Todo cliente nasce com avisos (suporte do Asaas). Lista vazia é
+        # resposta estranha, e dar por ligado deixaria o cliente sem e-mail
+        # para sempre: vira falha, e a próxima chance tenta de novo.
+        raise AsaasErro(0, f"cliente {cliente} sem avisos na resposta")
+    faltam = [
+        aviso["id"]
+        for aviso in todos
+        if aviso.get("id") and not (aviso.get("enabled") and aviso.get("emailEnabledForCustomer"))
+    ]
+    for aviso in faltam:
+        await _pede(
+            "PUT", f"/notifications/{aviso}", {"enabled": True, "emailEnabledForCustomer": True}
+        )
+    return len(faltam)
+
+
 async def estornar_pagamento(pagamento: str) -> dict:
     """Estorno do valor inteiro, pelo mesmo meio do pagamento."""
     return await _pede("POST", f"/payments/{pagamento}/refund")
