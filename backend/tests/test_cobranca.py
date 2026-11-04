@@ -50,6 +50,28 @@ class AsaasFalso:
         self.assinatura_no_asaas = "sub_api"
         self.pagamentos: list[dict] = []
         self.estorno_falha = False
+        # Como o cliente criado pelo checkout nasce: avisos sem e-mail.
+        self.avisos = [
+            {
+                "id": "not_1",
+                "event": "PAYMENT_RECEIVED",
+                "enabled": True,
+                "emailEnabledForCustomer": False,
+            },
+            {
+                "id": "not_2",
+                "event": "PAYMENT_OVERDUE",
+                "enabled": False,
+                "emailEnabledForCustomer": False,
+            },
+            {
+                "id": "not_3",
+                "event": "PAYMENT_CREATED",
+                "enabled": True,
+                "emailEnabledForCustomer": True,
+            },
+        ]
+        self.avisos_falham = False
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         corpo = json.loads(request.content) if request.content else None
@@ -68,6 +90,10 @@ class AsaasFalso:
             if self.estorno_falha:
                 return httpx.Response(400, json={"errors": [{"description": "recusado"}]})
             return httpx.Response(200, json={"status": "REFUNDED"})
+        if "/notifications" in request.url.path and self.avisos_falham:
+            return httpx.Response(500, json={"errors": [{"description": "fora"}]})
+        if request.method == "GET" and request.url.path.endswith("/notifications"):
+            return httpx.Response(200, json={"data": self.avisos})
         if request.method == "GET" and request.url.path.endswith("/subscriptions"):
             ativas = [{"id": self.assinatura_no_asaas}] if self.assinatura_no_asaas else []
             return httpx.Response(200, json={"data": ativas})
@@ -1341,3 +1367,148 @@ async def test_desistencia_concluida_some_da_tela_e_nao_se_repete(
     resp = client.post("/conta/desistir", headers=_auth(user_id))
     assert resp.status_code == 409
     assert resp.json()["detail"]["codigo"] == "ja-devolvido"
+
+
+# ---------- avisos por e-mail e comprovantes ----------
+
+
+def _pedidos_de_avisos(asaas_falso):
+    return [(m, c, b) for m, c, b in asaas_falso.pedidos if "notifications" in c]
+
+
+def _webhook(client, evento):
+    return client.post(
+        "/pagamentos/webhook", json=evento, headers={"asaas-access-token": TOKEN_DO_WEBHOOK}
+    )
+
+
+async def test_cliente_novo_ganha_os_avisos_por_email(client, pg_pool, test_seller, asaas_falso):
+    """O cliente que o checkout cria nasce com os avisos sem e-mail (suporte do
+    Asaas, 2026-11-04): o primeiro aviso que o revela liga todos."""
+    _, seller_id = test_seller
+    await _checkout_criado(pg_pool, seller_id)
+
+    assert _webhook(client, _pagamento("evt_1", hoje_do_vendedor())).status_code == 200
+
+    assert _pedidos_de_avisos(asaas_falso) == [
+        ("GET", "/v3/customers/cus_1/notifications", None),
+        ("PUT", "/v3/notifications/not_1", {"enabled": True, "emailEnabledForCustomer": True}),
+        ("PUT", "/v3/notifications/not_2", {"enabled": True, "emailEnabledForCustomer": True}),
+    ]
+
+
+async def test_os_avisos_sao_ligados_uma_vez_so(client, pg_pool, test_seller, asaas_falso):
+    _, seller_id = test_seller
+    await _checkout_criado(pg_pool, seller_id)
+    _webhook(client, _pagamento("evt_1", hoje_do_vendedor()))
+    antes = len(_pedidos_de_avisos(asaas_falso))
+
+    _webhook(client, _pagamento("evt_2", hoje_do_vendedor(), tipo="PAYMENT_RECEIVED"))
+
+    assert len(_pedidos_de_avisos(asaas_falso)) == antes
+
+
+async def test_cliente_que_nao_e_nosso_nao_e_tocado(client, asaas_falso):
+    resp = _webhook(
+        client, _pagamento("evt_1", hoje_do_vendedor(), checkout="chk_alheio", cliente="cus_x")
+    )
+    assert resp.status_code == 200
+    assert _pedidos_de_avisos(asaas_falso) == []
+
+
+async def test_falha_ao_ligar_os_avisos_nao_derruba_o_webhook_e_tenta_de_novo(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    await _checkout_criado(pg_pool, seller_id)
+    asaas_falso.avisos_falham = True
+
+    resp = _webhook(client, _pagamento("evt_1", hoje_do_vendedor()))
+
+    assert resp.status_code == 200
+    assert client.get("/conta/acesso", headers=_auth(user_id)).json()["plano"] == "exclusive"
+    asaas_falso.avisos_falham = False
+    _webhook(client, _pagamento("evt_2", hoje_do_vendedor(), tipo="PAYMENT_RECEIVED"))
+    assert (
+        "PUT",
+        "/v3/notifications/not_1",
+        {"enabled": True, "emailEnabledForCustomer": True},
+    ) in (_pedidos_de_avisos(asaas_falso))
+
+
+async def test_minha_assinatura_mostra_os_comprovantes(client, pg_pool, test_seller, asaas_falso):
+    """O recibo do PRIMEIRO pagamento sai antes de os avisos serem ligados: a
+    tela é onde ele fica."""
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+    hoje = hoje_do_vendedor()
+    antigo = _pago("pay_0", hoje - timedelta(days=40), status="REFUNDED")
+    antigo["transactionReceiptUrl"] = "https://asaas.test/r/0"
+    novo = _pago("pay_1", hoje)
+    novo["transactionReceiptUrl"] = "https://asaas.test/r/1"
+    pendente = {"id": "pay_2", "status": "PENDING", "value": 79.9}
+    sem_valor = _pago("pay_3", hoje)
+    sem_valor["transactionReceiptUrl"] = "https://asaas.test/r/3"
+    del sem_valor["value"]
+    asaas_falso.pagamentos = [antigo, novo, pendente, sem_valor]
+
+    resp = client.get("/conta/pagamentos", headers=_auth(user_id))
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "pagamentos": [
+            {
+                "dia": hoje.isoformat(),
+                "valor": 79.9,
+                "comprovante": "https://asaas.test/r/1",
+                "devolvido": False,
+            },
+            {
+                "dia": (hoje - timedelta(days=40)).isoformat(),
+                "valor": 79.9,
+                "comprovante": "https://asaas.test/r/0",
+                "devolvido": True,
+            },
+        ]
+    }
+
+
+async def test_abrir_minha_assinatura_liga_os_avisos_de_quem_ja_pagou(
+    client, pg_pool, test_seller, asaas_falso
+):
+    """Quem pagou antes de os avisos existirem só é alcançado assim."""
+    user_id, seller_id = test_seller
+    await _contratante(pg_pool, seller_id)
+
+    client.get("/conta/pagamentos", headers=_auth(user_id))
+
+    assert (
+        "PUT",
+        "/v3/notifications/not_2",
+        {"enabled": True, "emailEnabledForCustomer": True},
+    ) in (_pedidos_de_avisos(asaas_falso))
+
+
+async def test_sem_cobranca_pelo_asaas_nao_ha_comprovantes(
+    client, pg_pool, test_seller, asaas_falso
+):
+    user_id, seller_id = test_seller
+    async with pg_pool.acquire() as conn:
+        await da_plano(conn, seller_id, "exclusive")
+    assert client.get("/conta/pagamentos", headers=_auth(user_id)).json() == {"pagamentos": []}
+    assert asaas_falso.pedidos == []
+
+
+async def test_lista_de_avisos_vazia_nao_da_o_cliente_por_resolvido(
+    client, pg_pool, test_seller, asaas_falso
+):
+    _, seller_id = test_seller
+    await _checkout_criado(pg_pool, seller_id)
+    asaas_falso.avisos = []
+    _webhook(client, _pagamento("evt_1", hoje_do_vendedor()))
+
+    _webhook(client, _pagamento("evt_2", hoje_do_vendedor(), tipo="PAYMENT_RECEIVED"))
+
+    assert [c for m, c, _ in _pedidos_de_avisos(asaas_falso) if m == "GET"] == [
+        "/v3/customers/cus_1/notifications"
+    ] * 2

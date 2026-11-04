@@ -12,10 +12,10 @@ import logging
 import os
 import secrets
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
 
 from backend.db import get_pool
-from backend.pagamentos import eventos
+from backend.pagamentos import avisos, eventos
 
 _log = logging.getLogger(__name__)
 
@@ -27,6 +27,7 @@ SEGREDO_DO_WEBHOOK = "ASAAS_WEBHOOK_TOKEN"
 @router.post("/webhook")
 async def webhook(
     request: Request,
+    tarefas: BackgroundTasks,
     asaas_access_token: str | None = Header(default=None),
 ) -> dict:
     """Responde 200 a tudo que autenticou, inclusive ao evento ignorado.
@@ -47,6 +48,21 @@ async def webhook(
         raise HTTPException(status_code=401, detail="token invalido")
 
     evento = await request.json()
-    resultado = await eventos.processa(await get_pool(), evento)
+    pool = await get_pool()
+    resultado = await eventos.processa(pool, evento)
     _log.info("[asaas] %s %s -> %s", evento.get("event"), evento.get("id"), resultado)
+    # Depois da resposta: a chamada ao Asaas não atrasa o 200 que ele espera.
+    tarefas.add_task(avisos.garante, pool, _cliente_do(evento))
     return {"resultado": resultado}
+
+
+def _cliente_do(evento: dict) -> str | None:
+    """O cliente do Asaas, que chega no pagamento e na assinatura.
+
+    O `CHECKOUT_PAID` traz `customer: null`, então é o aviso seguinte que revela.
+    """
+    for chave in ("payment", "subscription"):
+        objeto = evento.get(chave)
+        if isinstance(objeto, dict) and (cliente := eventos._id_de(objeto.get("customer"))):
+            return cliente
+    return None

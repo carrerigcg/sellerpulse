@@ -21,7 +21,7 @@ import uuid
 from datetime import date, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from pydantic import BaseModel
 
 from backend.db import get_pool
@@ -33,7 +33,7 @@ from backend.deps import (
     le_plano_e_aceite,
     recusa,
 )
-from backend.pagamentos import asaas
+from backend.pagamentos import asaas, avisos
 from backend.pagamentos.eventos import referencia_do_vendedor
 from backend.pagamentos.prazos import hoje_do_vendedor
 from backend.planos import DIAS_DE_TESTE, PLANOS, PLANOS_COM_TESTE, VERSAO_DOS_TERMOS
@@ -519,6 +519,50 @@ def _o_que_falta(linha, do_contrato: list[dict]) -> tuple[list[dict], list[dict]
         [p for p in do_contrato if p.get("status") in _ESTORNADOS] if linha["com_acesso"] else []
     )
     return a_estornar, sem_corte
+
+
+@router.get("/pagamentos")
+async def get_pagamentos(
+    tarefas: BackgroundTasks, seller_id: uuid.UUID = Depends(get_current_seller_id)
+) -> dict:
+    """Os comprovantes dos pagamentos, lidos do Asaas na hora.
+
+    O link abre a página do Asaas com os dados de quem pagou: por isso nunca é
+    guardado (`eventos.sem_dados_pessoais`) e só sai aqui, para a conta dona do
+    contrato. Pagamento sem comprovante (pendente, vencido) fica de fora.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        cliente = await conn.fetchval(
+            "SELECT asaas_cliente FROM assinaturas WHERE seller_id = $1 AND origem = 'gateway'",
+            seller_id,
+        )
+    if not cliente:
+        return {"pagamentos": []}
+    # Quem pagou antes de os avisos existirem só é alcançado aqui.
+    tarefas.add_task(avisos.garante, pool, cliente)
+    try:
+        todos = await asaas.pagamentos_do_cliente(cliente)
+    except asaas.AsaasErro as erro:
+        _log.error("[asaas] consulta de pagamentos recusada: %s", erro)
+        raise recusa(
+            502, "gateway-recusou", "Não foi possível consultar os pagamentos agora."
+        ) from erro
+    pagamentos = [
+        {
+            "dia": dia.isoformat(),
+            "valor": p.get("value"),
+            "comprovante": p["transactionReceiptUrl"],
+            "devolvido": p.get("status") in _ESTORNADOS,
+        }
+        for p in todos
+        # Sem valor, a linha sairia "R$ 0,00": ausência não vira zero.
+        if p.get("transactionReceiptUrl")
+        and p.get("value") is not None
+        and (dia := _dia_do_pagamento(p)) is not None
+    ]
+    pagamentos.sort(key=lambda p: p["dia"], reverse=True)
+    return {"pagamentos": pagamentos}
 
 
 @router.get("/desistencia")
