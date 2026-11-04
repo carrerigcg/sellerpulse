@@ -82,6 +82,14 @@ export default function LoginPage() {
           value={senha}
           onChange={setSenha}
         />
+        <p className="-mt-2 text-right text-sm">
+          <Link
+            href="/esqueci-senha"
+            className="inline-block py-1 font-medium text-accent hover:underline"
+          >
+            Esqueceu a senha?
+          </Link>
+        </p>
         {erro && <Alert tone="erro">{erro}</Alert>}
         <PrimaryButton disabled={carregando}>
           {carregando ? "Entrando..." : "Entrar"}
