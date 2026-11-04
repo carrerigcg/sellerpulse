@@ -1,6 +1,6 @@
 # Telefone no cadastro e verificação em duas etapas
 
-Estado: mergeado em 2026-11-04 (#49). Falta o teste de tela com conta real (ativar, entrar com código, desativar) e a revisão do texto da política pelo advogado.
+Estado: mergeado em 2026-11-04 (#49). Teste de tela com conta real feito pelo Guilherme em 2026-11-04 (ativar, entrar com código, desativar): funcionou. Falta a revisão do texto da política pelo advogado.
 
 ## O pedido
 
