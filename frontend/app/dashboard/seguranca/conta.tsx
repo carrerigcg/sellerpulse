@@ -157,24 +157,24 @@ function Contato({ salvo, aoSalvar }: { salvo: ContatoSalvo; aoSalvar: () => Pro
             DDD + número. Deixe vazio e salve para apagar.
           </p>
         </div>
-        <label className={`flex items-start gap-2 text-sm ${semTelefone ? "text-muted" : ""}`}>
-          <input
-            type="checkbox"
-            checked={querWhatsapp}
-            disabled={semTelefone}
-            aria-describedby={semTelefone ? "whatsapp-dica" : undefined}
-            onChange={(e) => setQuerWhatsapp(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-accent"
-          />
-          <span>
-            Aceito receber mensagens do SellerPulse por WhatsApp nesse número.
-            {semTelefone && (
-              <span id="whatsapp-dica" className="block text-xs">
-                Preencha o celular para escolher.
-              </span>
-            )}
-          </span>
-        </label>
+        <div>
+          <label className={`flex items-start gap-2 text-sm ${semTelefone ? "text-muted" : ""}`}>
+            <input
+              type="checkbox"
+              checked={querWhatsapp}
+              disabled={semTelefone}
+              aria-describedby={semTelefone ? "whatsapp-dica" : undefined}
+              onChange={(e) => setQuerWhatsapp(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-accent"
+            />
+            <span>Aceito receber mensagens do SellerPulse por WhatsApp nesse número.</span>
+          </label>
+          {semTelefone && (
+            <p id="whatsapp-dica" className="ml-6 text-xs text-muted">
+              Preencha o celular para escolher.
+            </p>
+          )}
+        </div>
         <button type="submit" disabled={ocupado} className={BOTAO}>
           {ocupado ? "Salvando…" : "Salvar"}
         </button>
