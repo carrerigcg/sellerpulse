@@ -24,15 +24,24 @@ from backend.analytics._common import _TZ_VENDEDOR
 from backend.db import get_pool
 from backend.deps import (
     Acesso,
+    Contas,
     get_acesso,
-    get_current_seller_id,
+    get_contas,
     le_plano_e_aceite,
+    recusa,
     recusa_fora_do_plano,
 )
 from backend.jobs import queue
 from backend.ml import oauth
 from backend.ml.tokens import PostgresTokenStore
-from backend.planos import ASSINATURA_VIGENTE, PLANOS, VERSAO_DOS_TERMOS, Recurso
+from backend.planos import (
+    ASSINATURA_VIGENTE,
+    JOIN_PRINCIPAL,
+    PLANOS,
+    VERSAO_DOS_TERMOS,
+    Recurso,
+    conta_abre,
+)
 from src.ml_client import MLClient
 from src.session_auth import OAuthError, exchange_code_for_tokens, sanitize_oauth_error
 
@@ -45,11 +54,67 @@ def _destino(caminho: str) -> str:
     return f"{os.environ['FRONTEND_URL'].rstrip('/')}{caminho}"
 
 
+# No `state`, distingue "conectar uma conta nova" de "(re)conectar a conta
+# aberta". O state é assinado: o navegador não troca um pelo outro.
+_PREFIXO_NOVA = "nova:"
+
+
 @router.post("/connect/start")
 async def connect_start(acesso: Acesso = Depends(get_acesso)) -> dict[str, str]:
     # Conectar exige plano e aceite: sem eles, o vendedor só vê a demo.
     url, _state = oauth.url_de_consentimento(str(acesso.seller_id))
     return {"url": url}
+
+
+async def _contas_do_usuario(conn, seller_id: uuid.UUID) -> int:
+    return await conn.fetchval(
+        "SELECT count(*) FROM sellers WHERE user_id = (SELECT user_id FROM sellers WHERE id = $1)",
+        seller_id,
+    )
+
+
+def _recusa_limite() -> HTTPException:
+    return recusa(409, "limite-de-contas", "O plano já está com todas as contas conectadas")
+
+
+@router.post("/contas/nova")
+async def nova_conta(acesso: Acesso = Depends(get_acesso)) -> dict[str, str]:
+    """Consentimento para conectar mais uma conta do ML ao mesmo login.
+
+    O limite é conferido aqui e de novo no callback: entre os dois, outro
+    consentimento aberto pode ter ocupado a vaga.
+    """
+    if acesso.plano.max_contas < 2:
+        raise recusa_fora_do_plano()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if await _contas_do_usuario(conn, acesso.principal_id) >= acesso.plano.max_contas:
+            raise _recusa_limite()
+    url, _state = oauth.url_de_consentimento(f"{_PREFIXO_NOVA}{acesso.principal_id}")
+    return {"url": url}
+
+
+@router.delete("/contas/{conta_id}", status_code=204)
+async def remove_conta(conta_id: uuid.UUID, contas: Contas = Depends(get_contas)) -> None:
+    """Apaga uma conta extra e, em cascata, todos os dados dela.
+
+    Vale fora do Premium: é como quem saiu dele apaga a conta que não abre
+    mais. A principal não sai por aqui, e sim com a exclusão da conta, que
+    trata assinatura e a prova do aceite.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        principal = await conn.fetchval(
+            "SELECT principal FROM sellers "
+            "WHERE id = $1 AND user_id = (SELECT user_id FROM sellers WHERE id = $2)",
+            conta_id,
+            contas.principal,
+        )
+        if principal is None:
+            raise HTTPException(status_code=404, detail="Conta não encontrada")
+        if principal:
+            raise recusa(409, "conta-principal", "A conta principal sai com a exclusão da conta")
+        await conn.execute("DELETE FROM sellers WHERE id = $1", conta_id)
 
 
 @router.get("/callback")
@@ -63,14 +128,29 @@ async def callback(
         return RedirectResponse(_destino("/dashboard/conectar?erro=recusado"))
 
     try:
-        seller_id = uuid.UUID(oauth.valida_state(state or ""))
+        sub = oauth.valida_state(state or "")
+        nova = sub.startswith(_PREFIXO_NOVA)
+        seller_id = uuid.UUID(sub.removeprefix(_PREFIXO_NOVA))
     except (oauth.StateInvalido, ValueError):
         return RedirectResponse(_destino("/dashboard/conectar?erro=state"))
 
+    async with (await get_pool()).acquire() as conn:
+        conta = await conn.fetchrow(
+            f"SELECT p.id AS principal, s.principal AS e_principal FROM sellers s "
+            f"{JOIN_PRINCIPAL} WHERE s.id = $1",
+            seller_id,
+        )
+    if conta is None:
+        # A conta foi removida enquanto o consentimento estava aberto.
+        return RedirectResponse(_destino("/dashboard/conectar?erro=state"))
+
     # O state so e emitido para quem tem acesso, mas vale por alguns minutos:
-    # quem perdeu o plano nesse meio-tempo nao termina a conexao.
-    plano, aceitou = await le_plano_e_aceite(await get_pool(), seller_id)
+    # quem perdeu o plano nesse meio-tempo nao termina a conexao. Plano e
+    # aceite sao os da principal: a conta extra nao tem assinatura propria.
+    plano, aceitou = await le_plano_e_aceite(await get_pool(), conta["principal"])
     if plano is None or not aceitou:
+        return RedirectResponse(_destino("/dashboard"))
+    if (nova and plano.max_contas < 2) or not conta_abre(plano, principal=conta["e_principal"]):
         return RedirectResponse(_destino("/dashboard"))
 
     # `requests` e sincrono: sem to_thread, estas duas chamadas travariam o
@@ -103,28 +183,45 @@ async def callback(
     ml_seller_id = int(eu["id"])
     pool = await get_pool()
 
-    async with pool.acquire() as conn:
-        dono = await conn.fetchval(
-            "SELECT id FROM sellers WHERE ml_seller_id = $1 AND id <> $2",
-            ml_seller_id,
-            seller_id,
-        )
-        if dono is not None:
-            return RedirectResponse(_destino("/dashboard/conectar?erro=ja-conectada"))
-
-        try:
-            await conn.execute(
-                "UPDATE sellers SET ml_seller_id = $2, ml_nickname = $3 WHERE id = $1",
-                seller_id,
+    try:
+        async with pool.acquire() as conn, conn.transaction():
+            # Na conta nova, nenhuma linha existente pode ter esta conta do ML,
+            # nem a principal; na reconexao, a propria linha pode.
+            dono = await conn.fetchval(
+                "SELECT id FROM sellers WHERE ml_seller_id = $1 AND ($3 OR id <> $2)",
                 ml_seller_id,
-                eu.get("nickname"),
+                seller_id,
+                nova,
             )
-        except asyncpg.exceptions.UniqueViolationError:
-            # Dois callbacks pra mesma conta do ML no mesmo instante: os dois
-            # passam pelo SELECT acima antes de qualquer um gravar. Quem decide
-            # e a constraint uniq_ml_seller_id; o SELECT continua ali so pra dar
-            # a mensagem certa no caso comum, sem gastar um write que vai falhar.
-            return RedirectResponse(_destino("/dashboard/conectar?erro=ja-conectada"))
+            if dono is not None:
+                return RedirectResponse(_destino("/dashboard/conectar?erro=ja-conectada"))
+
+            if nova:
+                # Trava na principal: dois callbacks de conta nova ao mesmo tempo
+                # contariam as mesmas contas e passariam os dois do limite.
+                await conn.execute("SELECT 1 FROM sellers WHERE id = $1 FOR UPDATE", seller_id)
+                if await _contas_do_usuario(conn, seller_id) >= plano.max_contas:
+                    return RedirectResponse(_destino("/dashboard/conectar?erro=limite-de-contas"))
+                seller_id = await conn.fetchval(
+                    "INSERT INTO sellers (user_id, principal, ml_seller_id, ml_nickname) "
+                    "SELECT user_id, false, $2, $3 FROM sellers WHERE id = $1 RETURNING id",
+                    seller_id,
+                    ml_seller_id,
+                    eu.get("nickname"),
+                )
+            else:
+                await conn.execute(
+                    "UPDATE sellers SET ml_seller_id = $2, ml_nickname = $3 WHERE id = $1",
+                    seller_id,
+                    ml_seller_id,
+                    eu.get("nickname"),
+                )
+    except asyncpg.exceptions.UniqueViolationError:
+        # Dois callbacks pra mesma conta do ML no mesmo instante: os dois
+        # passam pelo SELECT acima antes de qualquer um gravar. Quem decide
+        # e a constraint uniq_ml_seller_id; o SELECT continua ali so pra dar
+        # a mensagem certa no caso comum, sem gastar um write que vai falhar.
+        return RedirectResponse(_destino("/dashboard/conectar?erro=ja-conectada"))
 
     await PostgresTokenStore(pool, seller_id).save(tokens)
     await queue.enqueue(pool, seller_id, "backfill")
@@ -132,13 +229,15 @@ async def callback(
 
 
 @router.delete("/connection", status_code=204)
-async def disconnect(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> None:
+async def disconnect(contas: Contas = Depends(get_contas)) -> None:
     """Apaga os tokens e para a sincronizacao. Os dados ingeridos ficam.
 
     Eles saem junto com a conta, que tem ON DELETE CASCADE desde a Sprint 1 —
     apagar historico aqui seria destruir dado que o usuario nao pediu pra
-    destruir, so porque ele desplugou a integracao.
+    destruir, so porque ele desplugou a integracao. E a conta aberta: com uma
+    extra aberta, a principal continua conectada.
     """
+    seller_id = contas.aberta
     pool = await get_pool()
     async with pool.acquire() as conn, conn.transaction():
         await conn.execute("DELETE FROM oauth_tokens WHERE seller_id = $1", seller_id)
@@ -305,13 +404,14 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
         # ingerido fica, e volta a atualizar com o plano e o aceite.
         sellers = await conn.fetch(
             f"""
-            SELECT s.id, s.last_synced_at, a.plano
+            SELECT s.id, s.last_synced_at, s.principal, a.plano
               FROM sellers s
-              JOIN assinaturas a ON a.seller_id = s.id
+              {JOIN_PRINCIPAL}
+              JOIN assinaturas a ON a.seller_id = p.id
              WHERE s.ml_seller_id IS NOT NULL
                AND {ASSINATURA_VIGENTE}
                AND EXISTS (SELECT 1 FROM aceites_de_termos t
-                            WHERE t.seller_id = s.id AND t.versao = $1)
+                            WHERE t.seller_id = p.id AND t.versao = $1)
             """,
             VERSAO_DOS_TERMOS,
         )
@@ -321,6 +421,10 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
     pulados: dict[str, int] = {}
 
     for seller in sellers:
+        # Conta extra fora do Premium: os dados ficam, mas nao sincroniza (2.1).
+        if not conta_abre(PLANOS[seller["plano"]], principal=seller["principal"]):
+            pulados["fora-do-plano"] = pulados.get("fora-do-plano", 0) + 1
+            continue
         ultimo = seller["last_synced_at"]
         if ultimo is not None and not _hora_de_sincronizar(
             PLANOS[seller["plano"]], ultimo=ultimo, agora=agora
@@ -346,9 +450,10 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
 
 
 @router.get("/sync/status")
-async def sync_status(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
+async def sync_status(contas: Contas = Depends(get_contas)) -> dict:
+    seller_id = contas.aberta
     pool = await get_pool()
-    plano, _ = await le_plano_e_aceite(pool, seller_id)
+    plano, _ = await le_plano_e_aceite(pool, contas.principal)
     async with pool.acquire() as conn:
         seller = await conn.fetchrow(
             "SELECT ml_seller_id, ml_nickname, last_synced_at FROM sellers WHERE id = $1",

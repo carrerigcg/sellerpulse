@@ -6,6 +6,8 @@
  * com cadeado. Desenho em `docs/specs/2026-10-28-planos-e-acesso-design.md`.
  */
 
+import type { Contas } from "@/lib/contas";
+
 export type Recurso =
   | "abc-completa"
   | "desempenho-anuncios"
@@ -20,7 +22,7 @@ export type NomeDoPlano = "essencial" | "exclusive" | "premium";
 /** O que se pode contratar ou escolher numa troca. O backend recusa os demais. */
 export const PLANOS_A_VENDA: NomeDoPlano[] = ["essencial", "exclusive"];
 
-export type Acesso = {
+export type Acesso = Contas & {
   plano: NomeDoPlano | null;
   recursos: Recurso[];
   /**

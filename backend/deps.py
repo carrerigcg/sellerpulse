@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 
 import asyncpg
-from fastapi import Depends, HTTPException
+from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.auth import decode_supabase_jwt
@@ -26,20 +26,26 @@ from backend.planos import (
     VERSAO_DOS_TERMOS,
     Plano,
     Recurso,
+    conta_abre,
 )
 
 _bearer = HTTPBearer()
 
 
 async def resolve_seller_id(pool: asyncpg.Pool, user_id: str) -> uuid.UUID:
-    """user_id (claim `sub` do JWT) -> seller_id. 404 se não houver seller.
+    """user_id (claim `sub` do JWT) -> seller_id da conta principal. 404 se não houver.
+
+    É a principal que tem plano, aceite e cobrança. A conta aberta na tela,
+    que pode ser uma extra, vem de `get_contas`.
 
     Não deveria acontecer em uso normal: um trigger no Supabase cria a row
     em `sellers` a cada insert em `auth.users`. É defesa contra estado
     inconsistente.
     """
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT id FROM sellers WHERE user_id = $1", user_id)
+        row = await conn.fetchrow(
+            "SELECT id FROM sellers WHERE user_id = $1 AND principal", uuid.UUID(str(user_id))
+        )
     if row is None:
         raise HTTPException(status_code=404, detail="Usuário sem seller associado")
     return row["id"]
@@ -75,6 +81,57 @@ async def get_current_seller_id(
     return await resolve_seller_id(pool, claims["sub"])
 
 
+@dataclass(frozen=True)
+class Contas:
+    principal: uuid.UUID
+    # A que a tela mostra: a do cabeçalho `X-Conta`, ou a principal.
+    aberta: uuid.UUID
+
+    @property
+    def extra_aberta(self) -> bool:
+        return self.aberta != self.principal
+
+
+def recusa_conta_invalida() -> HTTPException:
+    return recusa(403, "conta-invalida", "Esta conta do Mercado Livre não está disponível")
+
+
+async def resolve_contas(pool: asyncpg.Pool, user_id: str, x_conta: str | None) -> Contas:
+    """A principal do usuário e a conta pedida no cabeçalho, conferida.
+
+    Conta que não é do usuário é recusada, e nunca trocada pela principal: o
+    número de uma conta apareceria com o nome de outra.
+    """
+    pedida = None
+    if x_conta:
+        try:
+            pedida = uuid.UUID(x_conta)
+        except ValueError:
+            raise recusa_conta_invalida() from None
+    async with pool.acquire() as conn:
+        linhas = await conn.fetch(
+            "SELECT id, principal FROM sellers WHERE user_id = $1 AND (principal OR id = $2)",
+            uuid.UUID(str(user_id)),
+            pedida,
+        )
+    principal = next((linha["id"] for linha in linhas if linha["principal"]), None)
+    if principal is None:
+        raise HTTPException(status_code=404, detail="Usuário sem seller associado")
+    if pedida is not None and pedida not in {linha["id"] for linha in linhas}:
+        raise recusa_conta_invalida()
+    return Contas(principal=principal, aberta=pedida or principal)
+
+
+async def get_contas(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    x_conta: str | None = Header(default=None),
+) -> Contas:
+    """A conta aberta, sem exigir plano: para desconectar e ver o status."""
+    pool = await get_pool()
+    claims = await _claims_verificadas(pool, credentials.credentials)
+    return await resolve_contas(pool, claims["sub"], x_conta)
+
+
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> uuid.UUID:
@@ -85,8 +142,11 @@ async def get_current_user_id(
 
 @dataclass(frozen=True)
 class Acesso:
+    # A conta aberta: é por ela que as telas filtram.
     seller_id: uuid.UUID
     plano: Plano
+    # A que tem o plano e a cobrança. É a mesma quando não há conta extra aberta.
+    principal_id: uuid.UUID
 
 
 def recusa(status: int, codigo: str, mensagem: str) -> HTTPException:
@@ -141,7 +201,7 @@ async def historico_visivel(
     return buscados, True
 
 
-async def get_acesso(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> Acesso:
+async def get_acesso(contas: Contas = Depends(get_contas)) -> Acesso:
     """Vendedor com plano E com os termos vigentes aceitos. Senão, recusa.
 
     Sem plano, 402 (o caminho é contratar). Com plano e sem aceite, 403
@@ -149,17 +209,20 @@ async def get_acesso(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> A
     plano não tem contrato para aceitar.
     """
     pool = await get_pool()
-    plano, aceitou = await le_plano_e_aceite(pool, seller_id)
+    plano, aceitou = await le_plano_e_aceite(pool, contas.principal)
     if plano is None:
         raise recusa(402, "sem-plano", "Contrate um plano para acessar o painel")
     if not aceitou:
         raise recusa(403, "termos-pendentes", "Aceite os Termos de Uso para continuar")
-    dias, _buscando = await historico_visivel(pool, seller_id, plano)
+    if not conta_abre(plano, principal=not contas.extra_aberta):
+        raise recusa_conta_invalida()
+    # O histórico é o da conta aberta: cada conta tem o próprio backfill.
+    dias, _buscando = await historico_visivel(pool, contas.aberta, plano)
     if dias != plano.dias_de_historico:
         # O corte (`limita_ao_historico`) lê os dias do plano. Trocar aqui, num
         # lugar só, cobre todas as telas sem que cada router saiba da busca.
         plano = replace(plano, dias_de_historico=dias)
-    return Acesso(seller_id=seller_id, plano=plano)
+    return Acesso(seller_id=contas.aberta, plano=plano, principal_id=contas.principal)
 
 
 def exige(recurso: Recurso) -> Callable[..., Awaitable[Acesso]]:
