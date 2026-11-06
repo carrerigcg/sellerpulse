@@ -271,3 +271,44 @@ recuperação (spec `2026-11-04-telefone-e-verificacao-em-duas-etapas`).
 
 4. Responder que a verificação foi desligada e que pode ativar de novo em
    "Conta e segurança".
+
+**E-mail da conta errado ou inexistente.** Não há tela para trocar o e-mail, e
+o Supabase confirmaria a troca mandando e-mail para o endereço antigo. Sem a
+chave de serviço no `backend/.env`, a troca é por SQL. Feito pela primeira vez
+em 2026-11-06.
+
+1. Confirmar a identidade por outro caminho (a pessoa entra com a senha e o
+   código, ou o pedido vem do e-mail novo com dados que só o dono sabe).
+2. Conferir que o e-mail novo não tem conta: o login quebraria com dois
+   usuários no mesmo endereço.
+
+   ```sql
+   select count(*) from auth.users where lower(email) = '<e-mail novo>';
+   ```
+
+3. Com o ok do Guilherme, trocar nos dois lugares, num comando só. A coluna
+   `auth.identities.email` é gerada a partir do `identity_data`; só o JSON
+   muda.
+
+   ```sql
+   with u as (
+     update auth.users
+        set email = '<e-mail novo>',
+            email_confirmed_at = coalesce(email_confirmed_at, now()),
+            updated_at = now()
+      where id = '<id da conta>' and email = '<e-mail antigo>'
+     returning id
+   ), i as (
+     update auth.identities
+        set identity_data = identity_data
+              || '{"email":"<e-mail novo>","email_verified":true}'::jsonb,
+            updated_at = now()
+      where user_id in (select id from u) and provider = 'email'
+     returning user_id
+   )
+   select (select count(*) from u) usuarios, (select count(*) from i) identidades;
+   ```
+
+   Tem de voltar `1, 1`. Senha, app autenticador, loja e assinatura ficam,
+   porque se prendem ao id e não ao e-mail.
+4. O e-mail do cliente no Asaas é outro cadastro e não muda junto.
