@@ -58,6 +58,8 @@ class Plano:
     produtos_na_abc: int | None
     # Fora de venda: não entra em checkout nem em troca, mas quem já tem continua.
     a_venda: bool = True
+    # De quanto em quanto tempo a sincronização agendada traz o dado novo.
+    horas_entre_syncs: int = 24
 
     def libera(self, recurso: Recurso) -> bool:
         return recurso in self.recursos
@@ -99,6 +101,7 @@ PLANOS: dict[str, Plano] = {
         produtos_na_abc=None,
         # Volta à venda quando as funções que o diferenciam existirem.
         a_venda=False,
+        horas_entre_syncs=6,
     ),
 }
 

@@ -136,7 +136,9 @@ PR #18 e a Vercel no PR #20.
 
 ## 7. Sincronização
 
-- A sincronização diária fica em `.github/workflows/sincronizacao-agendada.yml`.
+- A sincronização agendada fica em `.github/workflows/sincronizacao-agendada.yml`:
+  4 rodadas por dia. O Premium sincroniza em todas; os outros planos, só na
+  da manhã (`_hora_de_sincronizar` em `backend/routers/ml.py`).
 - A cadeia de jobs por vendedor é **delta → visitas → frete**: cada um
   enfileira o próximo depois de terminar, porque o índice único só admite um
   job ativo por vendedor.

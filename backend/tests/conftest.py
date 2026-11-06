@@ -90,6 +90,19 @@ async def pg_pool():
     await pool.close()
 
 
+@pytest.fixture(autouse=True)
+def qualquer_hora_e_manha(monkeypatch):
+    """Nos testes, a rodada do agendador conta como a da manhã a qualquer hora.
+
+    Os planos diários só sincronizam na rodada da manhã: sem isto, o resultado
+    de `/ml/sync-todos` dependeria da hora em que a suíte roda. O teste da
+    regra de horário põe a janela de volta e fixa o relógio.
+    """
+    from backend.routers import ml as ml_router
+
+    monkeypatch.setattr(ml_router, "MANHA", range(24))
+
+
 async def da_plano(conn, seller_id, plano: str = "exclusive", *, aceita: bool = True) -> None:
     """Põe o seller num plano e, por padrão, com os termos vigentes aceitos."""
     await conn.execute(

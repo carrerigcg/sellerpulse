@@ -205,6 +205,37 @@ async def test_backfill_que_falhou_ha_pouco_nao_troca_as_visitas(pg_pool, test_s
     assert (await _kinds(pg_pool, seller_id))[-1] == "backfill"
 
 
+async def test_delta_pula_as_visitas_colhidas_ha_pouco(pg_pool, test_seller):
+    """As rodadas de dentro do dia do Premium nao refazem a colheita."""
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "premium")
+    await _backfill_concluido(pg_pool, seller_id, {"janelas_concluidas": 13, "dias": 365})
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'visitas', 'done', now() - interval '6 hours')",
+            seller_id,
+        )
+    job = await _job(pg_pool, seller_id, kind="delta")
+    await runner.executa_job(pg_pool, job, client=ClienteFake())
+    assert (await _kinds(pg_pool, seller_id))[-1] == "frete"
+
+    # Um dia depois, colhe de novo.
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sync_jobs SET finished_at = now() - interval '23 hours' "
+            "WHERE seller_id = $1 AND kind = 'visitas'",
+            seller_id,
+        )
+        await conn.execute(
+            "DELETE FROM sync_jobs WHERE seller_id = $1 AND kind = 'frete'", seller_id
+        )
+    job = await _job(pg_pool, seller_id, kind="delta")
+    await runner.executa_job(pg_pool, job, client=ClienteFake())
+    assert (await _kinds(pg_pool, seller_id))[-1] == "visitas"
+
+
 @pytest.mark.parametrize(
     ("plano", "cursor", "encadeado"),
     [

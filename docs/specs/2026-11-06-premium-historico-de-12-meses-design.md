@@ -1,6 +1,8 @@
 # Premium: histórico de 12 meses
 
-Estado: em implementação na branch `feat/premium-historico-12-meses`. Item 1 da
+Estado: mergeado em 2026-11-06 (#52), no ar no Render (`0e0c4cd`). A primeira
+busca de 12 meses da loja real roda no delta seguinte; o tempo dela ainda não
+foi medido. Item 1 da
 etapa 11 (funções do Premium) de `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## O pedido
