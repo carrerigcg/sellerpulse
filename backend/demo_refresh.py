@@ -37,8 +37,8 @@ from backend.seed import seed_na_conexao
 _log = logging.getLogger(__name__)
 
 # 26 semanas = 182 dias, o mais proximo em semanas inteiras dos 180 dias que um
-# seller real recebe no backfill (`JANELAS_BACKFILL * DIAS_POR_JANELA` em
-# `backend/worker/runner.py`). A demo tem que mostrar a MESMA profundidade de
+# seller real recebe no backfill (`planos.dias_de_ingestao`, sem contar o
+# Premium). A demo tem que mostrar a MESMA profundidade de
 # historico que o produto entrega de verdade: com as 12 semanas do default do
 # `seed_postgres` (~3 meses), o visitante avalia metade do que receberia ao
 # conectar a conta dele -- e as analises que dependem de historico longo

@@ -6,6 +6,7 @@ aqui. O que cada um prova está no nome; o porquê, na spec.
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -16,7 +17,7 @@ from fastapi import HTTPException
 from backend.analytics._common import _TZ_VENDEDOR
 from backend.ml import oauth
 from backend.ml import tokens as tokens_mod
-from backend.planos import PLANOS, VERSAO_DOS_TERMOS
+from backend.planos import PLANOS, VERSAO_DOS_TERMOS, Plano, dias_de_ingestao
 from backend.routers._common import CABECALHO_HISTORICO, limita_ao_historico
 from backend.routers.segmentation import CABECALHO_PRODUTOS_OCULTOS
 
@@ -290,7 +291,66 @@ async def test_exclusive_corta_a_janela_em_seis_meses(client, pg_pool, test_sell
     assert sum(linha["receita_bruta"] for linha in resp.json()) == pytest.approx(500.0)
 
 
-async def test_premium_nao_corta_historico(client, pg_pool, test_seller):
+async def _backfill_concluido(pool, seller_id, cursor):
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, cursor, finished_at) "
+            "VALUES ($1, 'backfill', 'done', $2::jsonb, now())",
+            seller_id,
+            json.dumps(cursor),
+        )
+
+
+def test_premium_mostra_doze_meses_e_busca_o_que_mostra():
+    assert PLANOS["premium"].dias_de_historico == 365
+    assert dias_de_ingestao(PLANOS["premium"]) == 365
+    # Piso de 180: quem sobe do Essencial para o Exclusive tem os 6 meses na hora.
+    assert dias_de_ingestao(PLANOS["essencial"]) == 180
+    assert dias_de_ingestao(PLANOS["exclusive"]) == 180
+    assert dias_de_ingestao(None) == 180
+
+
+async def test_premium_corta_a_janela_em_doze_meses(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _backfill_concluido(pg_pool, seller_id, {"janelas_concluidas": 13, "dias": 365})
+    await _order(pg_pool, seller_id, 1, f"{_dia(190)}T12:00:00-03:00", 900.0)
+    await _order(pg_pool, seller_id, 2, f"{_dia(370)}T12:00:00-03:00", 400.0)
+    resp = client.get(
+        "/metrics/fluxo-financeiro",
+        params={"date_from": _dia(400), "date_to": _dia(0)},
+        headers=_auth(user_id),
+    )
+    assert resp.headers[CABECALHO_HISTORICO] == _dia(365)
+    assert sum(linha["receita_bruta"] for linha in resp.json()) == pytest.approx(900.0)
+
+
+async def test_premium_com_seis_meses_buscados_corta_no_que_existe(client, pg_pool, test_seller):
+    """Mostrar 12 meses com 6 buscados exibiria os 6 antigos como venda zero."""
+    user_id, seller_id = test_seller
+    # Backfill de antes desta mudança: sem `dias` no cursor, buscou 180.
+    await _backfill_concluido(pg_pool, seller_id, {"janelas_concluidas": 6})
+    resp = client.get(
+        "/metrics/fluxo-financeiro",
+        params={"date_from": _dia(300), "date_to": _dia(0)},
+        headers=_auth(user_id),
+    )
+    assert resp.headers[CABECALHO_HISTORICO] == _dia(180)
+
+
+async def test_acesso_do_premium_diz_quando_ainda_busca(client, pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    await _backfill_concluido(pg_pool, seller_id, {"janelas_concluidas": 6})
+    corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
+    assert (corpo["dias_de_historico"], corpo["historico_buscando"]) == (180, True)
+
+    await _backfill_concluido(pg_pool, seller_id, {"janelas_concluidas": 13, "dias": 365})
+    corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
+    assert (corpo["dias_de_historico"], corpo["historico_buscando"]) == (365, False)
+
+
+async def test_premium_recem_conectado_nao_corta_antes_do_primeiro_backfill(
+    client, pg_pool, test_seller
+):
     user_id, seller_id = test_seller
     await _order(pg_pool, seller_id, 1, f"{_dia(190)}T12:00:00-03:00", 900.0)
     resp = client.get(
@@ -320,7 +380,14 @@ def test_janela_que_termina_no_limite_e_recusada():
 
 
 def test_plano_sem_limite_nao_mexe_na_janela():
-    assert limita_ao_historico(PLANOS["premium"], "2020-01-01", "2026-10-28") == (
+    sem_limite = Plano(
+        nome="x",
+        preco_mensal=PLANOS["premium"].preco_mensal,
+        recursos=frozenset(),
+        dias_de_historico=None,
+        produtos_na_abc=None,
+    )
+    assert limita_ao_historico(sem_limite, "2020-01-01", "2026-10-28") == (
         "2020-01-01",
         "2026-10-28",
         None,
@@ -428,6 +495,7 @@ async def test_acesso_do_exclusive_libera_tudo(client, pg_pool, test_seller):
     corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
     assert "clientes" in corpo["recursos"]
     assert corpo["dias_de_historico"] == 180
+    assert corpo["historico_buscando"] is False
 
 
 async def test_aceite_sem_plano_e_recusado(client, pg_pool, seller_sem_plano):

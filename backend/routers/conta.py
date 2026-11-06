@@ -30,6 +30,7 @@ from backend.deps import (
     get_acesso,
     get_current_seller_id,
     get_current_user_id,
+    historico_visivel,
     le_plano_e_aceite,
     recusa,
 )
@@ -80,10 +81,14 @@ async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_
             """,
             seller_id,
         )
+    # Os dias que as telas mostram, e não os do plano: enquanto o backfill não
+    # traz os meses antigos, o corte fica no que existe.
+    dias, buscando = await historico_visivel(pool, seller_id, plano) if plano else (None, False)
     return {
         "plano": plano.nome if plano else None,
         "recursos": sorted(plano.recursos) if plano else [],
-        "dias_de_historico": plano.dias_de_historico if plano else None,
+        "dias_de_historico": dias,
+        "historico_buscando": buscando,
         "produtos_na_abc": plano.produtos_na_abc if plano else None,
         "termos": {"versao": VERSAO_DOS_TERMOS, "aceito": aceitou},
         "vendas_abertas": vendas_abertas(),
