@@ -61,11 +61,24 @@ primeira: o histórico de 12 meses que a vitrine promete. Decisões dele:
 7. **O teto de largura de janela (`MAX_JANELA_DIAS`) passa a 2 × 365.** Ele era
    2 × 180 = 360, e recusaria um pedido de 12 meses do Premium.
 
+8. **Backfill que falhou há menos de 7 dias não é refeito pelo delta.** Com um
+   erro persistente, cada delta trocaria as visitas por um backfill que morre,
+   e o ML só guarda 150 dias de visitas. Passado o prazo, tenta de novo.
+
 ## Fora desta entrega
 
 - **Visitas:** o ML entrega no máximo `MLClient.MAX_DIAS_DE_VISITAS` dias. Nos
   meses mais antigos, a conversão aparece com a cobertura parcial que já existe.
 - **Volta do Premium à venda** (`a_venda`): só quando as outras funções
   existirem.
+- **Antes da volta à venda (da auditoria de escala, 2026-11-06):**
+  - índice parcial `sync_jobs(seller_id) where kind = 'backfill' and status =
+    'done'`. Sem ele, `dias_ja_buscados` lê a fila inteira: medido em 26 ms com
+    300 vendedores e 1 ano de jobs, contra 0,18 ms com o índice. Hoje a fila
+    tem 59 linhas.
+  - medir o backfill de 365 dias da loja real (`finished_at - started_at`). A
+    estimativa é de 7 a 12 minutos.
+  - o aviso aparece desde a troca de plano, mas a busca começa no delta
+    seguinte (até um dia depois).
 - **Texto da vitrine e dos termos** sobre os 12 meses: entra com a volta à
   venda.

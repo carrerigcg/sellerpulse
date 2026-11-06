@@ -27,7 +27,7 @@ from backend.ml import oauth
 from backend.ml.frete_pg import colhe_frete
 from backend.ml.ingest_pg import ingest_janela
 from backend.ml.visitas_pg import colhe_visitas
-from backend.planos import dias_de_ingestao, plano_vigente
+from backend.planos import DIAS_DE_INGESTAO_MINIMO, dias_de_ingestao, plano_vigente
 from src.ml_client import MLClient
 from src.session_auth import sanitize_oauth_error
 
@@ -45,6 +45,8 @@ MARGEM_DELTA = timedelta(hours=1)
 JANELA_DELTA_PADRAO = timedelta(days=7)
 
 INTERVALO_OCIOSO = 5.0
+
+ESPERA_APOS_BACKFILL_FALHO = timedelta(days=7)
 
 # Intervalo minimo entre renovacoes de lease DENTRO de uma janela. Derivado do
 # lease (backend/jobs/queue.py) e nao um numero solto: tem que ser
@@ -270,11 +272,28 @@ async def _depois_do_delta(pool, seller_id) -> str:
     sincronizacao, sem que nenhum deles precise saber. O backfill encadeia as
     visitas, entao a cadeia continua inteira. Sem backfill concluido (loja
     recem-conectada ou backfill que falhou), quem busca e o fluxo de conexao.
+
+    Backfill que falhou ha menos de `ESPERA_APOS_BACKFILL_FALHO` nao e
+    refeito: com um erro persistente, cada delta trocaria as visitas por um
+    backfill que morre, e o ML so guarda 150 dias de visitas. Passado o
+    prazo, tenta de novo.
     """
+    pedidos = dias_de_ingestao(await plano_vigente(pool, seller_id))
+    # O plano primeiro: so quem busca alem do piso pode estar a frente do que
+    # veio, e a consulta a fila le o historico inteiro de jobs do vendedor.
+    if pedidos <= DIAS_DE_INGESTAO_MINIMO:
+        return "visitas"
     buscados = await queue.dias_ja_buscados(pool, seller_id)
-    if buscados is not None and buscados < dias_de_ingestao(await plano_vigente(pool, seller_id)):
-        return "backfill"
-    return "visitas"
+    if buscados is None or buscados >= pedidos:
+        return "visitas"
+    async with pool.acquire() as conn:
+        falhou_ha_pouco = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
+            "AND kind = 'backfill' AND status = 'failed' AND finished_at > now() - $2::interval)",
+            seller_id,
+            ESPERA_APOS_BACKFILL_FALHO,
+        )
+    return "visitas" if falhou_ha_pouco else "backfill"
 
 
 async def _visitas(pool, job, client, seller_id) -> None:

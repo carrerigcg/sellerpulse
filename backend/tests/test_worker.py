@@ -150,6 +150,61 @@ async def _backfill_concluido(pool, seller_id, cursor):
         )
 
 
+async def test_retomada_de_backfill_de_antes_dos_dias_usa_180(pg_pool, test_seller):
+    """Job em andamento no deploy: o cursor so tem `janelas_concluidas`."""
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "premium")
+    job = await _job(pg_pool, seller_id)
+    await queue.salva_cursor(pg_pool, job["id"], {"janelas_concluidas": 2})
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sync_jobs SET leased_until = now() - interval '1 minute' WHERE id = $1",
+            job["id"],
+        )
+    repescado = await queue.claim_next(pg_pool)
+    cliente = ClienteFake()
+
+    await runner.executa_job(pg_pool, repescado, client=cliente)
+
+    assert len(cliente.chamadas_get_orders) == 8  # 4 janelas restantes x 2
+    esperado = runner.janelas(repescado["started_at"], dias=180)[2]
+    assert cliente.chamadas_get_orders[0]["de"] == esperado[0].isoformat()
+
+
+async def test_backfill_que_falhou_ha_pouco_nao_troca_as_visitas(pg_pool, test_seller):
+    """Erro persistente no backfill nao pode parar a colheita de visitas."""
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "premium")
+    await _backfill_concluido(pg_pool, seller_id, {"janelas_concluidas": 6})
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'failed', now() - interval '1 day')",
+            seller_id,
+        )
+    job = await _job(pg_pool, seller_id, kind="delta")
+
+    await runner.executa_job(pg_pool, job, client=ClienteFake())
+
+    assert (await _kinds(pg_pool, seller_id))[-1] == "visitas"
+
+    # Passado o prazo, tenta de novo.
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sync_jobs SET finished_at = now() - interval '8 days' "
+            "WHERE seller_id = $1 AND status = 'failed'",
+            seller_id,
+        )
+        await conn.execute(
+            "DELETE FROM sync_jobs WHERE seller_id = $1 AND kind = 'visitas'", seller_id
+        )
+    job = await _job(pg_pool, seller_id, kind="delta")
+    await runner.executa_job(pg_pool, job, client=ClienteFake())
+    assert (await _kinds(pg_pool, seller_id))[-1] == "backfill"
+
+
 @pytest.mark.parametrize(
     ("plano", "cursor", "encadeado"),
     [
