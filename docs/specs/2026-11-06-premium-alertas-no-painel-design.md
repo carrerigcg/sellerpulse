@@ -1,7 +1,8 @@
 # Premium: alertas no painel
 
-Estado: em implementação na branch `feat/premium-alertas`. Item 4 das funções
-do Premium. O envio por e-mail fica para depois (decisão 4.1).
+Estado: no ar desde 2026-11-06 (#54, `0c82f8d`, conferido no Render e na
+Vercel). Item 4 das funções do Premium. Falta ver o card logado com os dados
+reais. O envio por e-mail fica para depois (decisão 4.1).
 
 ## O pedido
 
