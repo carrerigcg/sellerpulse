@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import { cache } from "react";
 
 import type { Alertas } from "@/lib/alertas";
 import type { Cancelamentos } from "@/lib/cancelamentos";
+import { cabecalhoDaConta, COOKIE_DA_CONTA } from "@/lib/contas";
 import { comReceitaSemFrete, type FluxoDiaDaApi } from "@/lib/frete";
 import type { Acesso } from "@/lib/plano";
 import { createClient } from "@/lib/supabase/server";
@@ -182,8 +184,10 @@ async function buscarComCabecalhos<T>(
   if (!session) throw new ApiError(401, "Sem sessão");
 
   const query = new URLSearchParams(params).toString();
+  // A conta aberta no seletor. Quem confere que ela é do usuário é o backend.
+  const conta = (await cookies()).get(COOKIE_DA_CONTA)?.value;
   const resposta = await fetch(`${BASE}${caminho}?${query}`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
+    headers: { Authorization: `Bearer ${session.access_token}`, ...cabecalhoDaConta(conta) },
     // Dado de vendedor muda a cada ingestão e é específico do usuário —
     // cachear no servidor arriscaria servir número de um seller pra outro.
     cache: "no-store",

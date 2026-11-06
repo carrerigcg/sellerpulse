@@ -27,17 +27,26 @@ from pydantic import BaseModel
 from backend.db import get_pool
 from backend.deps import (
     Acesso,
+    Contas,
     get_acesso,
+    get_contas,
     get_current_seller_id,
     get_current_user_id,
     historico_visivel,
     le_plano_e_aceite,
     recusa,
+    recusa_conta_invalida,
 )
 from backend.pagamentos import asaas, avisos
 from backend.pagamentos.eventos import referencia_do_vendedor
 from backend.pagamentos.prazos import hoje_do_vendedor
-from backend.planos import DIAS_DE_TESTE, PLANOS, PLANOS_COM_TESTE, VERSAO_DOS_TERMOS
+from backend.planos import (
+    DIAS_DE_TESTE,
+    PLANOS,
+    PLANOS_COM_TESTE,
+    VERSAO_DOS_TERMOS,
+    conta_abre,
+)
 
 _log = logging.getLogger(__name__)
 
@@ -63,10 +72,21 @@ def vendas_abertas() -> bool:
 
 
 @router.get("/acesso")
-async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> dict:
+async def get_acesso_da_conta(contas: Contas = Depends(get_contas)) -> dict:
+    # Plano, aceite e assinatura são da principal; o histórico, da conta aberta.
+    seller_id = contas.principal
     pool = await get_pool()
     plano, aceitou = await le_plano_e_aceite(pool, seller_id)
+    if contas.extra_aberta and not conta_abre(plano, principal=False):
+        # O front apaga a escolha e volta para a principal.
+        raise recusa_conta_invalida()
     async with pool.acquire() as conn:
+        linhas = await conn.fetch(
+            "SELECT id, ml_nickname, principal FROM sellers "
+            "WHERE user_id = (SELECT user_id FROM sellers WHERE id = $1) "
+            "ORDER BY principal DESC, created_at, id",
+            seller_id,
+        )
         assinatura = await conn.fetchrow(
             """
             SELECT origem, ciclo, pago_ate, acesso_ate, plano_no_proximo_ciclo,
@@ -83,9 +103,20 @@ async def get_acesso_da_conta(seller_id: uuid.UUID = Depends(get_current_seller_
         )
     # Os dias que as telas mostram, e não os do plano: enquanto o backfill não
     # traz os meses antigos, o corte fica no que existe.
-    dias, buscando = await historico_visivel(pool, seller_id, plano) if plano else (None, False)
+    dias, buscando = await historico_visivel(pool, contas.aberta, plano) if plano else (None, False)
     return {
         "plano": plano.nome if plano else None,
+        "conta_aberta": str(contas.aberta),
+        "max_contas": plano.max_contas if plano else 1,
+        "contas": [
+            {
+                "id": str(linha["id"]),
+                "apelido": linha["ml_nickname"],
+                "principal": linha["principal"],
+                "ativa": conta_abre(plano, principal=linha["principal"]),
+            }
+            for linha in linhas
+        ],
         "recursos": sorted(plano.recursos) if plano else [],
         "dias_de_historico": dias,
         "historico_buscando": buscando,

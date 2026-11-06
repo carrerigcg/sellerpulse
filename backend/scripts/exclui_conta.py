@@ -71,8 +71,10 @@ async def exclui_conta(conn, email: str, *, aplicar: bool) -> Relatorio:
     async with conn.transaction():
         conta = await conn.fetchrow(
             """
-            SELECT u.id AS user_id, s.id AS seller_id, s.is_demo
-              FROM auth.users u JOIN sellers s ON s.user_id = u.id
+            SELECT u.id AS user_id, s.id AS seller_id, s.is_demo,
+                   (SELECT array_agg(c.id ORDER BY c.principal DESC, c.id)
+                      FROM sellers c WHERE c.user_id = u.id) AS contas
+              FROM auth.users u JOIN sellers s ON s.user_id = u.id AND s.principal
              WHERE lower(u.email) = lower($1)
             """,
             email,
@@ -105,10 +107,13 @@ async def exclui_conta(conn, email: str, *, aplicar: bool) -> Relatorio:
         ):
             raise ExclusaoRecusada("há um link de pagamento aberto: espere 1 hora")
 
+        # Assinatura e checkout são da principal; os dados, de todas as contas
+        # do usuário (as extras do Premium também saem).
+        contas = list(conta["contas"])
         relatorio = Relatorio(conta["user_id"], conta["seller_id"])
         for tabela in await _tabelas_com_seller(conn):
             total = await conn.fetchval(
-                f"SELECT count(*) FROM {tabela} WHERE seller_id = $1", conta["seller_id"]
+                f"SELECT count(*) FROM {tabela} WHERE seller_id = ANY($1::uuid[])", contas
             )
             destino = relatorio.preservadas if tabela in PRESERVADAS else relatorio.apagadas
             destino[tabela] = total
@@ -117,10 +122,9 @@ async def exclui_conta(conn, email: str, *, aplicar: bool) -> Relatorio:
         )
 
         if aplicar:
-            await conn.execute(
+            await conn.executemany(
                 "INSERT INTO contas_excluidas (seller_id, user_id) VALUES ($1, $2)",
-                conta["seller_id"],
-                conta["user_id"],
+                [(seller_id, conta["user_id"]) for seller_id in contas],
             )
             await conn.execute("DELETE FROM auth.users WHERE id = $1", conta["user_id"])
             relatorio.aplicado = True
