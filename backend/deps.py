@@ -146,7 +146,7 @@ class Acesso:
     seller_id: uuid.UUID
     plano: Plano
     # A que tem o plano e a cobrança. É a mesma quando não há conta extra aberta.
-    principal_id: uuid.UUID | None = None
+    principal_id: uuid.UUID
 
 
 def recusa(status: int, codigo: str, mensagem: str) -> HTTPException:

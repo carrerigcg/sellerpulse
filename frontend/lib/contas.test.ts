@@ -65,6 +65,11 @@ describe("fraseDasContas", () => {
     expect(fraseDasContas(acesso({ contas: [PRINCIPAL, EXTRA] }))).toMatch(/^2 de 3 contas/);
   });
 
+  it("só manda trocar no topo quando há seletor", () => {
+    expect(fraseDasContas(acesso({ contas: [PRINCIPAL, EXTRA] }))).toMatch(/topo do painel/);
+    expect(fraseDasContas(acesso({}))).toBe("1 de 3 contas no seu plano.");
+  });
+
   it("fora do Premium, diz que as extras ficam guardadas, e não '2 de 1'", () => {
     const frase = fraseDasContas(acesso({ contas: [PRINCIPAL, EXTRA], max_contas: 1 }));
     expect(frase).toMatch(/ficam guardadas/);

@@ -10,6 +10,9 @@
 -- o de qual delas? Toda linha que existe hoje e principal (o padrao), e o
 -- trigger de cadastro continua criando a principal sem mudar.
 --
+-- Reverter depois que existir conta extra pede apagar as extras antes: o
+-- UNIQUE(user_id) antigo nao volta com duas linhas do mesmo usuario.
+--
 -- As policies de RLS ja usam `seller_id in (select id from sellers where
 -- user_id = auth.uid())`, que cobre varias contas sem mudar.
 

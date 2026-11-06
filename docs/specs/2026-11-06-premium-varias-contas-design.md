@@ -79,6 +79,19 @@ visão somada. Os detalhes ficam para a spec ser atualizada com a parte B.
 
 - Trocar a conta principal por outra.
 - Preço por conta: o Premium inclui as 3.
-- Volume: cada conta extra traz o próprio histórico de 12 meses e a própria
-  sincronização a cada 6 horas. Um cliente com 3 contas ocupa perto do triplo
-  do banco, o que aproxima o limite do Supabase gratuito.
+- Volume (`auditor-de-escala`, medido em 2026-11-06 na loja real):
+  - **Fila:** uma conta Premium ocupa ~11,5 min por dia do worker único
+    (visitas ~570 s, 4 deltas, 4 fretes). O teto fica perto de 125 a 145
+    contas do tamanho da loja real; a referência passa a ser **contas**, não
+    vendedores. Cada conta nova entra com ~40 min de fila (projeção: o
+    backfill de 12 meses ainda não rodou em produção).
+  - **Espaço:** ~12 a 14 MB por conta Premium em 12 meses; um cliente de 3
+    contas ocupa ~40 MB dos 500 MB do Supabase gratuito.
+  - **A API do ML não é o limite:** o worker serial não passa de ~2 pedidos
+    por segundo.
+  - Pendente antes de vender o Premium: o índice em `sync_jobs` para o
+    `dias_ja_buscados` (já anotado na spec do histórico de 12 meses), que as
+    contas extras fazem crescer mais rápido.
+- Trocar de conta recarrega a página inteira, e não só os dados: o
+  `router.refresh()` guardaria o estado das telas interativas (custos,
+  conexão) com a conta anterior (`revisor-de-interface`).

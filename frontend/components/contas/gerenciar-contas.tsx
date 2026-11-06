@@ -88,9 +88,14 @@ export function PainelDeContas({ contas }: { contas: Contas }) {
             {!conta.principal &&
               (confirmando === conta.id ? (
                 <span className="flex flex-wrap items-center gap-2">
-                  <span className="text-muted">Apaga os pedidos e custos desta conta.</span>
+                  <span className="text-muted">
+                    Apaga do SellerPulse os dados desta conta, sem volta. Nada muda no Mercado
+                    Livre.
+                  </span>
                   <button
                     type="button"
+                    // O "Remover" que tinha o foco sumiu: o foco vem para a confirmação.
+                    autoFocus
                     onClick={() => void remover(conta.id)}
                     disabled={removendo}
                     className="min-h-11 rounded-lg border border-line px-3 font-medium transition hover:bg-surface disabled:opacity-50"
@@ -129,7 +134,8 @@ export function PainelDeContas({ contas }: { contas: Contas }) {
             type="button"
             onClick={() => void adicionar()}
             disabled={adicionando}
-            className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
+            // Com borda, e não laranja: na tela de conexão a ação primária é sincronizar.
+            className="mt-3 min-h-11 rounded-lg border border-line px-4 text-sm font-medium transition hover:bg-surface hover:text-accent disabled:opacity-50"
           >
             {adicionando ? "Redirecionando…" : "Adicionar outra conta"}
           </button>

@@ -58,7 +58,11 @@ export function fraseDasContas(acesso: Contas): string {
   if (n > acesso.max_contas) {
     return "Seu plano atual abre só a conta principal. As outras ficam guardadas: voltam a abrir no Premium, ou podem ser removidas aqui.";
   }
-  return `${n} de ${acesso.max_contas} contas no seu plano. Troque a conta aberta no topo do painel.`;
+  const vaga = `${n} de ${acesso.max_contas} contas no seu plano.`;
+  // Com uma conta só não há seletor no topo: mandar trocar lá apontaria para nada.
+  return contasDoSeletor(acesso).length > 0
+    ? `${vaga} Troque a conta aberta no topo do painel.`
+    : vaga;
 }
 
 export function nomeDaConta(conta: ContaML): string {

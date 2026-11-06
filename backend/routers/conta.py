@@ -410,8 +410,10 @@ async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)
     Nos dois casos o valor novo vale a partir da próxima cobrança: a diferença
     do mês corrente, no upgrade, fica por nossa conta.
     """
+    # A assinatura é da conta principal, qualquer que seja a conta aberta.
+    seller_id = acesso.principal_id
     pool = await get_pool()
-    linha, assinatura = await _assinatura_recorrente(pool, acesso.seller_id)
+    linha, assinatura = await _assinatura_recorrente(pool, seller_id)
     novo = PLANOS[corpo.plano]
     atual = PLANOS[linha["plano"]]
     # Quem já está no plano pode continuar nele: é o que desfaz um downgrade agendado.
@@ -434,13 +436,13 @@ async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)
             await conn.execute(
                 "UPDATE assinaturas SET plano = $2, plano_no_proximo_ciclo = NULL "
                 "WHERE seller_id = $1",
-                acesso.seller_id,
+                seller_id,
                 novo.nome,
             )
         else:
             await conn.execute(
                 "UPDATE assinaturas SET plano_no_proximo_ciclo = $2 WHERE seller_id = $1",
-                acesso.seller_id,
+                seller_id,
                 novo.nome,
             )
     return {
