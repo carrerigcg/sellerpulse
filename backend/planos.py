@@ -81,8 +81,8 @@ PLANOS: dict[str, Plano] = {
         dias_de_historico=90,
         produtos_na_abc=10,
     ),
-    # Exclusive e Premium liberam tudo o que existe hoje. O que vai
-    # diferenciá-los (MCP com a conta real, alertas, várias contas) entra com
+    # O Exclusive libera tudo, menos o que é só do Premium (os alertas). O que
+    # mais vai diferenciá-los (MCP com a conta real, várias contas) entra com
     # cada feature (decisão 8 da spec). Sem corte no Exclusive, ele entregaria
     # com o tempo o histórico longo que o Premium vai vender.
     "exclusive": Plano(

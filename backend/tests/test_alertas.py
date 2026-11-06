@@ -108,6 +108,54 @@ async def test_frete_do_carrinho_e_dividido_pela_receita_de_cada_pedido(pg_pool,
     assert r["margem_negativa"][0]["margem"] == pytest.approx(-5.0)
 
 
+async def test_pedido_com_dois_itens_divide_taxa_e_frete_pela_receita(pg_pool, test_seller):
+    """Cada item levar a taxa ou o frete inteiro do pedido inventaria prejuízo."""
+    _u, sid = test_seller
+    await _order(pg_pool, sid, 1, _quando(HOJE - timedelta(days=2)), 100.0, 20.0)
+    await _order_item(pg_pool, sid, 1, "MLB1", 1, 60.0)
+    await _order_item(pg_pool, sid, 1, "MLB2", 1, 40.0)
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE orders SET shipment_id = 800 WHERE seller_id = $1 AND order_id = 1", sid
+        )
+    await _frete(pg_pool, sid, 800, 10.0)
+    await _custo(pg_pool, sid, "MLB1", 45.0)
+    await _custo(pg_pool, sid, "MLB2", 20.0)
+
+    r = await alertas(pg_pool, sid, hoje=HOJE)
+
+    # MLB1: 60 - 12 de taxa - 6 de frete - 45 = -3. MLB2: 40 - 8 - 4 - 20 = +8.
+    assert r["produtos_avaliados"] == 2
+    assert [(a["sku"], a["margem"]) for a in r["margem_negativa"]] == [
+        ("MLB1", pytest.approx(-3.0))
+    ]
+
+
+async def test_piores_prejuizos_primeiro(pg_pool, test_seller):
+    _u, sid = test_seller
+    for n, (sku, custo) in enumerate([("MLB1", 105.0), ("MLB2", 130.0), ("MLB3", 115.0)], 1):
+        await _venda(pg_pool, sid, n, sku, HOJE - timedelta(days=2), 100.0)
+        await _custo(pg_pool, sid, sku, custo)
+
+    r = await alertas(pg_pool, sid, hoje=HOJE)
+
+    assert [a["sku"] for a in r["margem_negativa"]] == ["MLB2", "MLB3", "MLB1"]
+
+
+async def test_janela_da_margem_e_a_do_resumo(pg_pool, test_seller):
+    """Entra o dia de 30 dias atrás; hoje fica de fora, como no Resumo."""
+    _u, sid = test_seller
+    await _venda(pg_pool, sid, 1, "MLB1", HOJE - timedelta(days=30), 100.0)
+    await _custo(pg_pool, sid, "MLB1", 110.0)
+    await _venda(pg_pool, sid, 2, "MLB2", HOJE, 100.0)
+    await _custo(pg_pool, sid, "MLB2", 500.0)
+
+    r = await alertas(pg_pool, sid, hoje=HOJE)
+
+    assert r["produtos_avaliados"] == 1
+    assert [a["sku"] for a in r["margem_negativa"]] == ["MLB1"]
+
+
 async def test_produto_com_venda_sem_custo_nao_e_avaliado(pg_pool, test_seller):
     """O custo vale só a partir da data informada: a venda anterior fica sem custo."""
     _u, sid = test_seller
@@ -163,6 +211,8 @@ async def test_parado_e_ficar_tres_vezes_o_intervalo_sem_vender(pg_pool, test_se
 
     r = await alertas(pg_pool, sid, hoje=HOJE)
 
+    # MLB1 e MLB2 têm ritmo; MLB3 não.
+    assert r["produtos_com_ritmo"] == 2
     assert r["parados"] == [
         {
             "sku": "MLB1",
@@ -172,6 +222,20 @@ async def test_parado_e_ficar_tres_vezes_o_intervalo_sem_vender(pg_pool, test_se
             "ultima_venda": (HOJE - timedelta(days=28)).isoformat(),
         }
     ]
+
+
+async def test_parado_mais_grave_primeiro(pg_pool, test_seller):
+    """Grave é o atraso em relação ao ritmo do produto, não o número de dias."""
+    _u, sid = test_seller
+    await _sincronizado_em(pg_pool, sid, HOJE)
+    # 28 dias sem vender, ritmo de 8: 3,5 vezes.
+    await _vendas_espacadas(pg_pool, sid, "MLB1", 100, HOJE - timedelta(days=28), 8, 5)
+    # 20 dias sem vender, ritmo de 2: 10 vezes.
+    await _vendas_espacadas(pg_pool, sid, "MLB2", 200, HOJE - timedelta(days=20), 2, 5)
+
+    r = await alertas(pg_pool, sid, hoje=HOJE)
+
+    assert [a["sku"] for a in r["parados"]] == ["MLB2", "MLB1"]
 
 
 async def test_produto_de_venda_diaria_para_com_o_minimo_de_7_dias(pg_pool, test_seller):
@@ -206,6 +270,7 @@ async def test_sem_sincronizacao_nao_ha_parado(pg_pool, test_seller):
     r = await alertas(pg_pool, sid, hoje=HOJE)
 
     assert r["parados"] == []
+    assert r["produtos_com_ritmo"] is None
 
 
 # ---------- endpoint ----------

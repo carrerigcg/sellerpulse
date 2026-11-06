@@ -136,7 +136,6 @@ _PARADOS = f"""
     FROM ritmo r
     LEFT JOIN items_cache ic
       ON ic.seller_id = $1 AND ic.item_id = r.item_id
-    WHERE ($4::date - r.ultima) > greatest({VEZES_O_INTERVALO} * r.mediana, {MIN_DIAS_PARADO})
     ORDER BY ($4::date - r.ultima) / r.mediana DESC, r.item_id
 """
 
@@ -159,6 +158,9 @@ async def alertas(pool, seller_id: uuid.UUID, *, hoje: date) -> dict:
     avaliados = await pool.fetch(_MARGEM_POR_PRODUTO, seller_id, de, ate)
 
     parados: list[dict] = []
+    # Quantos produtos têm ritmo para medir. Sem ele, "nenhum parado" diria
+    # "está tudo vendendo" sobre produtos que nem dá para avaliar.
+    com_ritmo: int | None = None
     referencia = await pool.fetchval(_DIA_DA_ULTIMA_SINCRONIZACAO, seller_id)
     if referencia is not None:
         linhas = await pool.fetch(
@@ -168,6 +170,7 @@ async def alertas(pool, seller_id: uuid.UUID, *, hoje: date) -> dict:
             _parse_boundary((referencia + timedelta(days=1)).isoformat()),
             referencia,
         )
+        com_ritmo = len(linhas)
         parados = [
             {
                 "sku": r["sku"],
@@ -177,6 +180,7 @@ async def alertas(pool, seller_id: uuid.UUID, *, hoje: date) -> dict:
                 "ultima_venda": r["ultima"].isoformat(),
             }
             for r in linhas
+            if r["dias_sem_vender"] > max(VEZES_O_INTERVALO * r["mediana"], MIN_DIAS_PARADO)
         ]
 
     return {
@@ -192,5 +196,7 @@ async def alertas(pool, seller_id: uuid.UUID, *, hoje: date) -> dict:
             if r["margem"] < 0
         ],
         "parados": parados,
+        # None = nunca sincronizou: não há dia de referência para contar.
+        "produtos_com_ritmo": com_ritmo,
         "referencia": referencia.isoformat() if referencia else None,
     }

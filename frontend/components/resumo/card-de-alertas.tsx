@@ -5,6 +5,8 @@ import {
   estadoDaMargem,
   fraseDaMargem,
   fraseDoParado,
+  fraseSemAlertaDeMargem,
+  fraseSemParados,
   linkDoAnuncio,
   MAX_POR_TIPO,
   type Alertas,
@@ -14,8 +16,8 @@ import {
  * Os alertas do Premium, no topo do Resumo. Spec
  * `docs/specs/2026-11-06-premium-alertas-no-painel-design.md`.
  *
- * O texto vai em `ink`, com a cor só no marcador: o vermelho de `negative`
- * em texto corrido não passa do contraste mínimo (ver `ResumoDaLoja`).
+ * Sem vermelho no texto: o `negative` em texto corrido não passa do
+ * contraste mínimo (ver `ResumoDaLoja`). A palavra "prejuízo" carrega o peso.
  */
 export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefCustos: string }) {
   const margem = estadoDaMargem(alertas);
@@ -30,15 +32,13 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
       <h3 className="mt-3 font-semibold">Produtos com prejuízo</h3>
       {margem === "sem-custo" ? (
         <p className="mt-1 leading-relaxed text-muted">
-          Informe o custo dos produtos para saber quais vendem no prejuízo.{" "}
+          {fraseSemAlertaDeMargem(alertas)}{" "}
           <Link href={hrefCustos} className="text-accent underline hover:text-accent-hover">
-            Informar custos
+            Conferir os custos
           </Link>
         </p>
       ) : margem === "nenhum" ? (
-        <p className="mt-1 leading-relaxed text-muted">
-          Nenhum, entre os {alertas.produtos_avaliados} produtos com custo informado.
-        </p>
+        <p className="mt-1 leading-relaxed text-muted">{fraseSemAlertaDeMargem(alertas)}</p>
       ) : (
         <Lista total={alertas.margem_negativa.length}>
           {alertas.margem_negativa.slice(0, MAX_POR_TIPO).map((a) => (
@@ -54,9 +54,7 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
 
       <h3 className="mt-5 font-semibold">Anúncios parados</h3>
       {alertas.parados.length === 0 ? (
-        <p className="mt-1 leading-relaxed text-muted">
-          Nenhum produto parou de vender fora do ritmo dele.
-        </p>
+        <p className="mt-1 leading-relaxed text-muted">{fraseSemParados(alertas)}</p>
       ) : (
         <Lista total={alertas.parados.length}>
           {alertas.parados.slice(0, MAX_POR_TIPO).map((a) => {

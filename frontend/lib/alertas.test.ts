@@ -1,8 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { estadoDaMargem, fraseDaMargem, fraseDoParado, linkDoAnuncio, type Alertas } from "./alertas";
+import {
+  estadoDaMargem,
+  fraseDaMargem,
+  fraseDoParado,
+  fraseSemAlertaDeMargem,
+  fraseSemParados,
+  linkDoAnuncio,
+  type Alertas,
+} from "./alertas";
 
-const VAZIO: Alertas = { produtos_avaliados: 0, margem_negativa: [], parados: [], referencia: null };
+const VAZIO: Alertas = {
+  produtos_avaliados: 0,
+  margem_negativa: [],
+  parados: [],
+  produtos_com_ritmo: null,
+  referencia: null,
+};
+
+describe("frases sem alerta", () => {
+  it("sem produto avaliado, não diz que a margem está boa nem culpa só o custo", () => {
+    const frase = fraseSemAlertaDeMargem(VAZIO);
+    expect(frase).toMatch(/ainda não dá para medir/i);
+    expect(frase).not.toMatch(/^nenhum/i);
+  });
+
+  it("diz entre quantos produtos não há prejuízo, com o plural certo", () => {
+    expect(fraseSemAlertaDeMargem({ ...VAZIO, produtos_avaliados: 4 })).toBe(
+      "Nenhum, entre os 4 produtos com custo e frete conhecidos em todas as vendas.",
+    );
+    expect(fraseSemAlertaDeMargem({ ...VAZIO, produtos_avaliados: 1 })).not.toMatch(/os 1/);
+  });
+
+  it("nenhum parado diz sobre quantos produtos vale", () => {
+    expect(fraseSemParados({ ...VAZIO, produtos_com_ritmo: 7 })).toBe(
+      "Nenhum dos 7 produtos que vendem com frequência parou.",
+    );
+    expect(fraseSemParados({ ...VAZIO, produtos_com_ritmo: 0 })).toMatch(/nenhum produto vende com frequência/i);
+    expect(fraseSemParados(VAZIO)).toMatch(/primeira sincronização/);
+  });
+});
 
 describe("estadoDaMargem", () => {
   it("sem produto avaliado, pede o custo em vez de dizer que está tudo bem", () => {

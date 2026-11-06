@@ -55,3 +55,12 @@ Premium.
 - Alertas por e-mail (depende do domínio e do Resend).
 - A demo: o card não aparece nela por enquanto.
 - O cadeado nos outros planos: com a volta do Premium à venda.
+- Escala (`auditor-de-escala`, medido em 2026-11-06): ~12 ms de servidor na
+  loja real e 230 a 270 ms numa loja sintética de 3.000 itens e 50 mil
+  pedidos por ano. Não bloqueia. Ficam três melhorias para quando houver loja
+  grande: devolver só os 5 piores de cada tipo mais o total, guardar o
+  resultado em cache pela `last_synced_at`, e juntar as três consultas numa
+  só (hoje são três idas e voltas em série).
+- O rateio da taxa dentro do pedido é pela receita, não pelo `sale_fee` de
+  cada item (que está no `raw_json`). Na loja real todo pedido tem um item
+  só, então a diferença é zero.

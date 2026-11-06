@@ -20,6 +20,8 @@ export type Alertas = {
   produtos_avaliados: number;
   margem_negativa: AlertaDeMargem[];
   parados: AlertaDeParado[];
+  /** Produtos com ritmo para medir. `null` = nunca sincronizou. */
+  produtos_com_ritmo: number | null;
   /** O dia da última sincronização, até onde os dias parados são contados. */
   referencia: string | null;
 };
@@ -46,6 +48,33 @@ export function linkDoAnuncio(sku: string): string | null {
 export function estadoDaMargem(alertas: Alertas): "sem-custo" | "nenhum" | "alertas" {
   if (alertas.margem_negativa.length > 0) return "alertas";
   return alertas.produtos_avaliados === 0 ? "sem-custo" : "nenhum";
+}
+
+/**
+ * Sem alerta de margem. Com zero avaliados, não se culpa o custo: o produto
+ * também sai da conta por frete ainda não colhido, e "informe o custo" para
+ * quem já informou contradiria a tela de Custos.
+ */
+export function fraseSemAlertaDeMargem(alertas: Alertas): string {
+  if (alertas.produtos_avaliados === 0) {
+    return "Ainda não dá para medir: nenhum produto tem custo e frete conhecidos em todas as vendas dos últimos 30 dias.";
+  }
+  const n = alertas.produtos_avaliados;
+  return n === 1
+    ? "Nenhum. Só 1 produto tem custo e frete conhecidos em todas as vendas, e ele não deu prejuízo."
+    : `Nenhum, entre os ${n} produtos com custo e frete conhecidos em todas as vendas.`;
+}
+
+/** Sem parado. Diz sobre quantos produtos isso vale: "nenhum" sozinho afirmaria que tudo vende. */
+export function fraseSemParados(alertas: Alertas): string {
+  const n = alertas.produtos_com_ritmo;
+  if (n === null) return "Aparece depois da primeira sincronização.";
+  if (n === 0) {
+    return "Nenhum produto vende com frequência para medir o ritmo: é preciso venda em 5 dias ou mais nos últimos 4 meses.";
+  }
+  return n === 1
+    ? "Nenhum. O único produto que vende com frequência continua no ritmo."
+    : `Nenhum dos ${n} produtos que vendem com frequência parou.`;
 }
 
 export function fraseDaMargem(alerta: AlertaDeMargem): string {
