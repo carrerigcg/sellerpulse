@@ -20,6 +20,7 @@ import asyncpg
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import RedirectResponse
 
+from backend.analytics._common import _TZ_VENDEDOR
 from backend.db import get_pool
 from backend.deps import (
     Acesso,
@@ -31,7 +32,7 @@ from backend.deps import (
 from backend.jobs import queue
 from backend.ml import oauth
 from backend.ml.tokens import PostgresTokenStore
-from backend.planos import ASSINATURA_VIGENTE, VERSAO_DOS_TERMOS, Recurso
+from backend.planos import ASSINATURA_VIGENTE, PLANOS, VERSAO_DOS_TERMOS, Recurso
 from src.ml_client import MLClient
 from src.session_auth import OAuthError, exchange_code_for_tokens, sanitize_oauth_error
 
@@ -159,6 +160,39 @@ async def disconnect(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> N
 # bastante e cada sync gasta rate limit da API do ML.
 LIMIAR_DELTA = timedelta(hours=6)
 
+FOLGA_DO_AGENDADOR = timedelta(hours=1)
+
+
+def _agora() -> datetime:
+    # Separado para os testes fixarem a hora da rodada.
+    return datetime.now(UTC)
+
+
+# A rodada dos planos diarios: a das 06:00, com o resto da manha de folga para
+# o atraso do cron do GitHub.
+MANHA = range(6, 12)
+
+
+def _hora_de_sincronizar(plano, *, ultimo: datetime, agora: datetime) -> bool:
+    """Esta rodada do agendador sincroniza este vendedor?
+
+    O agendador roda de 6 em 6 horas (spec 2026-11-06-premium-sync-a-cada-6-horas).
+
+    - Plano diario: so na rodada da manha, para o dado estar pronto antes do
+      expediente. Por intervalo de 23h, o horario escorregaria para a primeira
+      rodada depois do ultimo sync (um backfill as 14h fixaria as 18h) e nao
+      voltaria. O limiar do login evita repetir quem acabou de sincronizar.
+    - Premium: a cada rodada, com folga. `last_synced_at` e gravado no FIM do
+      job, e o cron atrasa: sem a folga, a rodada seguinte veria 5h50 e o
+      Premium sincronizaria de 12 em 12 horas. A folga tambem cobre a fila:
+      se o delta do ultimo Premium terminar mais de 1h depois da rodada, ele
+      cai para 12 em 12 horas sem nada falhar.
+    """
+    if plano.horas_entre_syncs >= 24:
+        return agora.astimezone(_TZ_VENDEDOR).hour in MANHA and agora - ultimo >= LIMIAR_DELTA
+    return agora - ultimo >= timedelta(hours=plano.horas_entre_syncs) - FOLGA_DO_AGENDADOR
+
+
 _MOTIVOS = frozenset({"manual", "login"})
 
 
@@ -271,7 +305,7 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
         # ingerido fica, e volta a atualizar com o plano e o aceite.
         sellers = await conn.fetch(
             f"""
-            SELECT s.id, s.last_synced_at
+            SELECT s.id, s.last_synced_at, a.plano
               FROM sellers s
               JOIN assinaturas a ON a.seller_id = s.id
              WHERE s.ml_seller_id IS NOT NULL
@@ -282,16 +316,15 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
             VERSAO_DOS_TERMOS,
         )
 
-    agora = datetime.now(UTC)
+    agora = _agora()
     enfileirados = 0
     pulados: dict[str, int] = {}
 
     for seller in sellers:
         ultimo = seller["last_synced_at"]
-        # Mesma janela de 6h do login. Um agendamento diario raramente cai
-        # dentro dela, mas quando cai e porque o vendedor acabou de usar o
-        # produto — e ai sincronizar de novo so gasta cota da API do ML.
-        if ultimo is not None and agora - ultimo < LIMIAR_DELTA:
+        if ultimo is not None and not _hora_de_sincronizar(
+            PLANOS[seller["plano"]], ultimo=ultimo, agora=agora
+        ):
             pulados["recente"] = pulados.get("recente", 0) + 1
             continue
 

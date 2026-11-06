@@ -1,4 +1,6 @@
-# Sincronização diária dos vendedores conectados.
+# Sincronização agendada dos vendedores conectados, de 6 em 6 horas. Quem
+# sincroniza em cada rodada é o plano (`horas_entre_syncs` em
+# `backend/planos.py`): o Premium em todas, os outros só na da manhã.
 #
 # POR QUE EXISTE
 #
@@ -32,10 +34,10 @@ name: Sincronização agendada
 
 on:
   schedule:
-    # 09:00 UTC = 06:00 em São Paulo, antes do expediente.
-    # O cron do GitHub é "melhor esforço" e pode atrasar alguns minutos.
-    # Para uma vez por dia, irrelevante.
-    - cron: "0 9 * * *"
+    # 03, 09, 15 e 21 UTC = 00, 06, 12 e 18 em São Paulo. A das 06:00 é a dos
+    # planos diários, antes do expediente. O cron do GitHub é "melhor esforço"
+    # e atrasa alguns minutos: o endpoint tem uma folga de 1 hora para isso.
+    - cron: "0 3,9,15,21 * * *"
   # Permite disparar à mão pela aba Actions — é assim que se testa sem
   # esperar o dia seguinte.
   workflow_dispatch:
@@ -92,7 +94,8 @@ jobs:
           # antes disso, mas conforme a base cresce a colheita de visitas
           # passa de uma chamada por item, e aí o serviço dormiria no meio do
           # trabalho. Dez minutos de presença cobrem a fila de hoje com folga
-          # e custam ~5 h/mês das 750 gratuitas.
+          # e, em 4 rodadas por dia (com os ~15 min até hibernar), custam
+          # ~50 h/mês das 750 gratuitas.
           for i in $(seq 1 10); do
             sleep 60
             codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \

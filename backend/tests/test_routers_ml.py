@@ -17,9 +17,10 @@ from backend.main import app
 from backend.ml import oauth
 from backend.ml import tokens as tokens_mod
 from backend.ml.tokens import PostgresTokenStore
+from backend.routers import ml as ml_router
 from src.auth import TokenSet
 
-from .conftest import TEST_DATABASE_URL
+from .conftest import TEST_DATABASE_URL, da_plano
 
 TEST_JWT_SECRET = "test-secret-do-supabase"
 
@@ -619,7 +620,7 @@ async def test_sync_todos_ignora_quem_nao_conectou_o_mercado_livre(
 
 
 async def test_sync_todos_pula_quem_sincronizou_ha_pouco(client, monkeypatch, pg_pool, test_seller):
-    """Mesma janela de 6h do login -- nao queimar cota de quem acabou de usar."""
+    """Premium que sincronizou ha 30 min: nao queimar cota de quem acabou de usar."""
     monkeypatch.setenv("SYNC_SECRET", SEGREDO)
     _, seller_id = test_seller
     await _conectado(pg_pool, seller_id, ultimo_sync=datetime.now(UTC) - timedelta(minutes=30))
@@ -629,6 +630,48 @@ async def test_sync_todos_pula_quem_sincronizou_ha_pouco(client, monkeypatch, pg
     assert resp.json() == {"sellers": 1, "enfileirados": 0, "pulados": {"recente": 1}}
     async with pg_pool.acquire() as conn:
         assert await conn.fetchval("SELECT count(*) FROM sync_jobs") == 0
+
+
+# Rodadas do agendador em UTC: 09:05 e a das 06:05 em Sao Paulo, 10:40 e a
+# mesma atrasada, 15:05 e a do meio-dia.
+_MANHA = datetime(2026, 11, 6, 9, 5, tzinfo=UTC)
+_MANHA_ATRASADA = datetime(2026, 11, 6, 10, 40, tzinfo=UTC)
+_MEIO_DIA = datetime(2026, 11, 6, 15, 5, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("plano", "rodada", "horas", "enfileira"),
+    [
+        # A rodada seguinte do agendador ve menos de 6h, porque o
+        # `last_synced_at` e gravado no fim do job: a folga e o que mantem o
+        # Premium de 6 em 6 horas, e nao de 12 em 12.
+        ("premium", _MEIO_DIA, 5.5, True),
+        ("premium", _MEIO_DIA, 4.5, False),
+        # Plano diario: so na rodada da manha, para o dado estar pronto antes
+        # do expediente e o horario nao escorregar para a tarde.
+        ("exclusive", _MANHA, 23.5, True),
+        ("exclusive", _MANHA, 20, True),
+        ("exclusive", _MEIO_DIA, 30, False),
+        ("exclusive", _MANHA, 5, False),
+        ("essencial", _MANHA_ATRASADA, 20, True),
+        # 14:00 UTC sao 11:00 em Sao Paulo: ainda manha no dia do vendedor.
+        ("exclusive", datetime(2026, 11, 6, 14, 0, tzinfo=UTC), 20, True),
+    ],
+)
+async def test_sync_todos_segue_o_intervalo_do_plano(
+    client, monkeypatch, pg_pool, test_seller, plano, rodada, horas, enfileira
+):
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    monkeypatch.setattr(ml_router, "_agora", lambda: rodada)
+    monkeypatch.setattr(ml_router, "MANHA", range(6, 12))
+    _, seller_id = test_seller
+    async with pg_pool.acquire() as conn:
+        await da_plano(conn, seller_id, plano)
+    await _conectado(pg_pool, seller_id, ultimo_sync=rodada - timedelta(hours=horas))
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.json()["enfileirados"] == (1 if enfileira else 0)
 
 
 async def test_sync_todos_nao_duplica_job_em_andamento(client, monkeypatch, pg_pool, test_seller):

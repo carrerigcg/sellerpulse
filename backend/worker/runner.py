@@ -48,6 +48,10 @@ INTERVALO_OCIOSO = 5.0
 
 ESPERA_APOS_BACKFILL_FALHO = timedelta(days=7)
 
+# Menos que um dia, para a colheita diaria nao escorregar de rodada: a da
+# manha de ontem terminou ha pouco menos de 24h quando a de hoje comeca.
+INTERVALO_DAS_VISITAS = timedelta(hours=20)
+
 # Intervalo minimo entre renovacoes de lease DENTRO de uma janela. Derivado do
 # lease (backend/jobs/queue.py) e nao um numero solto: tem que ser
 # confortavelmente MENOR que ele, senao nao serve de nada. Um quarto do lease da
@@ -265,7 +269,29 @@ async def _delta(pool, job, client, ml_seller_id, seller_id, last_synced_at) -> 
 
 
 async def _depois_do_delta(pool, seller_id) -> str:
-    """Backfill se o plano pede mais meses do que ja foram buscados.
+    """O proximo elo da cadeia depois do delta.
+
+    Backfill se o plano pede mais meses do que ja foram buscados. Senao,
+    visitas, a nao ser que elas tenham sido colhidas ha menos de
+    `INTERVALO_DAS_VISITAS`: visita existe por dia, e as rodadas de dentro do
+    dia do Premium so reescreveriam a contagem parcial de hoje, uma chamada ao
+    ML por item (1.118 na loja real, uns 10 minutos). Ai a cadeia vai direto
+    ao frete.
+    """
+    if await _precisa_de_backfill(pool, seller_id):
+        return "backfill"
+    async with pool.acquire() as conn:
+        colheu_ha_pouco = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
+            "AND kind = 'visitas' AND status = 'done' AND finished_at > now() - $2::interval)",
+            seller_id,
+            INTERVALO_DAS_VISITAS,
+        )
+    return "frete" if colheu_ha_pouco else "visitas"
+
+
+async def _precisa_de_backfill(pool, seller_id) -> bool:
+    """O plano pede mais meses do que ja foram buscados?
 
     E o delta quem dispara a busca, e nao o pagamento: assim todo caminho que
     vira Premium (pagamento, troca, plano dado a mao) chega aqui na proxima
@@ -282,10 +308,10 @@ async def _depois_do_delta(pool, seller_id) -> str:
     # O plano primeiro: so quem busca alem do piso pode estar a frente do que
     # veio, e a consulta a fila le o historico inteiro de jobs do vendedor.
     if pedidos <= DIAS_DE_INGESTAO_MINIMO:
-        return "visitas"
+        return False
     buscados = await queue.dias_ja_buscados(pool, seller_id)
     if buscados is None or buscados >= pedidos:
-        return "visitas"
+        return False
     async with pool.acquire() as conn:
         falhou_ha_pouco = await conn.fetchval(
             "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
@@ -293,7 +319,7 @@ async def _depois_do_delta(pool, seller_id) -> str:
             seller_id,
             ESPERA_APOS_BACKFILL_FALHO,
         )
-    return "visitas" if falhou_ha_pouco else "backfill"
+    return not falhou_ha_pouco
 
 
 async def _visitas(pool, job, client, seller_id) -> None:
