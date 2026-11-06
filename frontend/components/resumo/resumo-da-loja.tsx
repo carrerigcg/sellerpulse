@@ -24,6 +24,7 @@ export function ResumoDaLoja({
   tarefas,
   rodape,
   hrefFinanceiro,
+  alertas = null,
 }: {
   legenda: string;
   /** Nó, e não texto: a sessão expirada leva um link para entrar de novo. */
@@ -34,6 +35,8 @@ export function ResumoDaLoja({
   tarefas: Tarefa[];
   rodape: string | null;
   hrefFinanceiro: string;
+  /** O card de alertas, pronto. Só o dashboard tem; a demo não. */
+  alertas?: ReactNode;
 }) {
   return (
     <div className="text-base">
@@ -56,6 +59,7 @@ export function ResumoDaLoja({
         vazio
       ) : (
         <>
+          {alertas}
           <BlocoDinheiro veredito={veredito} hrefFinanceiro={hrefFinanceiro} />
           <ListaDeTarefas tarefas={tarefas} rodape={rodape} />
         </>

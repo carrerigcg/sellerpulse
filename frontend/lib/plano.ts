@@ -12,7 +12,8 @@ export type Recurso =
   | "clientes"
   | "cohort"
   | "exportar"
-  | "sync-sob-demanda";
+  | "sync-sob-demanda"
+  | "alertas";
 
 export type NomeDoPlano = "essencial" | "exclusive" | "premium";
 

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { CardDeAlertas } from "@/components/resumo/card-de-alertas";
 import { ResumoDaLoja } from "@/components/resumo/resumo-da-loja";
 import {
   ApiError,
   getAbcPareto,
+  getAlertas,
   getAcesso,
   getCustos,
   getFluxoFinanceiro,
@@ -12,7 +14,7 @@ import {
   janelaAnterior,
 } from "@/lib/api";
 import { periodoDoResumo, periodoPadrao } from "@/lib/periodo";
-import { podeUsar } from "@/lib/plano";
+import { libera, podeUsar } from "@/lib/plano";
 import { montaResumo } from "@/lib/resumo";
 
 import { DisparaDelta } from "./delta";
@@ -34,7 +36,7 @@ export default async function ResumoPage() {
   const [antDe, antAte] = janelaAnterior(periodo.de, periodo.ate);
   const acesso = await getAcesso().catch(() => null);
 
-  const [fluxo, anterior, abc, custos, rfm] = await Promise.allSettled([
+  const [fluxo, anterior, abc, custos, rfm, alertas] = await Promise.allSettled([
     getFluxoFinanceiro(periodo.de, periodo.ate),
     getFluxoFinanceiro(antDe, antAte),
     getAbcPareto(periodo.de, periodo.ate),
@@ -45,6 +47,10 @@ export default async function ResumoPage() {
     podeUsar(acesso, "clientes")
       ? getRfmScores(periodoClientes.de, periodoClientes.ate)
       : Promise.resolve([]),
+    // Só o Premium. Sem acesso conhecido não pede: o card some, e o resto do
+    // Resumo não depende dele. Sem cadeado nos outros planos enquanto o
+    // Premium estiver fora de venda (decisão 3 da spec dos alertas).
+    acesso && libera(acesso, "alertas") ? getAlertas() : Promise.resolve(null),
   ]);
 
   const resumo = montaResumo({
@@ -68,6 +74,12 @@ export default async function ResumoPage() {
         tarefas={resumo.tarefas}
         rodape={resumo.rodape}
         hrefFinanceiro={resumo.hrefFinanceiro}
+        alertas={
+          // Falha nos alertas não derruba o Resumo: o card só não aparece.
+          alertas.status === "fulfilled" && alertas.value ? (
+            <CardDeAlertas alertas={alertas.value} hrefCustos="/dashboard/custos" />
+          ) : null
+        }
       />
     </>
   );

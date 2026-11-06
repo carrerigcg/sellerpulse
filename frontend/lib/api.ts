@@ -1,5 +1,6 @@
 import { cache } from "react";
 
+import type { Alertas } from "@/lib/alertas";
 import type { Cancelamentos } from "@/lib/cancelamentos";
 import { comReceitaSemFrete, type FluxoDiaDaApi } from "@/lib/frete";
 import type { Acesso } from "@/lib/plano";
@@ -286,6 +287,11 @@ export type CustoLinha = {
   /** Desde quando o custo acima vale. `null` quando não há custo. */
   vigente_desde: string | null;
 };
+
+/** Margem negativa e anúncio parado. Só o Premium; os outros levam 403. */
+export function getAlertas() {
+  return buscar<Alertas>("/metrics/alertas", {});
+}
 
 export function getCustos(dateFrom: string, dateTo: string) {
   return buscar<CustoLinha[]>("/custos", {

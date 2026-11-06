@@ -41,6 +41,8 @@ class Recurso(StrEnum):
     EXPORTAR = "exportar"
     # Sincronizar fora da diária agendada: no login e pelo botão.
     SYNC_SOB_DEMANDA = "sync-sob-demanda"
+    # Margem negativa e anúncio parado, no Resumo. Só o Premium.
+    ALERTAS = "alertas"
 
 
 @dataclass(frozen=True)
@@ -86,7 +88,7 @@ PLANOS: dict[str, Plano] = {
     "exclusive": Plano(
         nome="exclusive",
         preco_mensal=Decimal("79.90"),
-        recursos=_TUDO,
+        recursos=_TUDO - {Recurso.ALERTAS},
         dias_de_historico=180,
         produtos_na_abc=None,
     ),
