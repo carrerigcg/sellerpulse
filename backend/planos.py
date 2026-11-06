@@ -41,6 +41,8 @@ class Recurso(StrEnum):
     EXPORTAR = "exportar"
     # Sincronizar fora da diária agendada: no login e pelo botão.
     SYNC_SOB_DEMANDA = "sync-sob-demanda"
+    # Margem negativa e anúncio parado, no Resumo. Só o Premium.
+    ALERTAS = "alertas"
 
 
 @dataclass(frozen=True)
@@ -79,14 +81,14 @@ PLANOS: dict[str, Plano] = {
         dias_de_historico=90,
         produtos_na_abc=10,
     ),
-    # Exclusive e Premium liberam tudo o que existe hoje. O que vai
-    # diferenciá-los (MCP com a conta real, alertas, várias contas) entra com
+    # O Exclusive libera tudo, menos o que é só do Premium (os alertas). O que
+    # mais vai diferenciá-los (MCP com a conta real, várias contas) entra com
     # cada feature (decisão 8 da spec). Sem corte no Exclusive, ele entregaria
     # com o tempo o histórico longo que o Premium vai vender.
     "exclusive": Plano(
         nome="exclusive",
         preco_mensal=Decimal("79.90"),
-        recursos=_TUDO,
+        recursos=_TUDO - {Recurso.ALERTAS},
         dias_de_historico=180,
         produtos_na_abc=None,
     ),
