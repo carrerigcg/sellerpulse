@@ -1,6 +1,6 @@
 # Esqueci a senha
 
-Estado: mergeado em 2026-11-04 (#50 e #51), no ar na Vercel. Falta o teste com um link de verdade (pedir e abrir no mesmo navegador, com a conta do Guilherme). O envio para clientes depende do domínio e do Resend.
+Estado: mergeado em 2026-11-04 (#50 e #51), no ar na Vercel. Teste com link de verdade feito pelo Guilherme em 2026-11-06, numa conta dele: funcionou. O envio para clientes depende do domínio e do Resend.
 
 ## O pedido
 
