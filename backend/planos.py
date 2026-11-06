@@ -92,9 +92,42 @@ PLANOS: dict[str, Plano] = {
         nome="premium",
         preco_mensal=Decimal("139.90"),
         recursos=_TUDO,
-        dias_de_historico=None,
+        # 12 meses é o que o ML devolve no `/orders/search` (medido em
+        # 2026-11-06) e o que a vitrine promete. Sem corte, o histórico
+        # cresceria além do que se vende.
+        dias_de_historico=365,
         produtos_na_abc=None,
         # Volta à venda quando as funções que o diferenciam existirem.
         a_venda=False,
     ),
 }
+
+# Assinatura que ainda dá acesso, sobre `assinaturas` com o apelido `a`. Prazo
+# vencido conta como sem plano: é assim que a inadimplência e o cancelamento
+# desligam o acesso, sem agendador. Uma condição só, para o painel e o worker
+# não discordarem sobre quem tem plano.
+ASSINATURA_VIGENTE = "(a.acesso_ate IS NULL OR a.acesso_ate > now())"
+
+# O que o backfill sempre busca, qualquer que seja o plano: quem sobe do
+# Essencial para o Exclusive já tem os 6 meses, sem esperar outra busca.
+DIAS_DE_INGESTAO_MINIMO = 180
+
+
+def dias_de_ingestao(plano: Plano | None) -> int:
+    """Quantos dias o backfill busca no ML para este plano.
+
+    O que o plano mostra, com piso de 180. Spec
+    docs/specs/2026-11-06-premium-historico-de-12-meses-design.md, decisão 2.
+    """
+    dias = plano.dias_de_historico if plano is not None else None
+    return max(DIAS_DE_INGESTAO_MINIMO, dias or DIAS_DE_INGESTAO_MINIMO)
+
+
+async def plano_vigente(pool, seller_id) -> Plano | None:
+    """O plano do vendedor, para quem não passa pelo FastAPI (o worker)."""
+    async with pool.acquire() as conn:
+        nome = await conn.fetchval(
+            f"SELECT a.plano FROM assinaturas a WHERE a.seller_id = $1 AND {ASSINATURA_VIGENTE}",
+            seller_id,
+        )
+    return PLANOS[nome] if nome is not None else None

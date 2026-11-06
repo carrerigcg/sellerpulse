@@ -22,8 +22,14 @@ export const PLANOS_A_VENDA: NomeDoPlano[] = ["essencial", "exclusive"];
 export type Acesso = {
   plano: NomeDoPlano | null;
   recursos: Recurso[];
-  /** `null` = sem limite além do que a ingestão trouxe. */
+  /**
+   * Os dias que as telas mostram. `null` = sem limite além do que a ingestão
+   * trouxe. Com a busca dos meses antigos em andamento, é o que já veio, e não
+   * o do plano.
+   */
   dias_de_historico: number | null;
+  /** O plano mostra mais do que já foi buscado no ML: a busca está em andamento. */
+  historico_buscando: boolean;
   produtos_na_abc: number | null;
   termos: { versao: string; aceito: boolean };
   /** Se a contratação nova está aberta. O backend é quem recusa o checkout. */
@@ -99,8 +105,14 @@ export const NOMES_DOS_PLANOS: Record<NomeDoPlano, string> = {
   premium: "Premium",
 };
 
-/** "No Exclusive, o histórico é de 6 meses". Só faz sentido em plano com corte. */
+/**
+ * "No Exclusive, o histórico é de 6 meses". Só faz sentido em plano com corte.
+ *
+ * Com a busca em andamento, o corte não é do plano, e dizer "o histórico é de
+ * 6 meses" a quem contratou 12 seria falso.
+ */
 export function fraseDoHistorico(acesso: Acesso): string {
+  if (acesso.historico_buscando) return "Ainda buscando no Mercado Livre os meses mais antigos";
   const nome = acesso.plano ? NOMES_DOS_PLANOS[acesso.plano] : "seu plano";
   return `No ${nome}, o histórico é de ${Math.round((acesso.dias_de_historico ?? 0) / 30)} meses`;
 }

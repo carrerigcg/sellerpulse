@@ -27,13 +27,14 @@ from backend.ml import oauth
 from backend.ml.frete_pg import colhe_frete
 from backend.ml.ingest_pg import ingest_janela
 from backend.ml.visitas_pg import colhe_visitas
+from backend.planos import DIAS_DE_INGESTAO_MINIMO, dias_de_ingestao, plano_vigente
 from src.ml_client import MLClient
 from src.session_auth import sanitize_oauth_error
 
 _log = logging.getLogger(__name__)
 
-# 6 janelas de 30 dias = 180 dias, a mesma janela do src/ingest.py original.
-JANELAS_BACKFILL = 6
+# Janelas de 30 dias. Quantos dias o backfill busca depende do plano
+# (`planos.dias_de_ingestao`): 180 no minimo, 365 no Premium.
 DIAS_POR_JANELA = 30
 
 # Margem no delta: refaz um pouco do que ja foi pra absorver pedido que mudou
@@ -44,6 +45,8 @@ MARGEM_DELTA = timedelta(hours=1)
 JANELA_DELTA_PADRAO = timedelta(days=7)
 
 INTERVALO_OCIOSO = 5.0
+
+ESPERA_APOS_BACKFILL_FALHO = timedelta(days=7)
 
 # Intervalo minimo entre renovacoes de lease DENTRO de uma janela. Derivado do
 # lease (backend/jobs/queue.py) e nao um numero solto: tem que ser
@@ -61,22 +64,23 @@ INTERVALO_OCIOSO = 5.0
 INTERVALO_HEARTBEAT = queue.LEASE_SEGUNDOS / 4
 
 
-def janelas(
-    ancora: datetime, *, quantidade: int = JANELAS_BACKFILL
-) -> list[tuple[datetime, datetime]]:
-    """Fatia [ancora - quantidade*30d, ancora] em janelas contiguas.
+def janelas(ancora: datetime, *, dias: int) -> list[tuple[datetime, datetime]]:
+    """Fatia [ancora - dias, ancora] em janelas contiguas de 30 dias.
+
+    A ultima e menor quando `dias` nao e multiplo de 30: 365 sao 12 de 30 e
+    uma de 5. Arredondar para cima pediria ao ML meses que ele nao devolve.
 
     A `ancora` e o `started_at` PERSISTIDO do job, nunca `now()`: calcular de
     `now()` deslocaria as janelas a cada retomada, e o cursor ("3 concluidas")
     passaria a apontar pra um periodo diferente — deixando furo no historico.
     """
-    inicio = ancora - timedelta(days=quantidade * DIAS_POR_JANELA)
+    inicio = ancora - timedelta(days=dias)
     return [
         (
-            inicio + timedelta(days=i * DIAS_POR_JANELA),
-            inicio + timedelta(days=(i + 1) * DIAS_POR_JANELA),
+            inicio + timedelta(days=d),
+            inicio + timedelta(days=min(d + DIAS_POR_JANELA, dias)),
         )
-        for i in range(quantidade)
+        for d in range(0, dias, DIAS_POR_JANELA)
     ]
 
 
@@ -182,11 +186,18 @@ async def executa_job(pool: asyncpg.Pool, job: asyncpg.Record, *, client=None) -
 
 
 async def _backfill(pool, job, client, ml_seller_id, seller_id) -> None:
-    todas = janelas(job["started_at"])
     feitas = 0
     if job["cursor"]:
         cursor = job["cursor"] if isinstance(job["cursor"], dict) else json.loads(job["cursor"])
         feitas = int(cursor.get("janelas_concluidas", 0))
+        # Os dias sao os do INICIO do job, nunca os do plano de agora: se o
+        # plano mudou no meio, outras janelas fariam o cursor apontar para
+        # outro periodo. Cursor sem `dias` e de antes deles existirem: 180.
+        dias = int(cursor.get("dias", queue.DIAS_DO_BACKFILL_ANTIGO))
+    else:
+        dias = dias_de_ingestao(await plano_vigente(pool, seller_id))
+        await queue.salva_cursor(pool, job["id"], {"janelas_concluidas": 0, "dias": dias})
+    todas = janelas(job["started_at"], dias=dias)
 
     avisos: list[str] = []
     for indice in range(feitas, len(todas)):
@@ -215,7 +226,7 @@ async def _backfill(pool, job, client, ml_seller_id, seller_id) -> None:
         # Grava o progresso SO depois da janela inteira ter sido ingerida: se
         # ela estourar no meio, a retomada refaz essa janela (o upsert e
         # idempotente) em vez de pular dado.
-        await queue.salva_cursor(pool, job["id"], {"janelas_concluidas": indice + 1})
+        await queue.salva_cursor(pool, job["id"], {"janelas_concluidas": indice + 1, "dias": dias})
 
     await _conclui(pool, job, seller_id, avisos, len(todas), encadeia="visitas")
 
@@ -243,7 +254,46 @@ async def _delta(pool, job, client, ml_seller_id, seller_id, last_synced_at) -> 
             pool, job["id"], fase=fase, processados=0, total=1
         ),
     )
-    await _conclui(pool, job, seller_id, resultado.warnings, 1, encadeia="visitas")
+    await _conclui(
+        pool,
+        job,
+        seller_id,
+        resultado.warnings,
+        1,
+        encadeia=await _depois_do_delta(pool, seller_id),
+    )
+
+
+async def _depois_do_delta(pool, seller_id) -> str:
+    """Backfill se o plano pede mais meses do que ja foram buscados.
+
+    E o delta quem dispara a busca, e nao o pagamento: assim todo caminho que
+    vira Premium (pagamento, troca, plano dado a mao) chega aqui na proxima
+    sincronizacao, sem que nenhum deles precise saber. O backfill encadeia as
+    visitas, entao a cadeia continua inteira. Sem backfill concluido (loja
+    recem-conectada ou backfill que falhou), quem busca e o fluxo de conexao.
+
+    Backfill que falhou ha menos de `ESPERA_APOS_BACKFILL_FALHO` nao e
+    refeito: com um erro persistente, cada delta trocaria as visitas por um
+    backfill que morre, e o ML so guarda 150 dias de visitas. Passado o
+    prazo, tenta de novo.
+    """
+    pedidos = dias_de_ingestao(await plano_vigente(pool, seller_id))
+    # O plano primeiro: so quem busca alem do piso pode estar a frente do que
+    # veio, e a consulta a fila le o historico inteiro de jobs do vendedor.
+    if pedidos <= DIAS_DE_INGESTAO_MINIMO:
+        return "visitas"
+    buscados = await queue.dias_ja_buscados(pool, seller_id)
+    if buscados is None or buscados >= pedidos:
+        return "visitas"
+    async with pool.acquire() as conn:
+        falhou_ha_pouco = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
+            "AND kind = 'backfill' AND status = 'failed' AND finished_at > now() - $2::interval)",
+            seller_id,
+            ESPERA_APOS_BACKFILL_FALHO,
+        )
+    return "visitas" if falhou_ha_pouco else "backfill"
 
 
 async def _visitas(pool, job, client, seller_id) -> None:

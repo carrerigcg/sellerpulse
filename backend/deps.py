@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import asyncpg
 from fastapi import Depends, HTTPException
@@ -18,7 +18,15 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.auth import decode_supabase_jwt
 from backend.db import get_pool
-from backend.planos import PLANOS, VERSAO_DOS_TERMOS, Plano, Recurso
+from backend.jobs import queue
+from backend.planos import (
+    ASSINATURA_VIGENTE,
+    DIAS_DE_INGESTAO_MINIMO,
+    PLANOS,
+    VERSAO_DOS_TERMOS,
+    Plano,
+    Recurso,
+)
 
 _bearer = HTTPBearer()
 
@@ -96,20 +104,41 @@ async def le_plano_e_aceite(pool: asyncpg.Pool, seller_id: uuid.UUID) -> tuple[P
     """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            """
+            f"""
             SELECT a.plano,
                    EXISTS (SELECT 1 FROM aceites_de_termos t
                             WHERE t.seller_id = $1 AND t.versao = $2) AS aceitou
               FROM (SELECT 1) AS um
               LEFT JOIN assinaturas a
                      ON a.seller_id = $1
-                    AND (a.acesso_ate IS NULL OR a.acesso_ate > now())
+                    AND {ASSINATURA_VIGENTE}
             """,
             seller_id,
             VERSAO_DOS_TERMOS,
         )
     plano = PLANOS[row["plano"]] if row["plano"] is not None else None
     return plano, row["aceitou"]
+
+
+async def historico_visivel(
+    pool: asyncpg.Pool, seller_id: uuid.UUID, plano: Plano
+) -> tuple[int | None, bool]:
+    """Os dias que a tela mostra, e se ainda falta buscar o que o plano promete.
+
+    É o menor entre o plano e o que o backfill já trouxe: com 6 meses
+    buscados, mostrar 12 exibiria os 6 antigos como venda zero. Ausência não é
+    zero. Antes do primeiro backfill vale o plano, porque a tela de conexão já
+    mostra o progresso (spec 2026-11-06-premium-historico-de-12-meses, decisão 6).
+    """
+    dias = plano.dias_de_historico
+    # Só o plano que mostra além do piso de ingestão pode estar à frente do
+    # que foi buscado: os outros nem consultam a fila.
+    if dias is None or dias <= DIAS_DE_INGESTAO_MINIMO:
+        return dias, False
+    buscados = await queue.dias_ja_buscados(pool, seller_id)
+    if buscados is None or buscados >= dias:
+        return dias, False
+    return buscados, True
 
 
 async def get_acesso(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> Acesso:
@@ -125,6 +154,11 @@ async def get_acesso(seller_id: uuid.UUID = Depends(get_current_seller_id)) -> A
         raise recusa(402, "sem-plano", "Contrate um plano para acessar o painel")
     if not aceitou:
         raise recusa(403, "termos-pendentes", "Aceite os Termos de Uso para continuar")
+    dias, _buscando = await historico_visivel(pool, seller_id, plano)
+    if dias != plano.dias_de_historico:
+        # O corte (`limita_ao_historico`) lê os dias do plano. Trocar aqui, num
+        # lugar só, cobre todas as telas sem que cada router saiba da busca.
+        plano = replace(plano, dias_de_historico=dias)
     return Acesso(seller_id=seller_id, plano=plano)
 
 

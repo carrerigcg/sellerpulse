@@ -31,7 +31,7 @@ from backend.deps import (
 from backend.jobs import queue
 from backend.ml import oauth
 from backend.ml.tokens import PostgresTokenStore
-from backend.planos import VERSAO_DOS_TERMOS, Recurso
+from backend.planos import ASSINATURA_VIGENTE, VERSAO_DOS_TERMOS, Recurso
 from src.ml_client import MLClient
 from src.session_auth import OAuthError, exchange_code_for_tokens, sanitize_oauth_error
 
@@ -270,12 +270,12 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
         # recusou os Termos nao autorizou o tratamento dos dados novos. O dado
         # ingerido fica, e volta a atualizar com o plano e o aceite.
         sellers = await conn.fetch(
-            """
+            f"""
             SELECT s.id, s.last_synced_at
               FROM sellers s
               JOIN assinaturas a ON a.seller_id = s.id
              WHERE s.ml_seller_id IS NOT NULL
-               AND (a.acesso_ate IS NULL OR a.acesso_ate > now())
+               AND {ASSINATURA_VIGENTE}
                AND EXISTS (SELECT 1 FROM aceites_de_termos t
                             WHERE t.seller_id = s.id AND t.versao = $1)
             """,

@@ -17,11 +17,10 @@ from backend.analytics._common import _TZ_VENDEDOR, _parse_boundary
 from backend.deps import recusa_fora_do_plano
 from backend.planos import Plano
 
-# Teto da duração da janela. Derivado do que o produto de fato serve: a
-# ingestão faz backfill de 6 meses (JANELAS_BACKFILL * DIAS_POR_JANELA =
-# 6 * 30 = 180 dias, em backend/worker/runner.py). O teto é o DOBRO disso e não
-# os 180 exatos porque os deltas seguintes só acrescentam dado pra frente — o
-# histórico de uma conta antiga passa dos 180 dias, e pedir "tudo" tem que
+# Teto da duração da janela. Derivado do que o produto de fato serve: o
+# backfill mais longo é o do Premium, de 12 meses (`planos.dias_de_ingestao`).
+# O teto é o DOBRO disso e não os 365 exatos porque os deltas seguintes só acrescentam dado pra frente — o
+# histórico de uma conta antiga passa do que o backfill buscou, e pedir "tudo" tem que
 # continuar funcionando. Acima daí não é tela de ninguém: a janela mais larga
 # do frontend pede 90 dias (`periodoPadrao()` em app/**/page.tsx) e a
 # comparação com o período anterior (`janelaAnterior` em lib/api.ts) repete a
@@ -36,7 +35,7 @@ from backend.planos import Plano
 # trivial mantém a instância acordada de graça e queima a cota. Limitar a
 # entrada é o que encolhe isso de verdade; um limitador de taxa in-process
 # zeraria a cada cold start da instância, ou seja, seria teatro.
-MAX_JANELA_DIAS = 2 * 180
+MAX_JANELA_DIAS = 2 * 365
 
 # Teto do top-N. As duas rotas que aceitam `n` (/metrics/top-produtos e
 # /demo/top-produtos) alimentam ranking de tela — o frontend usa o default de

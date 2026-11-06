@@ -13,6 +13,7 @@ from backend.ml import tokens as tokens_mod
 from backend.worker import runner
 from src.auth import TokenSet
 
+from .conftest import da_plano
 from .test_ingest_pg import ClienteFake, _pedido
 
 ANCORA = datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
@@ -49,7 +50,7 @@ async def _job(pool, seller_id, kind="backfill"):
 
 def test_janelas_cobrem_o_periodo_sem_furo_nem_sobreposicao():
     """Furo = pedido perdido. Sobreposicao = trabalho e rate limit jogados fora."""
-    janelas = runner.janelas(ANCORA, quantidade=6)
+    janelas = runner.janelas(ANCORA, dias=180)
     assert len(janelas) == 6
     assert janelas[0][0] == ANCORA - timedelta(days=180)
     assert janelas[-1][1] == ANCORA
@@ -67,12 +68,171 @@ def test_janelas_sao_deterministicas_pela_ancora():
     deslocaria todas elas — e o cursor "3 janelas feitas" passaria a apontar
     pra um periodo diferente, deixando um furo no historico.
     """
-    assert runner.janelas(ANCORA, quantidade=6) == runner.janelas(ANCORA, quantidade=6)
+    assert runner.janelas(ANCORA, dias=180) == runner.janelas(ANCORA, dias=180)
+
+
+def test_janelas_de_um_ano_fecham_em_365_dias_sem_pedir_alem():
+    """O ML devolve exatamente 12 meses: 13 janelas de 30 dias pediriam 390."""
+    janelas = runner.janelas(ANCORA, dias=365)
+    assert len(janelas) == 13
+    assert janelas[0][0] == ANCORA - timedelta(days=365)
+    assert janelas[-1][1] == ANCORA
+    assert janelas[-1][1] - janelas[-1][0] == timedelta(days=5)
+    for anterior, seguinte in zip(janelas, janelas[1:], strict=False):
+        assert anterior[1] == seguinte[0]
+
+
+async def _no_plano(pool, seller_id, plano):
+    async with pool.acquire() as conn:
+        await da_plano(conn, seller_id, plano)
+
+
+async def _kinds(pool, seller_id):
+    async with pool.acquire() as conn:
+        return [
+            r["kind"]
+            for r in await conn.fetch(
+                "SELECT kind FROM sync_jobs WHERE seller_id = $1 ORDER BY id", seller_id
+            )
+        ]
+
+
+async def test_backfill_do_premium_busca_doze_meses(pg_pool, test_seller):
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "premium")
+    job = await _job(pg_pool, seller_id)
+    cliente = ClienteFake()
+
+    await runner.executa_job(pg_pool, job, client=cliente)
+
+    assert len(cliente.chamadas_get_orders) == 26  # 13 janelas x (paid + cancelled)
+    assert (
+        cliente.chamadas_get_orders[0]["de"]
+        == (job["started_at"] - timedelta(days=365)).isoformat()
+    )
+    async with pg_pool.acquire() as conn:
+        cursor = await conn.fetchval("SELECT cursor FROM sync_jobs WHERE id = $1", job["id"])
+    assert json.loads(cursor) == {"janelas_concluidas": 13, "dias": 365}
+
+
+async def test_retomada_usa_os_dias_do_cursor_mesmo_se_o_plano_mudou(pg_pool, test_seller):
+    """Começou Premium e virou Exclusive no meio: as janelas não podem mudar."""
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "exclusive")
+    job = await _job(pg_pool, seller_id)
+    await queue.salva_cursor(pg_pool, job["id"], {"janelas_concluidas": 2, "dias": 365})
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sync_jobs SET leased_until = now() - interval '1 minute' WHERE id = $1",
+            job["id"],
+        )
+    repescado = await queue.claim_next(pg_pool)
+    cliente = ClienteFake()
+
+    await runner.executa_job(pg_pool, repescado, client=cliente)
+
+    assert len(cliente.chamadas_get_orders) == 22  # 11 janelas restantes x 2
+    assert (
+        cliente.chamadas_get_orders[0]["de"]
+        == runner.janelas(repescado["started_at"], dias=365)[2][0].isoformat()
+    )
+
+
+async def _backfill_concluido(pool, seller_id, cursor):
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, cursor, finished_at) "
+            "VALUES ($1, 'backfill', 'done', $2::jsonb, now())",
+            seller_id,
+            json.dumps(cursor),
+        )
+
+
+async def test_retomada_de_backfill_de_antes_dos_dias_usa_180(pg_pool, test_seller):
+    """Job em andamento no deploy: o cursor so tem `janelas_concluidas`."""
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "premium")
+    job = await _job(pg_pool, seller_id)
+    await queue.salva_cursor(pg_pool, job["id"], {"janelas_concluidas": 2})
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sync_jobs SET leased_until = now() - interval '1 minute' WHERE id = $1",
+            job["id"],
+        )
+    repescado = await queue.claim_next(pg_pool)
+    cliente = ClienteFake()
+
+    await runner.executa_job(pg_pool, repescado, client=cliente)
+
+    assert len(cliente.chamadas_get_orders) == 8  # 4 janelas restantes x 2
+    esperado = runner.janelas(repescado["started_at"], dias=180)[2]
+    assert cliente.chamadas_get_orders[0]["de"] == esperado[0].isoformat()
+
+
+async def test_backfill_que_falhou_ha_pouco_nao_troca_as_visitas(pg_pool, test_seller):
+    """Erro persistente no backfill nao pode parar a colheita de visitas."""
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "premium")
+    await _backfill_concluido(pg_pool, seller_id, {"janelas_concluidas": 6})
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'failed', now() - interval '1 day')",
+            seller_id,
+        )
+    job = await _job(pg_pool, seller_id, kind="delta")
+
+    await runner.executa_job(pg_pool, job, client=ClienteFake())
+
+    assert (await _kinds(pg_pool, seller_id))[-1] == "visitas"
+
+    # Passado o prazo, tenta de novo.
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sync_jobs SET finished_at = now() - interval '8 days' "
+            "WHERE seller_id = $1 AND status = 'failed'",
+            seller_id,
+        )
+        await conn.execute(
+            "DELETE FROM sync_jobs WHERE seller_id = $1 AND kind = 'visitas'", seller_id
+        )
+    job = await _job(pg_pool, seller_id, kind="delta")
+    await runner.executa_job(pg_pool, job, client=ClienteFake())
+    assert (await _kinds(pg_pool, seller_id))[-1] == "backfill"
+
+
+@pytest.mark.parametrize(
+    ("plano", "cursor", "encadeado"),
+    [
+        # Virou Premium com 6 meses buscados (backfill antigo, sem `dias`).
+        ("premium", {"janelas_concluidas": 6}, "backfill"),
+        ("premium", {"janelas_concluidas": 13, "dias": 365}, "visitas"),
+        ("exclusive", {"janelas_concluidas": 6}, "visitas"),
+        ("essencial", {"janelas_concluidas": 6}, "visitas"),
+    ],
+)
+async def test_delta_busca_os_meses_que_o_plano_pede(
+    pg_pool, test_seller, plano, cursor, encadeado
+):
+    _u, seller_id = test_seller
+    await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, plano)
+    await _backfill_concluido(pg_pool, seller_id, cursor)
+    job = await _job(pg_pool, seller_id, kind="delta")
+
+    await runner.executa_job(pg_pool, job, client=ClienteFake())
+
+    assert (await _kinds(pg_pool, seller_id))[-1] == encadeado
 
 
 async def test_backfill_ingere_todas_as_janelas_e_conclui(pg_pool, test_seller):
     _u, seller_id = test_seller
     await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "exclusive")
     job = await _job(pg_pool, seller_id)
     cliente = ClienteFake()
 
@@ -94,6 +254,7 @@ async def test_cursor_permite_retomar_sem_refazer(pg_pool, test_seller):
     """
     _u, seller_id = test_seller
     await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "exclusive")
     job = await _job(pg_pool, seller_id)
 
     class ClienteQueQuebra(ClienteFake):
@@ -127,7 +288,7 @@ async def test_cursor_permite_retomar_sem_refazer(pg_pool, test_seller):
     # DATA muda. Este assert compara a 3a janela pedida com o `started_at`
     # persistido do job — e o que de fato prova que a retomada nao pulou nem
     # repetiu periodo nenhum.
-    esperado = runner.janelas(repescado["started_at"])[2]
+    esperado = runner.janelas(repescado["started_at"], dias=180)[2]
     assert cliente2.chamadas_get_orders[0]["de"] == esperado[0].isoformat()
     assert cliente2.chamadas_get_orders[0]["ate"] == esperado[1].isoformat()
 
@@ -218,6 +379,7 @@ async def test_lease_e_renovado_dentro_da_janela(pg_pool, test_seller, monkeypat
     """O lease anda NO MEIO de uma janela, nao so entre janelas."""
     _u, seller_id = test_seller
     await _seller_conectado(pg_pool, seller_id)
+    await _no_plano(pg_pool, seller_id, "exclusive")
     job = await _job(pg_pool, seller_id)
     # O intervalo real e LEASE_SEGUNDOS / 4 = 30s e o teste nao pode esperar
     # isso. Aqui o que se prova e o fio ligado; que o throttle vale e o teste

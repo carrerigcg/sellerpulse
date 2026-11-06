@@ -17,6 +17,7 @@ const ESSENCIAL: Acesso = {
   plano: "essencial",
   recursos: [],
   dias_de_historico: 90,
+  historico_buscando: false,
   produtos_na_abc: 10,
   termos: { versao: "v1", aceito: true },
   vendas_abertas: true,
@@ -58,6 +59,19 @@ describe("histórico do plano", () => {
     expect(fraseDoHistorico(ESSENCIAL)).toBe("No Essencial, o histórico é de 3 meses");
     expect(fraseDoHistorico({ ...ESSENCIAL, plano: "exclusive", dias_de_historico: 180 })).toBe(
       "No Exclusive, o histórico é de 6 meses",
+    );
+  });
+
+  it("enquanto busca os meses antigos, não diz que o histórico do plano é menor", () => {
+    const buscando: Acesso = {
+      ...ESSENCIAL,
+      plano: "premium",
+      dias_de_historico: 180,
+      historico_buscando: true,
+    };
+    expect(fraseDoHistorico(buscando)).toBe("Ainda buscando no Mercado Livre os meses mais antigos");
+    expect(fraseDoHistorico({ ...buscando, dias_de_historico: 365, historico_buscando: false })).toBe(
+      "No Premium, o histórico é de 12 meses",
     );
   });
 

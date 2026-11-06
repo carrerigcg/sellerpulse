@@ -99,6 +99,27 @@ async def heartbeat(
         )
 
 
+# Backfill de antes de o cursor guardar os `dias`: todos buscaram 6 janelas de
+# 30 dias.
+DIAS_DO_BACKFILL_ANTIGO = 180
+
+
+async def dias_ja_buscados(pool: asyncpg.Pool, seller_id: uuid.UUID) -> int | None:
+    """Quantos dias de pedidos o vendedor já tem buscados. None se nenhum.
+
+    Derivado dos backfills concluídos, sem coluna nova: o maior `dias` gravado
+    no cursor. O ML só devolve 12 meses, então o que veio antes continua no
+    banco mesmo quando a janela do ML anda.
+    """
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT max(coalesce((cursor->>'dias')::int, $2)) FROM sync_jobs "
+            "WHERE seller_id = $1 AND kind = 'backfill' AND status = 'done'",
+            seller_id,
+            DIAS_DO_BACKFILL_ANTIGO,
+        )
+
+
 async def salva_cursor(pool: asyncpg.Pool, job_id: int, cursor: dict) -> None:
     """Grava de onde retomar se este job for interrompido."""
     async with pool.acquire() as conn:
