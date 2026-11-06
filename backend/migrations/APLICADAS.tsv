@@ -83,3 +83,4 @@
 0020_rls_registros_de_acesso.sql	20261030162119	2026-10-30
 0021_preserva_prova_na_exclusao.sql	20261103130023	2026-11-03
 0022_eventos_sem_link_de_fatura.sql	20261103131024	2026-11-03
+0023_varias_contas_por_usuario.sql	20261106204023	2026-11-06
