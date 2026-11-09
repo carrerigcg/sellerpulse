@@ -1,7 +1,7 @@
 # Premium: até 3 contas do Mercado Livre
 
-Estado: em implementação, parte A (várias contas, com seletor) na branch
-`feat/premium-varias-contas`. A parte B (visão somada) vem num PR seguinte.
+Estado: parte A (várias contas, com seletor) no ar desde 2026-11-09 (#55,
+`a0a7568`, migration 0023). Parte B (visão somada) em implementação.
 Item 5 das funções do Premium.
 
 ## O pedido
