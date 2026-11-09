@@ -674,6 +674,42 @@ async def test_sync_todos_segue_o_intervalo_do_plano(
     assert resp.json()["enfileirados"] == (1 if enfileira else 0)
 
 
+@pytest.mark.parametrize(
+    ("plano", "rodada", "horas_desde_a_falha", "enfileira"),
+    [
+        # Sem `last_synced_at`, o backfill que falhou era refeito em TODA
+        # rodada, 4 vezes por dia em qualquer plano: cota do ML gasta com job
+        # que morre. A falha passa a contar como a última tentativa.
+        ("exclusive", _MANHA, 2, False),
+        ("exclusive", _MEIO_DIA, 30, False),
+        ("exclusive", _MANHA, 20, True),
+        ("premium", _MEIO_DIA, 2, False),
+        ("premium", _MEIO_DIA, 5.5, True),
+    ],
+)
+async def test_sync_todos_nao_refaz_backfill_falho_a_cada_rodada(
+    client, monkeypatch, pg_pool, test_seller, plano, rodada, horas_desde_a_falha, enfileira
+):
+    monkeypatch.setenv("SYNC_SECRET", SEGREDO)
+    monkeypatch.setattr(ml_router, "_agora", lambda: rodada)
+    monkeypatch.setattr(ml_router, "MANHA", range(6, 12))
+    _, seller_id = test_seller
+    async with pg_pool.acquire() as conn:
+        await da_plano(conn, seller_id, plano)
+    await _conectado(pg_pool, seller_id, ultimo_sync=None)
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'failed', $2)",
+            seller_id,
+            rodada - timedelta(hours=horas_desde_a_falha),
+        )
+
+    resp = client.post("/ml/sync-todos", headers=_cabecalho())
+
+    assert resp.json()["enfileirados"] == (1 if enfileira else 0)
+
+
 async def test_sync_todos_nao_duplica_job_em_andamento(client, monkeypatch, pg_pool, test_seller):
     monkeypatch.setenv("SYNC_SECRET", SEGREDO)
     _, seller_id = test_seller

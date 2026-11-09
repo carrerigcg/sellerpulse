@@ -219,5 +219,12 @@ async def garante_token_valido(pool: asyncpg.Pool, seller_id: uuid.UUID) -> str:
             # DELETE executado la dentro nunca commitaria. Aqui fora, `conn`
             # nao esta em transacao explicita — o DELETE roda e commita
             # sozinho, imediatamente.
-            await conn.execute("DELETE FROM oauth_tokens WHERE seller_id = $1", seller_id)
+            async with conn.transaction():
+                await conn.execute("DELETE FROM oauth_tokens WHERE seller_id = $1", seller_id)
+                # Como no "Desconectar" (`backend/routers/ml.py`): a tela e o
+                # agendador dizem "conectado" pelo `ml_seller_id`. Sem zerar, a
+                # conta seguia "Conectado como X" e recebia job que so falha.
+                await conn.execute(
+                    "UPDATE sellers SET ml_seller_id = NULL WHERE id = $1", seller_id
+                )
             raise

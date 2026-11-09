@@ -89,10 +89,13 @@ async def get_acesso_da_conta(contas: Contas = Depends(get_contas_somaveis)) -> 
         linhas = await conn.fetch(
             # Desconectada guarda o apelido, mas não é mais a loja: o seletor
             # mostra "Conta sem conexão", como na que nunca conectou.
-            "SELECT id, CASE WHEN ml_seller_id IS NULL THEN NULL ELSE ml_nickname END "
-            "AS ml_nickname, principal FROM sellers "
-            "WHERE user_id = (SELECT user_id FROM sellers WHERE id = $1) "
-            "ORDER BY principal DESC, created_at, id",
+            "SELECT s.id, CASE WHEN s.ml_seller_id IS NULL THEN NULL ELSE s.ml_nickname END "
+            "AS ml_nickname, s.principal, s.last_synced_at, "
+            "EXISTS (SELECT 1 FROM sync_jobs j WHERE j.seller_id = s.id "
+            "AND j.kind = 'backfill' AND j.status = 'done') AS importacao_completa "
+            "FROM sellers s "
+            "WHERE s.user_id = (SELECT user_id FROM sellers WHERE id = $1) "
+            "ORDER BY s.principal DESC, s.created_at, s.id",
             seller_id,
         )
         assinatura = await conn.fetchrow(
@@ -123,6 +126,12 @@ async def get_acesso_da_conta(contas: Contas = Depends(get_contas_somaveis)) -> 
                 "apelido": linha["ml_nickname"],
                 "principal": linha["principal"],
                 "ativa": conta_abre(plano, principal=linha["principal"]),
+                # Na soma, conta parada ou importando entra com dias a menos:
+                # a tela avisa, em vez de a falta parecer queda de venda.
+                "sincronizada_em": (
+                    linha["last_synced_at"].isoformat() if linha["last_synced_at"] else None
+                ),
+                "importacao_completa": linha["importacao_completa"],
             }
             for linha in linhas
         ],

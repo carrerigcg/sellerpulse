@@ -417,7 +417,10 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
         # ingerido fica, e volta a atualizar com o plano e o aceite.
         sellers = await conn.fetch(
             f"""
-            SELECT s.id, s.last_synced_at, s.principal, a.plano
+            SELECT s.id, s.last_synced_at, s.principal, a.plano,
+                   (SELECT max(j.finished_at) FROM sync_jobs j
+                     WHERE j.seller_id = s.id AND j.kind = 'backfill'
+                       AND j.status = 'failed') AS backfill_falhou_em
               FROM sellers s
               {JOIN_PRINCIPAL}
               JOIN assinaturas a ON a.seller_id = p.id
@@ -439,8 +442,12 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
             pulados["fora-do-plano"] = pulados.get("fora-do-plano", 0) + 1
             continue
         ultimo = seller["last_synced_at"]
-        if ultimo is not None and not _hora_de_sincronizar(
-            PLANOS[seller["plano"]], ultimo=ultimo, agora=agora
+        # Sem sincronização nenhuma, a última tentativa é o backfill que
+        # falhou: sem isso, ele era refeito em toda rodada, 4 vezes por dia em
+        # qualquer plano, gastando cota do ML com job que morre.
+        tentativa = ultimo if ultimo is not None else seller["backfill_falhou_em"]
+        if tentativa is not None and not _hora_de_sincronizar(
+            PLANOS[seller["plano"]], ultimo=tentativa, agora=agora
         ):
             pulados["recente"] = pulados.get("recente", 0) + 1
             continue
@@ -462,6 +469,16 @@ async def sync_todos(x_sync_secret: str | None = Header(default=None)) -> dict:
     return {"sellers": len(sellers), "enfileirados": enfileirados, "pulados": pulados}
 
 
+# Conectar pede o status a cada 3 s enquanto um job roda. O indice
+# (seller_id, created_at) da migration 0025 evita ler a fila inteira.
+_ULTIMO_JOB = """
+    SELECT id, kind, status, fase, processados, total, erro, warnings,
+           created_at, finished_at
+    FROM sync_jobs WHERE seller_id = $1
+    ORDER BY created_at DESC LIMIT 1
+"""
+
+
 @router.get("/sync/status")
 async def sync_status(contas: Contas = Depends(get_contas)) -> dict:
     seller_id = contas.aberta
@@ -472,15 +489,7 @@ async def sync_status(contas: Contas = Depends(get_contas)) -> dict:
             "SELECT ml_seller_id, ml_nickname, last_synced_at FROM sellers WHERE id = $1",
             seller_id,
         )
-        job = await conn.fetchrow(
-            """
-            SELECT id, kind, status, fase, processados, total, erro, warnings,
-                   created_at, finished_at
-            FROM sync_jobs WHERE seller_id = $1
-            ORDER BY created_at DESC LIMIT 1
-            """,
-            seller_id,
-        )
+        job = await conn.fetchrow(_ULTIMO_JOB, seller_id)
         historico_completo = await conn.fetchval(
             "SELECT exists(SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
             "AND kind = 'backfill' AND status = 'done')",

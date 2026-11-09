@@ -57,9 +57,14 @@ export function ResumoDaLoja({
         </p>
       ) : semVendas ? (
         vazio
-      ) : (
+      ) : null}
+
+      {/* Fora do ramo de vendas: sem venda nos 30 dias é justamente quando
+          "anúncios parados" explica o vazio, e o card tem fonte própria. */}
+      {alertas}
+
+      {!erro && !semVendas && (
         <>
-          {alertas}
           <BlocoDinheiro veredito={veredito} hrefFinanceiro={hrefFinanceiro} />
           <ListaDeTarefas tarefas={tarefas} rodape={rodape} />
         </>

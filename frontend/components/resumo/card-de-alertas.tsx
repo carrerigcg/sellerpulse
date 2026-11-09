@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   estadoDaMargem,
   fraseDaMargem,
+  fraseDaReferencia,
   fraseDoParado,
   fraseSemAlertaDeMargem,
   fraseSemParados,
@@ -79,6 +80,9 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
             );
           })}
         </Lista>
+      )}
+      {alertas.parados.length > 0 && fraseDaReferencia(alertas) && (
+        <p className="mt-2 text-sm text-muted">{fraseDaReferencia(alertas)}</p>
       )}
     </section>
   );

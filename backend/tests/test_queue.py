@@ -62,6 +62,24 @@ async def test_claim_next_marca_running_e_conta_tentativa(pg_pool, test_seller):
     assert job["leased_until"] is not None
 
 
+async def test_delta_passa_na_frente_dos_jobs_longos(pg_pool, test_seller, outro_seller):
+    """A rodada da manhã enfileira o delta de todo mundo, e cada delta
+    enfileira as visitas da conta (~11 min cada). Por ordem de chegada, o
+    delta do Premium das 12h esperava todas as visitas da manhã: acima de ~44
+    contas, passava da folga de 1 hora e o Premium pulava a rodada das 18h
+    (auditoria de escala, 2026-11-09). O delta leva segundos: vai na frente."""
+    _u, seller_a = test_seller
+    _u2, seller_b = outro_seller
+    visitas = await queue.enqueue(pg_pool, seller_a, "visitas")
+    delta = await queue.enqueue(pg_pool, seller_b, "delta")
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sync_jobs SET created_at = now() - interval '1 hour' WHERE id = $1", visitas
+        )
+    assert (await queue.claim_next(pg_pool))["id"] == delta
+    assert (await queue.claim_next(pg_pool))["id"] == visitas
+
+
 async def test_claim_next_sem_fila_devolve_none(pg_pool):
     assert await queue.claim_next(pg_pool) is None
 
@@ -227,29 +245,80 @@ async def test_enqueue_nao_engole_outra_violacao_de_unicidade(pg_pool, test_sell
             await conn.execute("DROP INDEX uniq_teste_kind")
 
 
+def _nos(plano: dict) -> list[dict]:
+    nos = [plano]
+    for filho in plano.get("Plans", []):
+        nos += _nos(filho)
+    return nos
+
+
+async def _confere_que_le_so_o_vendedor(conn, consulta: str, *args) -> None:
+    """Com o seq scan desligado, o planejador ainda pode cair num índice que
+    não começa por `seller_id` e ler a fila inteira por ele: a exigência é que
+    todo índice de `sync_jobs` usado comece pelo vendedor."""
+    await conn.execute("SET LOCAL enable_seqscan = off")
+    bruto = await conn.fetchval(f"EXPLAIN (FORMAT JSON) {consulta}", *args)
+    nos = _nos(json.loads(bruto)[0]["Plan"])
+    assert not [
+        n
+        for n in nos
+        if n.get("Relation Name") == "sync_jobs"
+        and "Index Name" not in n
+        and n["Node Type"] != "Bitmap Heap Scan"
+    ], nos
+    usados = []
+    for no in nos:
+        if "Index Name" not in no:
+            continue
+        tabela, primeira = await conn.fetchrow(
+            """
+            SELECT t.relname, a.attname
+              FROM pg_class c
+              JOIN pg_index i ON i.indexrelid = c.oid
+              JOIN pg_class t ON t.oid = i.indrelid
+              JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+             WHERE c.relname = $1
+            """,
+            no["Index Name"],
+        )
+        if tabela == "sync_jobs":
+            usados.append((no["Index Name"], primeira))
+    assert usados, nos
+    assert all(primeira == "seller_id" for _nome, primeira in usados), usados
+
+
+@pytest.mark.parametrize(
+    "nome",
+    ["ultimo job (status)", "colheu ha pouco", "backfill falhou ha pouco"],
+)
+async def test_consultas_da_fila_por_vendedor_usam_indice(pg_pool, test_seller, nome):
+    """Status do Conectar (a cada 3 s com job rodando) e as checagens do
+    worker liam a fila inteira: 60 ms com um ano de fila para 125 contas,
+    contra 0,06 ms com o índice (auditoria de escala, 2026-11-09)."""
+    from backend.routers import ml
+    from backend.worker import runner
+
+    consultas = {
+        "ultimo job (status)": (ml._ULTIMO_JOB, ()),
+        "colheu ha pouco": (runner._COLHEU_HA_POUCO, (runner.INTERVALO_DAS_VISITAS,)),
+        "backfill falhou ha pouco": (
+            runner._BACKFILL_FALHOU_HA_POUCO,
+            (runner.ESPERA_APOS_BACKFILL_FALHO,),
+        ),
+    }
+    consulta, resto = consultas[nome]
+    _u, seller_id = test_seller
+    async with pg_pool.acquire() as conn, conn.transaction():
+        await _confere_que_le_so_o_vendedor(conn, consulta, seller_id, *resto)
+
+
 async def test_dias_ja_buscados_nao_le_a_fila_inteira(pg_pool, test_seller):
     """A consulta roda em toda carga do painel, por conta. Sem índice por
     vendedor, ela lia todos os jobs de todos os vendedores: 26 ms com 300
     vendedores e um ano de fila, contra 0,18 ms com o índice (auditoria de
-    escala, 2026-11-06). Com o seq scan desligado, o planejador cai num index
-    scan sem condição, que lê tudo do mesmo jeito: a exigência é a condição."""
+    escala, 2026-11-06)."""
     _u, seller_id = test_seller
     async with pg_pool.acquire() as conn, conn.transaction():
-        await conn.execute("SET LOCAL enable_seqscan = off")
-        bruto = await conn.fetchval(
-            f"EXPLAIN (FORMAT JSON) {queue._DIAS_JA_BUSCADOS}",
-            seller_id,
-            queue.DIAS_DO_BACKFILL_ANTIGO,
+        await _confere_que_le_so_o_vendedor(
+            conn, queue._DIAS_JA_BUSCADOS, seller_id, queue.DIAS_DO_BACKFILL_ANTIGO
         )
-
-    def leituras(no: dict) -> list[dict]:
-        achadas = [no] if no.get("Relation Name") == "sync_jobs" else []
-        for filho in no.get("Plans", []):
-            achadas += leituras(filho)
-        return achadas
-
-    nos = leituras(json.loads(bruto)[0]["Plan"])
-    assert nos
-    for no in nos:
-        condicao = no.get("Index Cond") or no.get("Recheck Cond") or ""
-        assert "seller_id" in condicao, no

@@ -136,9 +136,21 @@ PR #18 e a Vercel no PR #20.
 
 ## 7. Sincronização
 
-- A sincronização agendada fica em `.github/workflows/sincronizacao-agendada.yml`:
-  4 rodadas por dia. O Premium sincroniza em todas; os outros planos, só na
-  da manhã (`_hora_de_sincronizar` em `backend/routers/ml.py`).
+- A sincronização agendada são 4 rodadas por dia (00, 06, 12 e 18 em São
+  Paulo) chamando `POST /ml/sync-todos` com o cabeçalho `X-Sync-Secret`. Dois
+  gatilhos chamam o mesmo endpoint: o **cron-job.org** (o principal, desde
+  2026-11-09, na conta do Guilherme, com aviso de falha por e-mail) e o
+  `.github/workflows/sincronizacao-agendada.yml` (reserva: o cron do GitHub
+  pulou a rodada das 03 UTC e atrasou até 4,5 horas). Duas chamadas próximas
+  não duplicam nada: o índice de job ativo e o intervalo do plano barram a
+  segunda.
+- O Premium sincroniza em todas as rodadas; os outros planos, só na da manhã
+  (`_hora_de_sincronizar` em `backend/routers/ml.py`). Conta que nunca
+  sincronizou e teve o backfill falho segue o mesmo intervalo, contado da
+  falha.
+- O worker pega o **delta primeiro** e o resto por ordem de chegada: o delta
+  leva segundos, e as visitas da manhã (~11 min por conta) atrasariam o
+  Premium da rodada seguinte.
 - A cadeia de jobs por vendedor é **delta → visitas → frete**: cada um
   enfileira o próximo depois de terminar, porque o índice único só admite um
   job ativo por vendedor.
