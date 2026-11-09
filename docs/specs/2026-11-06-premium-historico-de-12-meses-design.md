@@ -74,12 +74,12 @@ primeira: o histórico de 12 meses que a vitrine promete. Decisões dele:
 - **Volta do Premium à venda** (`a_venda`): só quando as outras funções
   existirem.
 - **Antes da volta à venda (da auditoria de escala, 2026-11-06):**
-  - índice parcial `sync_jobs(seller_id) where kind = 'backfill' and status =
-    'done'`. Sem ele, `dias_ja_buscados` lê a fila inteira: medido em 26 ms com
+  - feito (migration 0024): índice parcial `sync_jobs(seller_id) where kind =
+    'backfill' and status = 'done'`. Sem ele, `dias_ja_buscados` lê a fila inteira: medido em 26 ms com
     300 vendedores e 1 ano de jobs, contra 0,18 ms com o índice. Hoje a fila
     tem 59 linhas.
-  - medir o backfill de 365 dias da loja real (`finished_at - started_at`). A
-    estimativa é de 7 a 12 minutos.
+  - medido em 2026-11-09: o backfill de 365 dias da loja real levou 13,2
+    minutos (job de 2026-11-07), contra a estimativa de 7 a 12.
   - o aviso aparece desde a troca de plano, mas a busca começa no delta
     seguinte (até um dia depois).
 - **Texto da vitrine e dos termos** sobre os 12 meses: entra com a volta à

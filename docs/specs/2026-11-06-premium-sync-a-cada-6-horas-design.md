@@ -1,7 +1,10 @@
 # Premium: sincronização a cada 6 horas
 
-Estado: em implementação na branch `feat/premium-sync-6-horas`. Item 2 das
-funções do Premium.
+Estado: no ar desde 2026-11-06 (#53, `e8602ad`). Item 2 das funções do
+Premium. Medido em 2026-11-09 (aba Actions, 7 a 9/11): o cron do GitHub não
+cumpre as 4 rodadas. A das 03 UTC não rodou nenhuma vez, e as outras atrasaram
+de 0,8 a 4,5 horas; na prática o Premium sincronizou 3 vezes por dia, com
+intervalo de até 10,5 horas. Trocar o gatilho é decisão pendente.
 
 ## O pedido
 

@@ -29,6 +29,8 @@ export type StatusSync = {
   historico_completo: boolean;
   /** O plano deixa sincronizar fora da diária agendada? */
   sincroniza_sob_demanda: boolean;
+  /** Quantos meses de pedidos a importação inicial traz (6, ou 12 no Premium). */
+  meses_da_importacao: number;
   job: StatusJob | null;
 };
 

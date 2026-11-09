@@ -554,6 +554,18 @@ async def test_status_diz_se_o_plano_sincroniza_sob_demanda(client, pg_pool, tes
     assert status["sincroniza_sob_demanda"] is False
 
 
+async def test_status_diz_quantos_meses_a_importacao_traz(client, pg_pool, test_seller):
+    """Conectar dizia "6 meses" a todos, e toda conta extra é do Premium, que
+    importa 12. O número sai da mesma regra do backfill (`dias_de_ingestao`)."""
+    user_id, seller_id = test_seller
+    await _no_plano(pg_pool, seller_id, "premium")
+    status = client.get("/ml/sync/status", headers=_auth(user_id)).json()
+    assert status["meses_da_importacao"] == 12
+    await _no_plano(pg_pool, seller_id, "essencial")
+    status = client.get("/ml/sync/status", headers=_auth(user_id)).json()
+    assert status["meses_da_importacao"] == 6
+
+
 async def test_custos_no_essencial_nao_mostra_a_classe_abc(client, pg_pool, test_seller):
     """A lista de Custos tem todos os produtos; a classe de todos é a ABC inteira."""
     user_id, seller_id = test_seller

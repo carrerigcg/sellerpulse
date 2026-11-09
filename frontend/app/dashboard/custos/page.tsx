@@ -43,6 +43,7 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
           ate={ate}
           tela="custos"
           temDados={false}
+          semPeriodo
         />
         <EscolhaUmaConta motivo="Cada conta do Mercado Livre tem os próprios anúncios, e o custo é informado em cada um." />
       </>

@@ -87,7 +87,10 @@ async def get_acesso_da_conta(contas: Contas = Depends(get_contas_somaveis)) -> 
         raise recusa_conta_invalida()
     async with pool.acquire() as conn:
         linhas = await conn.fetch(
-            "SELECT id, ml_nickname, principal FROM sellers "
+            # Desconectada guarda o apelido, mas não é mais a loja: o seletor
+            # mostra "Conta sem conexão", como na que nunca conectou.
+            "SELECT id, CASE WHEN ml_seller_id IS NULL THEN NULL ELSE ml_nickname END "
+            "AS ml_nickname, principal FROM sellers "
             "WHERE user_id = (SELECT user_id FROM sellers WHERE id = $1) "
             "ORDER BY principal DESC, created_at, id",
             seller_id,

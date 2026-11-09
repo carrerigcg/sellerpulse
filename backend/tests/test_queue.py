@@ -225,3 +225,31 @@ async def test_enqueue_nao_engole_outra_violacao_de_unicidade(pg_pool, test_sell
     finally:
         async with pg_pool.acquire() as conn:
             await conn.execute("DROP INDEX uniq_teste_kind")
+
+
+async def test_dias_ja_buscados_nao_le_a_fila_inteira(pg_pool, test_seller):
+    """A consulta roda em toda carga do painel, por conta. Sem índice por
+    vendedor, ela lia todos os jobs de todos os vendedores: 26 ms com 300
+    vendedores e um ano de fila, contra 0,18 ms com o índice (auditoria de
+    escala, 2026-11-06). Com o seq scan desligado, o planejador cai num index
+    scan sem condição, que lê tudo do mesmo jeito: a exigência é a condição."""
+    _u, seller_id = test_seller
+    async with pg_pool.acquire() as conn, conn.transaction():
+        await conn.execute("SET LOCAL enable_seqscan = off")
+        bruto = await conn.fetchval(
+            f"EXPLAIN (FORMAT JSON) {queue._DIAS_JA_BUSCADOS}",
+            seller_id,
+            queue.DIAS_DO_BACKFILL_ANTIGO,
+        )
+
+    def leituras(no: dict) -> list[dict]:
+        achadas = [no] if no.get("Relation Name") == "sync_jobs" else []
+        for filho in no.get("Plans", []):
+            achadas += leituras(filho)
+        return achadas
+
+    nos = leituras(json.loads(bruto)[0]["Plan"])
+    assert nos
+    for no in nos:
+        condicao = no.get("Index Cond") or no.get("Recheck Cond") or ""
+        assert "seller_id" in condicao, no

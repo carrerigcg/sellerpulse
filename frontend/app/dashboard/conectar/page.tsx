@@ -241,8 +241,8 @@ function ConectarConteudo() {
         <section className="mt-8 rounded-xl border border-line p-5">
           <h2 className="text-sm font-semibold">Nenhuma conta conectada</h2>
           <p className="mt-2 text-sm text-muted">
-            Ao conectar, importamos os últimos 6 meses de pedidos do Mercado
-            Livre. Isso pode levar alguns minutos.
+            Ao conectar, importamos os últimos {status?.meses_da_importacao ?? 6} meses de
+            pedidos do Mercado Livre. Isso pode levar alguns minutos.
           </p>
           <button
             type="button"
@@ -301,7 +301,7 @@ function ConectarConteudo() {
           {status.historico_completo === false && !jobAtivo && (
             <p className="mt-4 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
               A importação inicial não terminou. Os números do dashboard cobrem
-              menos que os últimos 6 meses.
+              menos que os últimos {status.meses_da_importacao} meses.
             </p>
           )}
 

@@ -44,6 +44,7 @@ from backend.planos import (
     VERSAO_DOS_TERMOS,
     Recurso,
     conta_abre,
+    dias_de_ingestao,
 )
 from src.ml_client import MLClient
 from src.session_auth import OAuthError, exchange_code_for_tokens, sanitize_oauth_error
@@ -513,4 +514,6 @@ async def sync_status(contas: Contas = Depends(get_contas)) -> dict:
         "historico_completo": bool(historico_completo),
         # O botao "Sincronizar agora" so aparece para quem o plano deixa usar.
         "sincroniza_sob_demanda": plano is not None and plano.libera(Recurso.SYNC_SOB_DEMANDA),
+        # Conectar dizia "6 meses" a todos, e a conta extra do Premium importa 12.
+        "meses_da_importacao": dias_de_ingestao(plano) // 30,
     }

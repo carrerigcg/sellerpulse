@@ -14,7 +14,8 @@ vigencia), `0010_visitas_do_anuncio.sql` (`item_visits` e o tipo de job
 e `aceites_de_termos`) `0018_cobranca.sql` (prazo do acesso, `checkouts` e
 `eventos_do_gateway`) `0019_registros_de_acesso.sql`,
 `0021_preserva_prova_na_exclusao.sql`, `0022_eventos_sem_link_de_fatura.sql`
-(so dado) e `0023_varias_contas_por_usuario.sql`. As migrations 0002, 0003,
+(so dado), `0023_varias_contas_por_usuario.sql` e
+`0024_indice_dos_backfills_concluidos.sql`. As migrations 0002, 0003,
 0005, 0009, 0011, 0013, 0015, 0017, 0020 NAO sao aplicadas:
 dependem de `auth.uid()`, funcao exclusiva do ambiente Supabase (a 0015 so
 apaga uma policy da 0002, que aqui nao existe). O isolamento entre tenants que os testes exercitam e o filtro
@@ -56,6 +57,7 @@ MIGRATIONS = (
     "0021_preserva_prova_na_exclusao.sql",
     "0022_eventos_sem_link_de_fatura.sql",
     "0023_varias_contas_por_usuario.sql",
+    "0024_indice_dos_backfills_concluidos.sql",
 )
 
 
