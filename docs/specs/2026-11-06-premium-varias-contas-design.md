@@ -1,7 +1,8 @@
 # Premium: até 3 contas do Mercado Livre
 
 Estado: parte A (várias contas, com seletor) no ar desde 2026-11-09 (#55,
-`a0a7568`, migration 0023). Parte B (visão somada) em implementação.
+`a0a7568`, migration 0023). Parte B (visão somada) no ar desde 2026-11-09
+(#56, `78d6155`). Não provado: o painel real logado com duas contas na soma.
 Item 5 das funções do Premium.
 
 ## O pedido
