@@ -26,16 +26,18 @@ from pydantic import BaseModel
 
 from backend.db import get_pool
 from backend.deps import (
+    TODAS_AS_CONTAS,
     Acesso,
     Contas,
-    get_acesso,
-    get_contas,
+    get_acesso_somavel,
+    get_contas_somaveis,
     get_current_seller_id,
     get_current_user_id,
-    historico_visivel,
+    historico_das_contas,
     le_plano_e_aceite,
     recusa,
     recusa_conta_invalida,
+    soma_abre,
 )
 from backend.pagamentos import asaas, avisos
 from backend.pagamentos.eventos import referencia_do_vendedor
@@ -72,13 +74,16 @@ def vendas_abertas() -> bool:
 
 
 @router.get("/acesso")
-async def get_acesso_da_conta(contas: Contas = Depends(get_contas)) -> dict:
-    # Plano, aceite e assinatura são da principal; o histórico, da conta aberta.
+async def get_acesso_da_conta(contas: Contas = Depends(get_contas_somaveis)) -> dict:
+    # Plano, aceite e assinatura são da principal; o histórico, das contas lidas.
     seller_id = contas.principal
     pool = await get_pool()
     plano, aceitou = await le_plano_e_aceite(pool, seller_id)
+    # Conta extra fora do plano, ou a visão somada sem plano de várias contas:
+    # o front apaga a escolha e volta para a principal.
     if contas.extra_aberta and not conta_abre(plano, principal=False):
-        # O front apaga a escolha e volta para a principal.
+        raise recusa_conta_invalida()
+    if contas.somada and not soma_abre(plano, contas):
         raise recusa_conta_invalida()
     async with pool.acquire() as conn:
         linhas = await conn.fetch(
@@ -103,10 +108,11 @@ async def get_acesso_da_conta(contas: Contas = Depends(get_contas)) -> dict:
         )
     # Os dias que as telas mostram, e não os do plano: enquanto o backfill não
     # traz os meses antigos, o corte fica no que existe.
-    dias, buscando = await historico_visivel(pool, contas.aberta, plano) if plano else (None, False)
+    lidas = contas.somadas if contas.somada else (contas.aberta,)
+    dias, buscando = await historico_das_contas(pool, lidas, plano) if plano else (None, False)
     return {
         "plano": plano.nome if plano else None,
-        "conta_aberta": str(contas.aberta),
+        "conta_aberta": TODAS_AS_CONTAS if contas.somada else str(contas.aberta),
         "max_contas": plano.max_contas if plano else 1,
         "contas": [
             {
@@ -404,13 +410,14 @@ async def _encerra_assinatura_anterior(pool, seller_id: uuid.UUID) -> None:
 
 
 @router.post("/plano")
-async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)) -> dict:
+async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso_somavel)) -> dict:
     """Upgrade vale na hora; downgrade, no próximo ciclo (decisão 6 da spec).
 
     Nos dois casos o valor novo vale a partir da próxima cobrança: a diferença
     do mês corrente, no upgrade, fica por nossa conta.
     """
-    # A assinatura é da conta principal, qualquer que seja a conta aberta.
+    # A assinatura é da conta principal, qualquer que seja a conta aberta, e
+    # vale na visão somada: trocar de plano age sobre o login.
     seller_id = acesso.principal_id
     pool = await get_pool()
     linha, assinatura = await _assinatura_recorrente(pool, seller_id)

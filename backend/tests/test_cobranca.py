@@ -692,6 +692,24 @@ async def test_troca_com_conta_extra_aberta_vale_para_a_principal(
     assert linha["plano_no_proximo_ciclo"] == "essencial"
 
 
+async def test_troca_na_visao_somada_vale_para_a_principal(
+    client, pg_pool, test_seller, asaas_falso
+):
+    """Trocar de plano age sobre o login, como adicionar conta: não pede uma conta."""
+    user_id, seller_id = test_seller
+    await _assinante(pg_pool, seller_id, "premium")
+    async with pg_pool.acquire() as conn:
+        await conn.execute("INSERT INTO sellers (user_id, principal) VALUES ($1, false)", user_id)
+    resp = client.post(
+        "/conta/plano",
+        json={"plano": "essencial"},
+        headers=_auth(user_id) | {"X-Conta": "todas"},
+    )
+    assert resp.json() == {"plano": "premium", "no_proximo_ciclo": "essencial"}
+    linha = await _assinatura(pg_pool, seller_id)
+    assert linha["plano_no_proximo_ciclo"] == "essencial"
+
+
 async def test_nao_troca_para_plano_fora_de_venda(client, pg_pool, test_seller, asaas_falso):
     user_id, seller_id = test_seller
     await _assinante(pg_pool, seller_id, "exclusive")

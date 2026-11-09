@@ -81,19 +81,46 @@ async def get_current_seller_id(
     return await resolve_seller_id(pool, claims["sub"])
 
 
+# O valor de `X-Conta` que pede a visão que soma as contas do login (Premium).
+TODAS_AS_CONTAS = "todas"
+
+
 @dataclass(frozen=True)
 class Contas:
     principal: uuid.UUID
-    # A que a tela mostra: a do cabeçalho `X-Conta`, ou a principal.
+    # A que a tela mostra: a do cabeçalho `X-Conta`, ou a principal. Na visão
+    # somada, a principal, mas quem soma lê `somadas`.
     aberta: uuid.UUID
+    # Na visão somada, todas as contas do login, a principal primeiro. Vazio
+    # fora dela.
+    somadas: tuple[uuid.UUID, ...] = ()
+
+    @property
+    def somada(self) -> bool:
+        return bool(self.somadas)
 
     @property
     def extra_aberta(self) -> bool:
-        return self.aberta != self.principal
+        return not self.somada and self.aberta != self.principal
 
 
 def recusa_conta_invalida() -> HTTPException:
     return recusa(403, "conta-invalida", "Esta conta do Mercado Livre não está disponível")
+
+
+def soma_abre(plano: Plano | None, contas: Contas) -> bool:
+    """A visão somada abre? Com plano de várias contas E duas contas, pelo menos.
+
+    Com uma conta só, o front não mostra o seletor: aceitar a soma deixaria o
+    vendedor preso nela, com Custos e Conectar mandando escolher a conta num
+    seletor que sumiu (`revisor-de-interface`). Recusada, o front apaga a
+    escolha e volta à principal.
+    """
+    return plano is not None and plano.max_contas > 1 and len(contas.somadas) > 1
+
+
+def recusa_visao_somada() -> HTTPException:
+    return recusa(409, "visao-somada", "Escolha uma conta do Mercado Livre para esta tela")
 
 
 async def resolve_contas(pool: asyncpg.Pool, user_id: str, x_conta: str | None) -> Contas:
@@ -102,6 +129,16 @@ async def resolve_contas(pool: asyncpg.Pool, user_id: str, x_conta: str | None) 
     Conta que não é do usuário é recusada, e nunca trocada pela principal: o
     número de uma conta apareceria com o nome de outra.
     """
+    if x_conta == TODAS_AS_CONTAS:
+        async with pool.acquire() as conn:
+            linhas = await conn.fetch(
+                "SELECT id FROM sellers WHERE user_id = $1 ORDER BY principal DESC, created_at, id",
+                uuid.UUID(str(user_id)),
+            )
+        if not linhas:
+            raise HTTPException(status_code=404, detail="Usuário sem seller associado")
+        ids = tuple(linha["id"] for linha in linhas)
+        return Contas(principal=ids[0], aberta=ids[0], somadas=ids)
     pedida = None
     if x_conta:
         try:
@@ -122,14 +159,26 @@ async def resolve_contas(pool: asyncpg.Pool, user_id: str, x_conta: str | None) 
     return Contas(principal=principal, aberta=pedida or principal)
 
 
-async def get_contas(
+async def get_contas_somaveis(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
     x_conta: str | None = Header(default=None),
 ) -> Contas:
-    """A conta aberta, sem exigir plano: para desconectar e ver o status."""
+    """A conta aberta, ou a visão somada. Só para quem sabe tratar as duas."""
     pool = await get_pool()
     claims = await _claims_verificadas(pool, credentials.credentials)
     return await resolve_contas(pool, claims["sub"], x_conta)
+
+
+async def get_contas(contas: Contas = Depends(get_contas_somaveis)) -> Contas:
+    """A conta aberta, sem exigir plano: para desconectar e ver o status.
+
+    Recusa a visão somada (409 `visao-somada`). É o padrão de propósito: uma
+    rota nova que não pensou na soma não grava nem mostra uma conta só com o
+    rótulo de todas (spec 2026-11-06-premium-varias-contas, parte B, item 3).
+    """
+    if contas.somada:
+        raise recusa_visao_somada()
+    return contas
 
 
 async def get_current_user_id(
@@ -142,11 +191,24 @@ async def get_current_user_id(
 
 @dataclass(frozen=True)
 class Acesso:
-    # A conta aberta: é por ela que as telas filtram.
-    seller_id: uuid.UUID
     plano: Plano
     # A que tem o plano e a cobrança. É a mesma quando não há conta extra aberta.
     principal_id: uuid.UUID
+    # As contas que a tela lê: a aberta, ou todas na visão somada.
+    contas: tuple[uuid.UUID, ...]
+    somada: bool = False
+
+    @property
+    def seller_id(self) -> uuid.UUID:
+        """A conta aberta, para o que é de uma conta só.
+
+        Na visão somada não existe uma: rota que optou pela soma e leu uma
+        conta só mostraria a principal com o rótulo de todas. Erro, e não a
+        principal, para isso aparecer no teste e não na tela.
+        """
+        if self.somada:
+            raise RuntimeError("visão somada: leia `acesso.contas`, não `acesso.seller_id`")
+        return self.contas[0]
 
 
 def recusa(status: int, codigo: str, mensagem: str) -> HTTPException:
@@ -201,34 +263,64 @@ async def historico_visivel(
     return buscados, True
 
 
-async def get_acesso(contas: Contas = Depends(get_contas)) -> Acesso:
-    """Vendedor com plano E com os termos vigentes aceitos. Senão, recusa.
+async def historico_das_contas(
+    pool: asyncpg.Pool, contas: tuple[uuid.UUID, ...], plano: Plano
+) -> tuple[int | None, bool]:
+    """`historico_visivel` de várias contas: o menor, e se alguma ainda busca.
 
-    Sem plano, 402 (o caminho é contratar). Com plano e sem aceite, 403
-    `termos-pendentes` (o caminho é aceitar). A ordem importa: quem não tem
-    plano não tem contrato para aceitar.
+    Na visão somada, uma conta já em 12 meses e outra ainda em 6: mostrar 12
+    exibiria os 6 antigos da segunda como venda zero.
     """
+    resultados = [await historico_visivel(pool, conta, plano) for conta in contas]
+    dias = [d for d, _buscando in resultados if d is not None]
+    return (min(dias) if dias else None), any(buscando for _d, buscando in resultados)
+
+
+async def _acesso(contas: Contas) -> Acesso:
     pool = await get_pool()
     plano, aceitou = await le_plano_e_aceite(pool, contas.principal)
     if plano is None:
         raise recusa(402, "sem-plano", "Contrate um plano para acessar o painel")
     if not aceitou:
         raise recusa(403, "termos-pendentes", "Aceite os Termos de Uso para continuar")
-    if not conta_abre(plano, principal=not contas.extra_aberta):
-        raise recusa_conta_invalida()
-    # O histórico é o da conta aberta: cada conta tem o próprio backfill.
-    dias, _buscando = await historico_visivel(pool, contas.aberta, plano)
+    if contas.somada:
+        if not soma_abre(plano, contas):
+            raise recusa_conta_invalida()
+        lidas = contas.somadas
+    else:
+        if not conta_abre(plano, principal=not contas.extra_aberta):
+            raise recusa_conta_invalida()
+        lidas = (contas.aberta,)
+    # O histórico é o das contas lidas: cada conta tem o próprio backfill.
+    dias, _buscando = await historico_das_contas(pool, lidas, plano)
     if dias != plano.dias_de_historico:
         # O corte (`limita_ao_historico`) lê os dias do plano. Trocar aqui, num
         # lugar só, cobre todas as telas sem que cada router saiba da busca.
         plano = replace(plano, dias_de_historico=dias)
-    return Acesso(seller_id=contas.aberta, plano=plano, principal_id=contas.principal)
+    return Acesso(plano=plano, principal_id=contas.principal, contas=lidas, somada=contas.somada)
 
 
-def exige(recurso: Recurso) -> Callable[..., Awaitable[Acesso]]:
+async def get_acesso_somavel(contas: Contas = Depends(get_contas_somaveis)) -> Acesso:
+    """`get_acesso` que aceita a visão somada. Só para as leituras que somam."""
+    return await _acesso(contas)
+
+
+async def get_acesso(contas: Contas = Depends(get_contas)) -> Acesso:
+    """Vendedor com plano E com os termos vigentes aceitos. Senão, recusa.
+
+    Sem plano, 402 (o caminho é contratar). Com plano e sem aceite, 403
+    `termos-pendentes` (o caminho é aceitar). A ordem importa: quem não tem
+    plano não tem contrato para aceitar. A visão somada é recusada (409
+    `visao-somada`); quem soma usa `get_acesso_somavel`.
+    """
+    return await _acesso(contas)
+
+
+def exige(recurso: Recurso, *, somavel: bool = False) -> Callable[..., Awaitable[Acesso]]:
     """Dependency que, além do acesso, exige que o plano libere `recurso`."""
+    base = get_acesso_somavel if somavel else get_acesso
 
-    async def _dependency(acesso: Acesso = Depends(get_acesso)) -> Acesso:
+    async def _dependency(acesso: Acesso = Depends(base)) -> Acesso:
         if not acesso.plano.libera(recurso):
             raise recusa_fora_do_plano()
         return acesso

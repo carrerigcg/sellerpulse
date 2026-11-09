@@ -26,10 +26,13 @@ from backend.deps import (
     Acesso,
     Contas,
     get_acesso,
+    get_acesso_somavel,
     get_contas,
+    get_contas_somaveis,
     le_plano_e_aceite,
     recusa,
     recusa_fora_do_plano,
+    recusa_visao_somada,
 )
 from backend.jobs import queue
 from backend.ml import oauth
@@ -78,11 +81,12 @@ def _recusa_limite() -> HTTPException:
 
 
 @router.post("/contas/nova")
-async def nova_conta(acesso: Acesso = Depends(get_acesso)) -> dict[str, str]:
+async def nova_conta(acesso: Acesso = Depends(get_acesso_somavel)) -> dict[str, str]:
     """Consentimento para conectar mais uma conta do ML ao mesmo login.
 
     O limite é conferido aqui e de novo no callback: entre os dois, outro
-    consentimento aberto pode ter ocupado a vaga.
+    consentimento aberto pode ter ocupado a vaga. Aceita a visão somada: age
+    sobre o login, e não sobre a conta aberta.
     """
     if acesso.plano.max_contas < 2:
         raise recusa_fora_do_plano()
@@ -95,12 +99,13 @@ async def nova_conta(acesso: Acesso = Depends(get_acesso)) -> dict[str, str]:
 
 
 @router.delete("/contas/{conta_id}", status_code=204)
-async def remove_conta(conta_id: uuid.UUID, contas: Contas = Depends(get_contas)) -> None:
+async def remove_conta(conta_id: uuid.UUID, contas: Contas = Depends(get_contas_somaveis)) -> None:
     """Apaga uma conta extra e, em cascata, todos os dados dela.
 
     Vale fora do Premium: é como quem saiu dele apaga a conta que não abre
     mais. A principal não sai por aqui, e sim com a exclusão da conta, que
-    trata assinatura e a prova do aceite.
+    trata assinatura e a prova do aceite. Aceita a visão somada, como
+    adicionar: age sobre o login.
     """
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -298,7 +303,7 @@ _MOTIVOS = frozenset({"manual", "login"})
 @router.post("/sync")
 async def sync(
     motivo: str = "manual",
-    acesso: Acesso = Depends(get_acesso),
+    acesso: Acesso = Depends(get_acesso_somavel),
 ) -> dict:
     """Enfileira um delta. QUEM DECIDE SE VALE A PENA E O SERVIDOR.
 
@@ -308,6 +313,13 @@ async def sync(
     """
     if motivo not in _MOTIVOS:
         raise HTTPException(status_code=400, detail=f"motivo invalido: {motivo!r}")
+    # Na visao somada nao ha uma conta para sincronizar. O login nao e erro (o
+    # front o dispara sozinho no Resumo); o botao e. O Premium ja sincroniza
+    # cada conta a cada 6 horas pela rodada agendada.
+    if acesso.somada:
+        if motivo == "login":
+            return {"enfileirado": False, "motivo": "visao-somada"}
+        raise recusa_visao_somada()
     seller_id = acesso.seller_id
 
     # Sem sincronizacao sob demanda, o plano fica so com a diaria agendada. O

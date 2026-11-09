@@ -17,10 +17,11 @@ Armadilhas de tradução de dialeto tratadas explicitamente aqui:
 
 1. Schema multi-tenant: as tabelas usam chave composta (seller_id, ...).
    Todo JOIN casa também por `seller_id`, e toda query filtra
-   `seller_id = $1` — senão dados de vendedores diferentes se misturam ou,
+   `seller_id = ANY($1)` (uma conta, ou as da visão somada) — senão dados de vendedores diferentes se misturam ou,
    pior, um `order_id`/`item_id`/`category_id` colidente entre sellers causa
    fan-out (a mesma linha de `order_items` casa com o pedido/item errado de
-   outro tenant e a receita multiplica).
+   outro tenant e a receita multiplica). O `ANY($1)` se repete em cada tabela
+   do JOIN: o Postgres não o deduz pela igualdade do ON (ver `metrics_pg`).
 2. `numeric` do Postgres volta como `decimal.Decimal` via asyncpg. Colunas
    numéricas são convertidas pra `float` explicitamente ao montar o
    DataFrame.
@@ -46,10 +47,11 @@ Armadilhas de tradução de dialeto tratadas explicitamente aqui:
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 import pandas as pd
 
-from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary
+from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary, contas_de
 from src.segmentation import _assign_segment, _score_by_quintile
 
 _ABC_COLUMNS = [
@@ -101,10 +103,12 @@ _ABC_PARETO_QUERY = f"""
         -- visita nunca foi medida (loja real, historico inteiro: 9,2% onde a
         -- real era 7,7%). O inicio e o da LOJA, nao o do item: linha de
         -- visita so existe em dia com visita, entao o primeiro dia de um item
-        -- e so quando alguem o visitou, nao quando a colheita comecou.
+        -- e so quando alguem o visitou, nao quando a colheita comecou. Na
+        -- visao somada do Premium, e o inicio de CADA conta: com o da conta
+        -- mais antiga, a venda de outra antes da colheita dela entraria aqui.
         COALESCE(SUM(oi.quantity) FILTER (
             WHERE (o.date_closed AT TIME ZONE '{FUSO_DO_VENDEDOR}')::date
-                  >= (SELECT min(dia) FROM item_visits WHERE seller_id = $1)
+                  >= (SELECT min(dia) FROM item_visits WHERE seller_id = oi.seller_id)
         ), 0)::int                                        AS unidades_com_visita,
         -- Mesmas duas colunas do fluxo financeiro, aqui por produto. Na tela
         -- de Custos e o que diz "este e o produto classe A que ainda nao tem
@@ -119,9 +123,9 @@ _ABC_PARETO_QUERY = f"""
         )                                                 AS receita_sem_custo
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
     LEFT JOIN items_cache ic
-      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
+      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id AND ic.seller_id = ANY($1::uuid[])
     -- Custo vigente na data do pedido. Identico ao de metrics_pg.py, e pela
     -- mesma razao: a data entra no fuso do VENDEDOR, nao em UTC.
     LEFT JOIN LATERAL (
@@ -133,7 +137,7 @@ _ABC_PARETO_QUERY = f"""
          ORDER BY c.vigente_desde DESC
          LIMIT 1
     ) pc ON TRUE
-    WHERE oi.seller_id = $1
+    WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
@@ -157,7 +161,7 @@ _ABC_PARETO_QUERY = f"""
             ) AS visitas_na_janela,
             COUNT(*) AS linhas_de_visita
           FROM item_visits iv
-         WHERE iv.seller_id = $1 AND iv.item_id = p.sku
+         WHERE iv.seller_id = ANY($1::uuid[]) AND iv.item_id = p.sku
     ) v ON TRUE
     -- Desempate por sku: divergencia INTENCIONAL de src/segmentation.py
     -- (que tem o mesmo defeito de ORDER BY sem desempate, mas esta
@@ -185,7 +189,7 @@ _RFM_BASE_QUERY = """
         ))                          AS frequency,
         ROUND(SUM(total_amount), 2) AS monetary
     FROM orders
-    WHERE seller_id = $1
+    WHERE seller_id = ANY($1::uuid[])
       AND status = 'paid'
       AND buyer_id IS NOT NULL
       AND date_closed >= $2::timestamptz
@@ -212,8 +216,8 @@ _COHORT_LAUNCH_QUERY = f"""
         to_char(MIN(o.date_closed) AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM') AS mes_lancamento
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
-    WHERE oi.seller_id = $1
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
+    WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
     GROUP BY oi.item_id
 """
@@ -229,8 +233,8 @@ _COHORT_REVENUE_QUERY = f"""
         ROUND(SUM(oi.quantity * oi.unit_price), 2)               AS receita
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
-    WHERE oi.seller_id = $1
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
+    WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
@@ -238,12 +242,14 @@ _COHORT_REVENUE_QUERY = f"""
 """
 
 
-async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> pd.DataFrame:
+async def abc_pareto(
+    pool, seller_id: uuid.UUID | Sequence[uuid.UUID], date_from: str, date_to: str
+) -> pd.DataFrame:
     """Ranking de produtos por receita + classe A/B/C (regra 80/15/5 acumulada).
 
     Args:
         pool: pool asyncpg (`backend.db.get_pool()`).
-        seller_id: UUID do seller — isola os dados desse tenant.
+        seller_id: a conta, ou a lista de contas da visão somada do Premium.
         date_from: início inclusivo (ISO 8601).
         date_to: fim exclusivo (ISO 8601).
 
@@ -281,7 +287,10 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
         demonstração, acumulada 79,4955 é A e a linha seguinte, 80,7894, é B.
     """
     rows = await pool.fetch(
-        _ABC_PARETO_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
+        _ABC_PARETO_QUERY,
+        contas_de(seller_id),
+        _parse_boundary(date_from),
+        _parse_boundary(date_to),
     )
     if not rows:
         return pd.DataFrame(columns=_ABC_COLUMNS)
@@ -336,12 +345,14 @@ async def abc_pareto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     return df[_ABC_COLUMNS]
 
 
-async def rfm_scores(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> pd.DataFrame:
+async def rfm_scores(
+    pool, seller_id: uuid.UUID | Sequence[uuid.UUID], date_from: str, date_to: str
+) -> pd.DataFrame:
     """RFM por comprador único no período + segmento textual.
 
     Args:
         pool: pool asyncpg (`backend.db.get_pool()`).
-        seller_id: UUID do seller — isola os dados desse tenant.
+        seller_id: a conta, ou a lista de contas da visão somada do Premium.
         date_from: início inclusivo (ISO 8601).
         date_to: fim exclusivo — usado como "hoje" no cálculo de recency.
 
@@ -354,7 +365,7 @@ async def rfm_scores(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     ordenadas (primeira que casar vence).
     """
     rows = await pool.fetch(
-        _RFM_BASE_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
+        _RFM_BASE_QUERY, contas_de(seller_id), _parse_boundary(date_from), _parse_boundary(date_to)
     )
     if not rows:
         return pd.DataFrame(columns=_RFM_COLUMNS)
@@ -396,7 +407,9 @@ async def rfm_scores(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -
     return df[_RFM_COLUMNS]
 
 
-async def cohort_produto(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> pd.DataFrame:
+async def cohort_produto(
+    pool, seller_id: uuid.UUID | Sequence[uuid.UUID], date_from: str, date_to: str
+) -> pd.DataFrame:
     """Cohort de produtos por mês de lançamento — agregado.
 
     "Mês de lançamento" = menor date_closed do produto **no banco inteiro**
@@ -405,7 +418,7 @@ async def cohort_produto(pool, seller_id: uuid.UUID, date_from: str, date_to: st
 
     Args:
         pool: pool asyncpg (`backend.db.get_pool()`).
-        seller_id: UUID do seller — isola os dados desse tenant.
+        seller_id: a conta, ou a lista de contas da visão somada do Premium.
         date_from: início inclusivo (ISO 8601).
         date_to: fim exclusivo.
 
@@ -418,14 +431,15 @@ async def cohort_produto(pool, seller_id: uuid.UUID, date_from: str, date_to: st
         DataFrame vazio se nenhuma venda no período.
     """
     # 1) Mapa item_id -> mês de lançamento (banco inteiro, não apenas janela).
-    launch_rows = await pool.fetch(_COHORT_LAUNCH_QUERY, seller_id)
+    contas = contas_de(seller_id)
+    launch_rows = await pool.fetch(_COHORT_LAUNCH_QUERY, contas)
     if not launch_rows:
         return pd.DataFrame()
     launches = pd.DataFrame([dict(r) for r in launch_rows])
 
     # 2) Receita por item x mês corrente na janela.
     revenue_rows = await pool.fetch(
-        _COHORT_REVENUE_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
+        _COHORT_REVENUE_QUERY, contas, _parse_boundary(date_from), _parse_boundary(date_to)
     )
     if not revenue_rows:
         return pd.DataFrame()

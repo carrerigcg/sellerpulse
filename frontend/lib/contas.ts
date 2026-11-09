@@ -9,6 +9,8 @@
 
 export const COOKIE_DA_CONTA = "sp_conta";
 export const CABECALHO_DA_CONTA = "X-Conta";
+/** O valor do cookie e do cabeçalho que pede a visão que soma as contas (Premium). */
+export const TODAS_AS_CONTAS = "todas";
 
 export type ContaML = {
   id: string;
@@ -21,6 +23,7 @@ export type ContaML = {
 
 export type Contas = {
   contas: ContaML[];
+  /** O id da conta aberta, ou `TODAS_AS_CONTAS` na visão somada. */
   conta_aberta: string;
   max_contas: number;
 };
@@ -43,6 +46,34 @@ export function valorDoCookie(cookies: string, nome: string): string | undefined
 export function contasDoSeletor(acesso: Contas): ContaML[] {
   const ativas = acesso.contas.filter((c) => c.ativa);
   return ativas.length > 1 ? ativas : [];
+}
+
+export type OpcaoDeConta = { valor: string; rotulo: string; principal: boolean };
+
+/**
+ * As opções do seletor do topo: as contas que abrem e, por último, a soma
+ * delas. Com uma conta só não há o que trocar nem o que somar.
+ */
+export function opcoesDoSeletor(acesso: Contas): OpcaoDeConta[] {
+  const contas = contasDoSeletor(acesso);
+  if (contas.length === 0) return [];
+  return [
+    ...contas.map((c) => ({ valor: c.id, rotulo: nomeDaConta(c), principal: c.principal })),
+    { valor: TODAS_AS_CONTAS, rotulo: "Todas as contas (soma)", principal: false },
+  ];
+}
+
+export function ehVisaoSomada(acesso: Contas | null): boolean {
+  return acesso?.conta_aberta === TODAS_AS_CONTAS;
+}
+
+/**
+ * Remover uma conta apaga a escolha do painel? Quando a removida era a aberta,
+ * e também na soma: com uma conta a menos pode não sobrar seletor, e o
+ * vendedor ficaria preso na soma, sem Custos nem Conectar.
+ */
+export function apagaEscolhaAoRemover(acesso: Contas, id: string): boolean {
+  return acesso.conta_aberta === id || acesso.conta_aberta === TODAS_AS_CONTAS;
 }
 
 export function podeAdicionarConta(acesso: Contas): boolean {

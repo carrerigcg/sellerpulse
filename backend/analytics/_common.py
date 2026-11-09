@@ -9,6 +9,8 @@ import cruzado entre eles.
 
 from __future__ import annotations
 
+import uuid
+from collections.abc import Sequence
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -31,6 +33,18 @@ from zoneinfo import ZoneInfo
 FUSO_DO_VENDEDOR = "America/Sao_Paulo"
 
 _TZ_VENDEDOR = ZoneInfo(FUSO_DO_VENDEDOR)
+
+
+def contas_de(seller: uuid.UUID | Sequence[uuid.UUID]) -> list[uuid.UUID]:
+    """Uma conta, ou as contas da visão somada do Premium, como lista.
+
+    As consultas filtram por `seller_id = ANY($1::uuid[])`: com uma conta, a
+    lista tem um elemento e o resultado é o de sempre. Spec
+    docs/specs/2026-11-06-premium-varias-contas-design.md, parte B.
+    """
+    if isinstance(seller, uuid.UUID):
+        return [seller]
+    return list(seller)
 
 
 def _parse_boundary(date_str: str) -> datetime:
