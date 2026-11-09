@@ -314,3 +314,90 @@ em 2026-11-06.
    Tem de voltar `1, 1`. Senha, app autenticador, loja e assinatura ficam,
    porque se prendem ao id e não ao e-mail.
 4. O e-mail do cliente no Asaas é outro cadastro e não muda junto.
+
+## 10. No dia do domínio
+
+Tudo o que depende do domínio está listado aqui, na ordem de fazer. O código
+já lê os endereços de variáveis de ambiente: nenhum passo pede mudança de
+código, salvo os dois arquivos marcados. Os endereços atuais
+(`frontend-three-rosy-iwes33l1kk.vercel.app` e `sellerpulse-049j.onrender.com`)
+**continuam funcionando** durante a troca: não apague nada antigo antes de
+conferir o novo.
+
+Convenção abaixo: `dominio.com.br` é o site, e `api.dominio.com.br` é o
+backend. Separar a API num subdomínio deixa o Render atrás do domínio sem
+mudar de hospedagem.
+
+### 10.1 DNS e hospedagem
+
+1. **Vercel** (projeto `frontend`): Settings > Domains, adicionar
+   `dominio.com.br` e `www.dominio.com.br` (o `www` redireciona para o sem
+   `www`). Criar no registro de DNS os registros que a Vercel mostrar.
+   Lembrete: o plano Hobby proíbe uso comercial; o Pro entra no dia de ligar
+   `VENDAS_ABERTAS` (decisão de 2026-11-03).
+2. **Render** (serviço da API): Settings > Custom Domains, adicionar
+   `api.dominio.com.br` e criar o CNAME que ele mostrar. Esperar o
+   certificado ficar verde.
+3. Conferir: `https://api.dominio.com.br/health` devolve 200, e o site abre
+   em `https://dominio.com.br`.
+
+### 10.2 Variáveis de ambiente
+
+| Onde | Variável | Valor novo |
+| --- | --- | --- |
+| Vercel | `NEXT_PUBLIC_API_URL` | `https://api.dominio.com.br` |
+| Render | `FRONTEND_URL` | `https://dominio.com.br` (retorno do Asaas e do OAuth do ML) |
+| Render | `CORS_ORIGINS` | acrescentar `https://dominio.com.br,https://www.dominio.com.br`. **Sem isso, o registro de acesso para sem aviso** |
+| Render | `ML_REDIRECT_URI` | `https://api.dominio.com.br/ml/callback` (só depois do 10.3) |
+| Render | `MCP_ALLOWED_HOSTS` | a lista padrão mais `api.dominio.com.br` |
+
+`NEXT_PUBLIC_*` entra no build: depois de trocar, refazer o deploy da Vercel.
+
+### 10.3 Serviços de fora
+
+1. **Mercado Livre** (developers.mercadolivre.com.br, app do SellerPulse):
+   acrescentar a URI `https://api.dominio.com.br/ml/callback` **sem tirar a
+   antiga**, e só então trocar o `ML_REDIRECT_URI` do Render. Conferir
+   conectando uma conta.
+2. **Supabase** (Authentication > URL Configuration): `Site URL` passa a ser
+   `https://dominio.com.br`; em `Redirect URLs`, acrescentar
+   `https://dominio.com.br/**`.
+3. **Asaas**: trocar a URL do webhook para
+   `https://api.dominio.com.br/pagamentos/webhook`, com o mesmo token
+   (`ASAAS_WEBHOOK_TOKEN`). Conferir no painel do Asaas que o envio de teste
+   volta 200.
+4. **cron-job.org**: trocar a URL do job para
+   `https://api.dominio.com.br/ml/sync-todos`. O cabeçalho continua o mesmo.
+5. **Arquivos do repositório** (por PR): a URL em
+   `.github/workflows/sincronizacao-agendada.yml` e o default de
+   `_ORIGENS_PADRAO`/`_MCP_HOSTS` em `backend/main.py`.
+
+### 10.4 E-mail (Resend)
+
+1. Criar a conta no Resend e o domínio `dominio.com.br`. Criar no DNS os
+   registros de SPF, DKIM e DMARC que ele mostrar, e esperar "Verified".
+2. Supabase > Authentication > Emails > SMTP Settings: ligar o SMTP próprio
+   com os dados do Resend. Remetente sugerido: `nao-responda@dominio.com.br`,
+   nome `SellerPulse`.
+3. Trocar o modelo "Reset Password" pelo de `token_hash`, que está pronto em
+   `docs/specs/2026-11-04-esqueci-a-senha-design.md`. O código já aceita os
+   dois.
+4. Conferir com uma conta de fora da equipe: cadastro, confirmação e
+   "esqueci a senha" chegando, e o link abrindo em outro aparelho.
+5. Criar o endereço de suporte do Premium (ver a decisão do gerente de
+   conta), e só então publicá-lo nas telas.
+
+### 10.5 O que destrava depois
+
+- **MCP com a conta real** (Premium): o desenho espera o domínio porque a URL
+  de autorização fica cadastrada no cliente de IA.
+- **E-mails do produto**: confirmação da desistência, alertas por e-mail e
+  planilha agendada.
+- **Vitrine com o Premium de volta** e os textos finais dos termos, que citam
+  o endereço do site.
+
+### 10.6 Conferência final
+
+Rodar o `verificador-de-entrega` contra os endereços novos, abrir o site
+deslogado e logado, conectar uma conta do ML, pedir "esqueci a senha" e
+olhar uma linha nova em `registros_de_acesso` com o IP público.
