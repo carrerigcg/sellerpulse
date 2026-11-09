@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { EscolhaUmaConta } from "@/components/contas/escolha-uma-conta";
 import { GerenciarContas } from "@/components/contas/gerenciar-contas";
+import { COOKIE_DA_CONTA, TODAS_AS_CONTAS, valorDoCookie } from "@/lib/contas";
 import {
   desconectar,
   iniciarConexao,
@@ -36,8 +38,52 @@ export default function ConectarPage() {
   // pra que este boundary funcione.
   return (
     <Suspense fallback={<p className="mt-8 text-sm text-muted">Carregando…</p>}>
-      <ConectarConteudo />
+      <ConectarDaConta />
     </Suspense>
+  );
+}
+
+function semAssinatura() {
+  return () => {};
+}
+
+function somadaNoCookie() {
+  return valorDoCookie(document.cookie, COOKIE_DA_CONTA) === TODAS_AS_CONTAS;
+}
+
+/**
+ * Na soma das contas, a conexão não é de nenhuma: o backend recusa status,
+ * sincronizar e desconectar (409 `visao-somada`). A lista de contas do login
+ * continua, porque adicionar e remover agem sobre o login.
+ *
+ * O cookie só existe no navegador: até ler, nem uma tela nem a outra, para
+ * nenhuma chamada sair para a conta errada no meio da hidratação.
+ */
+function ConectarDaConta() {
+  const somada = useSyncExternalStore<boolean | null>(semAssinatura, somadaNoCookie, () => null);
+  if (somada === null) return <p className="mt-8 text-sm text-muted">Carregando…</p>;
+  return somada ? <ConectarNaSoma /> : <ConectarConteudo />;
+}
+
+function ConectarNaSoma() {
+  const searchParams = useSearchParams();
+  const erroParam = searchParams.get("erro");
+  return (
+    <div className="max-w-xl">
+      <h1 className="text-2xl font-semibold tracking-tight">Conectar Mercado Livre</h1>
+      {erroParam && MENSAGENS_ERRO[erroParam] && (
+        <p className="mt-6 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
+          {MENSAGENS_ERRO[erroParam]}
+        </p>
+      )}
+      {searchParams.get("conectado") === "1" && (
+        <p className="mt-6 rounded-lg bg-positive/10 px-4 py-3 text-sm text-positive">
+          Conta conectada com sucesso.
+        </p>
+      )}
+      <EscolhaUmaConta motivo="Cada conta do Mercado Livre tem a própria conexão e a própria sincronização." />
+      <GerenciarContas />
+    </div>
   );
 }
 

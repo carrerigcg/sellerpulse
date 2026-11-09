@@ -4,7 +4,7 @@ import { SeletorDeConta } from "@/components/contas/seletor-de-conta";
 import { VoltaParaPrincipal } from "@/components/contas/volta-para-principal";
 import { RegistroDeAcesso } from "@/components/registro-de-acesso";
 import { ApiError, getAcesso } from "@/lib/api";
-import { contasDoSeletor } from "@/lib/contas";
+import { opcoesDoSeletor } from "@/lib/contas";
 import { destinoSemAcesso } from "@/lib/plano";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,7 +34,7 @@ export default async function DashboardLayout({
   if (acesso === "conta-invalida") return <VoltaParaPrincipal />;
   const destino = acesso && destinoSemAcesso(acesso);
   if (destino) redirect(destino);
-  const contas = acesso ? contasDoSeletor(acesso) : [];
+  const opcoes = acesso ? opcoesDoSeletor(acesso) : [];
 
   // A sidebar é montada em `navegacao.tsx`, e não aqui, porque duas das props
   // do `<Sidebar>` são funções (`grupos` carrega os componentes de ícone,
@@ -44,8 +44,8 @@ export default async function DashboardLayout({
     <>
       <RegistroDeAcesso />
       <NavegacaoDashboard email={user.email ?? ""}>
-        {acesso && contas.length > 0 && (
-          <SeletorDeConta contas={contas} aberta={acesso.conta_aberta} />
+        {acesso && opcoes.length > 0 && (
+          <SeletorDeConta opcoes={opcoes} aberta={acesso.conta_aberta} />
         )}
         {children}
       </NavegacaoDashboard>

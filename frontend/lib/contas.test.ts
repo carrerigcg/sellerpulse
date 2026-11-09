@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   cabecalhoDaConta,
   contasDoSeletor,
+  ehVisaoSomada,
+  opcoesDoSeletor,
   fraseDasContas,
   nomeDaConta,
   podeAdicionarConta,
@@ -48,6 +50,33 @@ describe("contasDoSeletor", () => {
     expect(contasDoSeletor(acesso({ contas: [PRINCIPAL, EXTRA] }))).toEqual([PRINCIPAL, EXTRA]);
     const inativa = { ...EXTRA, ativa: false };
     expect(contasDoSeletor(acesso({ contas: [PRINCIPAL, inativa] }))).toEqual([]);
+  });
+});
+
+describe("opcoesDoSeletor", () => {
+  it("com uma conta só, não há seletor nem soma", () => {
+    expect(opcoesDoSeletor(acesso({}))).toEqual([]);
+  });
+
+  it("com duas contas que abrem, a soma vem por último", () => {
+    expect(opcoesDoSeletor(acesso({ contas: [PRINCIPAL, EXTRA] }))).toEqual([
+      { valor: "a", rotulo: "LOJA_A (principal)", principal: true },
+      { valor: "b", rotulo: "LOJA_B", principal: false },
+      { valor: "todas", rotulo: "Todas as contas (soma)", principal: false },
+    ]);
+  });
+
+  it("a extra que não abre no plano não entra, e sem ela não há o que somar", () => {
+    const inativa = { ...EXTRA, ativa: false };
+    expect(opcoesDoSeletor(acesso({ contas: [PRINCIPAL, inativa] }))).toEqual([]);
+  });
+});
+
+describe("ehVisaoSomada", () => {
+  it("só quando a conta aberta é a soma", () => {
+    expect(ehVisaoSomada(acesso({ conta_aberta: "todas" }))).toBe(true);
+    expect(ehVisaoSomada(acesso({ conta_aberta: "a" }))).toBe(false);
+    expect(ehVisaoSomada(null)).toBe(false);
   });
 });
 

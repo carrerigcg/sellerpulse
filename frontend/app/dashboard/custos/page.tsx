@@ -1,7 +1,9 @@
 import { TabelaCustos } from "@/components/analytics/tabela-custos";
+import { EscolhaUmaConta } from "@/components/contas/escolha-uma-conta";
 import { AvisoDeHistorico } from "@/components/planos/cadeado";
 import { getAcesso, mensagemDeFalhaAoCarregar, getCustos, type CustoLinha } from "@/lib/api";
 import { coberturaInformada } from "@/lib/cobertura";
+import { ehVisaoSomada } from "@/lib/contas";
 import { hojeNoFusoDoVendedor, periodoPadrao } from "@/lib/periodo";
 import { historicoCortado, inicioDoHistorico } from "@/lib/plano";
 import { CabecalhoDeTela } from "@/components/analytics/cabecalho-de-tela";
@@ -29,6 +31,23 @@ export default async function CustosPage({ searchParams }: PageProps<"/dashboard
   const ate = typeof params.ate === "string" ? params.ate : padrao.ate;
 
   const acesso = await getAcesso().catch(() => null);
+  if (ehVisaoSomada(acesso)) {
+    // O custo é de cada anúncio, e cada conta tem os seus: na soma, gravar
+    // não diria em qual conta.
+    return (
+      <>
+        <CabecalhoDeTela
+          titulo="Custos"
+          subtitulo="Quanto cada produto custa a você. É o que falta para a margem ser a margem."
+          de={de}
+          ate={ate}
+          tela="custos"
+          temDados={false}
+        />
+        <EscolhaUmaConta motivo="Cada conta do Mercado Livre tem os próprios anúncios, e o custo é informado em cada um." />
+      </>
+    );
+  }
   const hoje = hojeNoFusoDoVendedor();
   const inicio = acesso && historicoCortado(acesso, de, hoje) ? inicioDoHistorico(acesso, hoje) : null;
 
