@@ -1,3 +1,4 @@
+import { cabecalhoDaConta, COOKIE_DA_CONTA, valorDoCookie, type Contas } from "@/lib/contas";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -36,7 +37,47 @@ async function autorizacao(): Promise<Record<string, string>> {
     data: { session },
   } = await createClient().auth.getSession();
   if (!session) throw new Error("Sem sessão");
-  return { Authorization: `Bearer ${session.access_token}` };
+  return {
+    Authorization: `Bearer ${session.access_token}`,
+    ...cabecalhoDaConta(valorDoCookie(document.cookie, COOKIE_DA_CONTA)),
+  };
+}
+
+/** As contas do ML do login, para a tela de conexão. */
+export async function contasDoLogin(): Promise<Contas> {
+  const resposta = await fetch(`${BASE}/conta/acesso`, {
+    headers: await autorizacao(),
+    cache: "no-store",
+  });
+  if (!resposta.ok) throw new Error("Não foi possível carregar as contas");
+  return resposta.json();
+}
+
+/** Consentimento no ML para mais uma conta. Devolve a URL para onde ir. */
+export async function iniciarContaNova(): Promise<string> {
+  const resposta = await fetch(`${BASE}/ml/contas/nova`, {
+    method: "POST",
+    headers: await autorizacao(),
+  });
+  if (resposta.status === 409) throw new Error("O plano já está com todas as contas conectadas.");
+  if (!resposta.ok) throw new Error("Não foi possível iniciar a conexão.");
+  return (await resposta.json()).url as string;
+}
+
+/** Apaga uma conta extra e todos os dados dela. */
+export async function removerConta(id: string): Promise<void> {
+  const resposta = await fetch(`${BASE}/ml/contas/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: await autorizacao(),
+  });
+  if (!resposta.ok) throw new Error("Não foi possível remover a conta.");
+}
+
+/** Troca a conta aberta. A principal não precisa de cookie: é o padrão do backend. */
+export function abrirConta(conta: { id: string; principal: boolean }) {
+  document.cookie = conta.principal
+    ? `${COOKIE_DA_CONTA}=; path=/; max-age=0; samesite=lax`
+    : `${COOKIE_DA_CONTA}=${encodeURIComponent(conta.id)}; path=/; max-age=31536000; samesite=lax`;
 }
 
 export async function iniciarConexao(): Promise<string> {

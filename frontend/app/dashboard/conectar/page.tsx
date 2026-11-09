@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { GerenciarContas } from "@/components/contas/gerenciar-contas";
 import {
   desconectar,
   iniciarConexao,
@@ -25,7 +26,8 @@ const MENSAGENS_ERRO: Record<string, string> = {
   state: "A autorização expirou. Tente conectar de novo.",
   troca: "O Mercado Livre recusou a autorização. Tente de novo.",
   perfil: "Conectamos, mas não conseguimos ler seus dados de vendedor.",
-  "ja-conectada": "Essa conta do Mercado Livre já está ligada a outro cadastro.",
+  "ja-conectada": "Essa conta do Mercado Livre já está ligada a um cadastro.",
+  "limite-de-contas": "O plano já está com todas as contas conectadas.",
 };
 
 export default function ConectarPage() {
@@ -260,6 +262,8 @@ function ConectarConteudo() {
           {job && <ProgressoJob job={job} />}
         </section>
       )}
+
+      <GerenciarContas />
     </div>
   );
 }

@@ -22,6 +22,8 @@ import os
 
 import asyncpg
 
+from backend.planos import JOIN_PRINCIPAL
+
 _log = logging.getLogger(__name__)
 
 # O que é "dado da loja" e sai aos 12 meses. `order_items` antes de `orders` só por
@@ -46,8 +48,13 @@ UM_DIA = 24 * 60 * 60
 
 # FOR UPDATE: o pagamento de uma recontratação que chegue no meio da limpeza
 # espera ela terminar e, depois, encontra o prazo já renovado na própria linha.
-_VENCIDOS = """
-    SELECT a.seller_id FROM assinaturas a JOIN sellers s ON s.id = a.seller_id
+# Cada conta, principal ou extra, vence com a assinatura da principal: a extra
+# não tem assinatura própria, e sem isso nunca venceria.
+_VENCIDOS = f"""
+    SELECT s.id AS seller_id
+      FROM sellers s
+      {JOIN_PRINCIPAL}
+      JOIN assinaturas a ON a.seller_id = p.id
      WHERE NOT s.is_demo AND a.acesso_ate < now() - $1::text::interval
        FOR UPDATE OF a
 """

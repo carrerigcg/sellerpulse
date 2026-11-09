@@ -62,6 +62,8 @@ class Plano:
     a_venda: bool = True
     # De quanto em quanto tempo a sincronização agendada traz o dado novo.
     horas_entre_syncs: int = 24
+    # Contas do Mercado Livre num login só, contando a principal.
+    max_contas: int = 1
 
     def libera(self, recurso: Recurso) -> bool:
         return recurso in self.recursos
@@ -104,6 +106,7 @@ PLANOS: dict[str, Plano] = {
         # Volta à venda quando as funções que o diferenciam existirem.
         a_venda=False,
         horas_entre_syncs=6,
+        max_contas=3,
     ),
 }
 
@@ -112,6 +115,23 @@ PLANOS: dict[str, Plano] = {
 # desligam o acesso, sem agendador. Uma condição só, para o painel e o worker
 # não discordarem sobre quem tem plano.
 ASSINATURA_VIGENTE = "(a.acesso_ate IS NULL OR a.acesso_ate > now())"
+
+# A conta principal do seller `s`, com o apelido `p`. Plano, aceite e cobrança
+# moram nela: a conta extra não tem assinatura própria (spec
+# docs/specs/2026-11-06-premium-varias-contas-design.md, decisão 2).
+JOIN_PRINCIPAL = "JOIN sellers p ON p.user_id = s.user_id AND p.principal"
+
+
+def conta_abre(plano: Plano | None, *, principal: bool) -> bool:
+    """A conta abre neste plano? A extra só enquanto o plano tiver mais de uma.
+
+    Fora disso os dados dela ficam, mas ela não abre nem sincroniza
+    (decisão 2.1): voltando ao Premium, volta sem buscar o histórico de novo.
+    """
+    if plano is None:
+        return False
+    return principal or plano.max_contas > 1
+
 
 # O que o backfill sempre busca, qualquer que seja o plano: quem sobe do
 # Essencial para o Exclusive já tem os 6 meses, sem esperar outra busca.
@@ -129,10 +149,22 @@ def dias_de_ingestao(plano: Plano | None) -> int:
 
 
 async def plano_vigente(pool, seller_id) -> Plano | None:
-    """O plano do vendedor, para quem não passa pelo FastAPI (o worker)."""
+    """O plano do vendedor, para quem não passa pelo FastAPI (o worker).
+
+    É o da conta principal. Conta extra fora do plano conta como sem plano.
+    """
     async with pool.acquire() as conn:
-        nome = await conn.fetchval(
-            f"SELECT a.plano FROM assinaturas a WHERE a.seller_id = $1 AND {ASSINATURA_VIGENTE}",
+        linha = await conn.fetchrow(
+            f"""
+            SELECT a.plano, s.principal
+              FROM sellers s
+              {JOIN_PRINCIPAL}
+              JOIN assinaturas a ON a.seller_id = p.id
+             WHERE s.id = $1 AND {ASSINATURA_VIGENTE}
+            """,
             seller_id,
         )
-    return PLANOS[nome] if nome is not None else None
+    if linha is None:
+        return None
+    plano = PLANOS[linha["plano"]]
+    return plano if conta_abre(plano, principal=linha["principal"]) else None

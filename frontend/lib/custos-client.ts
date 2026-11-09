@@ -10,6 +10,7 @@
  * página, como todo o resto do dashboard.
  */
 
+import { CABECALHO_DA_CONTA, COOKIE_DA_CONTA, valorDoCookie } from "@/lib/contas";
 import { corpoDoCusto } from "@/lib/custo-informado";
 import { createClient } from "@/lib/supabase/client";
 
@@ -22,6 +23,12 @@ async function autorizacao(): Promise<string> {
   } = await supabase.auth.getSession();
   if (!session) throw new Error("Sua sessão expirou. Entre de novo para salvar.");
   return `Bearer ${session.access_token}`;
+}
+
+/** O custo é da conta aberta: sem isto, salvaria na principal com outra conta na tela. */
+function cabecalhos(autorizacao: string): Record<string, string> {
+  const conta = valorDoCookie(document.cookie, COOKIE_DA_CONTA);
+  return { Authorization: autorizacao, ...(conta ? { [CABECALHO_DA_CONTA]: conta } : {}) };
 }
 
 /**
@@ -63,7 +70,7 @@ export async function salvaCusto(
 ): Promise<void> {
   const resposta = await fetch(url(sku), {
     method: "PUT",
-    headers: { Authorization: await autorizacao(), "Content-Type": "application/json" },
+    headers: { ...cabecalhos(await autorizacao()), "Content-Type": "application/json" },
     body: JSON.stringify(corpoDoCusto(custoUnitario, retroativo)),
   });
   if (!resposta.ok) await falha(resposta);
@@ -78,7 +85,7 @@ export async function salvaCusto(
 export async function removeCusto(sku: string): Promise<void> {
   const resposta = await fetch(url(sku), {
     method: "DELETE",
-    headers: { Authorization: await autorizacao() },
+    headers: cabecalhos(await autorizacao()),
   });
   if (!resposta.ok) await falha(resposta);
 }

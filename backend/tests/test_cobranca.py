@@ -672,6 +672,26 @@ async def test_upgrade_vale_na_hora_e_o_valor_novo_na_proxima_cobranca(
     assert (await _assinatura(pg_pool, seller_id))["plano"] == "exclusive"
 
 
+async def test_troca_com_conta_extra_aberta_vale_para_a_principal(
+    client, pg_pool, test_seller, asaas_falso
+):
+    """A assinatura é da principal: lida pela extra, diria "sem cobrança mensal"."""
+    user_id, seller_id = test_seller
+    await _assinante(pg_pool, seller_id, "premium")
+    async with pg_pool.acquire() as conn:
+        extra = await conn.fetchval(
+            "INSERT INTO sellers (user_id, principal) VALUES ($1, false) RETURNING id", user_id
+        )
+    resp = client.post(
+        "/conta/plano",
+        json={"plano": "essencial"},
+        headers=_auth(user_id) | {"X-Conta": str(extra)},
+    )
+    assert resp.json() == {"plano": "premium", "no_proximo_ciclo": "essencial"}
+    linha = await _assinatura(pg_pool, seller_id)
+    assert linha["plano_no_proximo_ciclo"] == "essencial"
+
+
 async def test_nao_troca_para_plano_fora_de_venda(client, pg_pool, test_seller, asaas_falso):
     user_id, seller_id = test_seller
     await _assinante(pg_pool, seller_id, "exclusive")
