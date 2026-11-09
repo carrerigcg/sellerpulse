@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   cabecalhoDaConta,
+  apagaEscolhaAoRemover,
   contasDoSeletor,
   ehVisaoSomada,
   opcoesDoSeletor,
@@ -69,6 +70,17 @@ describe("opcoesDoSeletor", () => {
   it("a extra que não abre no plano não entra, e sem ela não há o que somar", () => {
     const inativa = { ...EXTRA, ativa: false };
     expect(opcoesDoSeletor(acesso({ contas: [PRINCIPAL, inativa] }))).toEqual([]);
+  });
+});
+
+describe("apagaEscolhaAoRemover", () => {
+  it("apaga quando a removida era a aberta", () => {
+    expect(apagaEscolhaAoRemover(acesso({ conta_aberta: "b" }), "b")).toBe(true);
+    expect(apagaEscolhaAoRemover(acesso({ conta_aberta: "a" }), "b")).toBe(false);
+  });
+
+  it("apaga na soma: com uma conta a menos, pode não sobrar seletor para sair dela", () => {
+    expect(apagaEscolhaAoRemover(acesso({ conta_aberta: "todas" }), "b")).toBe(true);
   });
 });
 

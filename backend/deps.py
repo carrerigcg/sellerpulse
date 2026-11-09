@@ -108,6 +108,17 @@ def recusa_conta_invalida() -> HTTPException:
     return recusa(403, "conta-invalida", "Esta conta do Mercado Livre não está disponível")
 
 
+def soma_abre(plano: Plano | None, contas: Contas) -> bool:
+    """A visão somada abre? Com plano de várias contas E duas contas, pelo menos.
+
+    Com uma conta só, o front não mostra o seletor: aceitar a soma deixaria o
+    vendedor preso nela, com Custos e Conectar mandando escolher a conta num
+    seletor que sumiu (`revisor-de-interface`). Recusada, o front apaga a
+    escolha e volta à principal.
+    """
+    return plano is not None and plano.max_contas > 1 and len(contas.somadas) > 1
+
+
 def recusa_visao_somada() -> HTTPException:
     return recusa(409, "visao-somada", "Escolha uma conta do Mercado Livre para esta tela")
 
@@ -273,8 +284,7 @@ async def _acesso(contas: Contas) -> Acesso:
     if not aceitou:
         raise recusa(403, "termos-pendentes", "Aceite os Termos de Uso para continuar")
     if contas.somada:
-        # Somar é do plano de várias contas: fora dele, o front volta à principal.
-        if plano.max_contas < 2:
+        if not soma_abre(plano, contas):
             raise recusa_conta_invalida()
         lidas = contas.somadas
     else:

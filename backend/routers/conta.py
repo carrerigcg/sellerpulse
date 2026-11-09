@@ -29,7 +29,7 @@ from backend.deps import (
     TODAS_AS_CONTAS,
     Acesso,
     Contas,
-    get_acesso,
+    get_acesso_somavel,
     get_contas_somaveis,
     get_current_seller_id,
     get_current_user_id,
@@ -37,6 +37,7 @@ from backend.deps import (
     le_plano_e_aceite,
     recusa,
     recusa_conta_invalida,
+    soma_abre,
 )
 from backend.pagamentos import asaas, avisos
 from backend.pagamentos.eventos import referencia_do_vendedor
@@ -82,7 +83,7 @@ async def get_acesso_da_conta(contas: Contas = Depends(get_contas_somaveis)) -> 
     # o front apaga a escolha e volta para a principal.
     if contas.extra_aberta and not conta_abre(plano, principal=False):
         raise recusa_conta_invalida()
-    if contas.somada and (plano is None or plano.max_contas < 2):
+    if contas.somada and not soma_abre(plano, contas):
         raise recusa_conta_invalida()
     async with pool.acquire() as conn:
         linhas = await conn.fetch(
@@ -409,13 +410,14 @@ async def _encerra_assinatura_anterior(pool, seller_id: uuid.UUID) -> None:
 
 
 @router.post("/plano")
-async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso)) -> dict:
+async def post_troca_de_plano(corpo: Troca, acesso: Acesso = Depends(get_acesso_somavel)) -> dict:
     """Upgrade vale na hora; downgrade, no próximo ciclo (decisão 6 da spec).
 
     Nos dois casos o valor novo vale a partir da próxima cobrança: a diferença
     do mês corrente, no upgrade, fica por nossa conta.
     """
-    # A assinatura é da conta principal, qualquer que seja a conta aberta.
+    # A assinatura é da conta principal, qualquer que seja a conta aberta, e
+    # vale na visão somada: trocar de plano age sobre o login.
     seller_id = acesso.principal_id
     pool = await get_pool()
     linha, assinatura = await _assinatura_recorrente(pool, seller_id)

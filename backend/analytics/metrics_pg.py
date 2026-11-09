@@ -13,6 +13,9 @@ Duas armadilhas de tradução de dialeto que este módulo trata explicitamente:
 1. Schema multi-tenant: as tabelas usam chave composta (seller_id, ...).
    Todo JOIN casa também por `seller_id`, e toda query filtra
    `seller_id = ANY($1)` (uma conta, ou as da visão somada) — senão dados de vendedores diferentes se misturam.
+   O filtro `ANY($1)` se repete em cada tabela do JOIN: com `ANY` o Postgres
+   não deduz a condição pela igualdade do ON, e a tabela juntada era lida
+   inteira, de todos os vendedores (teste `nao_varre_os_outros_vendedores`).
 2. `numeric` do Postgres volta como `decimal.Decimal` via asyncpg. Colunas
    numéricas são convertidas pra `float` explicitamente ao montar o
    DataFrame, senão o dtype vira `object` e quebra downstream (gráficos,
@@ -91,7 +94,7 @@ _FLUXO_QUERY = f"""
             ), 0)                              AS receita_sem_frete
         FROM orders o
         LEFT JOIN shipment_costs sc
-          ON sc.seller_id = o.seller_id AND sc.shipment_id = o.shipment_id
+          ON sc.seller_id = o.seller_id AND sc.shipment_id = o.shipment_id AND sc.seller_id = ANY($1::uuid[])
         WHERE o.seller_id = ANY($1::uuid[])
           AND o.status = 'paid'
           AND o.date_closed >= $2::timestamptz
@@ -118,7 +121,7 @@ _FLUXO_QUERY = f"""
             SUM(sc.custo_vendedor) AS frete
           FROM envios e
           JOIN shipment_costs sc
-            ON sc.seller_id = e.seller_id AND sc.shipment_id = e.shipment_id
+            ON sc.seller_id = e.seller_id AND sc.shipment_id = e.shipment_id AND sc.seller_id = ANY($1::uuid[])
          WHERE e.primeiro_pedido >= $2::timestamptz
            AND e.primeiro_pedido <  $3::timestamptz
          GROUP BY 1
@@ -140,7 +143,7 @@ _FLUXO_QUERY = f"""
             )                                                  AS receita_sem_custo
         FROM order_items oi
         JOIN orders o
-          ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+          ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
         -- O custo que vale e o da ULTIMA vigencia anterior ou igual a data do
         -- pedido. LEFT JOIN LATERAL porque o item pode nao ter custo nenhum, e
         -- pedido anterior a primeira vigencia fica SEM custo de proposito: o
@@ -196,11 +199,11 @@ _TOP_PRODUTOS_QUERY = """
         ROUND(SUM(oi.quantity * oi.unit_price), 2)  AS receita
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
     LEFT JOIN items_cache ic
-      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
+      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id AND ic.seller_id = ANY($1::uuid[])
     LEFT JOIN categories_cache cc
-      ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id
+      ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id AND cc.seller_id = ANY($1::uuid[])
     WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz
@@ -233,11 +236,11 @@ _TOP_CATEGORIAS_QUERY = """
         ROUND(SUM(oi.quantity * oi.unit_price), 2)   AS receita
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
     LEFT JOIN items_cache ic
-      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
+      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id AND ic.seller_id = ANY($1::uuid[])
     LEFT JOIN categories_cache cc
-      ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id
+      ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id AND cc.seller_id = ANY($1::uuid[])
     WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz

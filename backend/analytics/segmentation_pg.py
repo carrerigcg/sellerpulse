@@ -20,7 +20,8 @@ Armadilhas de tradução de dialeto tratadas explicitamente aqui:
    `seller_id = ANY($1)` (uma conta, ou as da visão somada) — senão dados de vendedores diferentes se misturam ou,
    pior, um `order_id`/`item_id`/`category_id` colidente entre sellers causa
    fan-out (a mesma linha de `order_items` casa com o pedido/item errado de
-   outro tenant e a receita multiplica).
+   outro tenant e a receita multiplica). O `ANY($1)` se repete em cada tabela
+   do JOIN: o Postgres não o deduz pela igualdade do ON (ver `metrics_pg`).
 2. `numeric` do Postgres volta como `decimal.Decimal` via asyncpg. Colunas
    numéricas são convertidas pra `float` explicitamente ao montar o
    DataFrame.
@@ -122,9 +123,9 @@ _ABC_PARETO_QUERY = f"""
         )                                                 AS receita_sem_custo
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
     LEFT JOIN items_cache ic
-      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
+      ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id AND ic.seller_id = ANY($1::uuid[])
     -- Custo vigente na data do pedido. Identico ao de metrics_pg.py, e pela
     -- mesma razao: a data entra no fuso do VENDEDOR, nao em UTC.
     LEFT JOIN LATERAL (
@@ -215,7 +216,7 @@ _COHORT_LAUNCH_QUERY = f"""
         to_char(MIN(o.date_closed) AT TIME ZONE '{FUSO_DO_VENDEDOR}', 'YYYY-MM') AS mes_lancamento
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
     WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
     GROUP BY oi.item_id
@@ -232,7 +233,7 @@ _COHORT_REVENUE_QUERY = f"""
         ROUND(SUM(oi.quantity * oi.unit_price), 2)               AS receita
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
     WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz

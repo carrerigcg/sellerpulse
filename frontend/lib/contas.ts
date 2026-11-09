@@ -67,6 +67,15 @@ export function ehVisaoSomada(acesso: Contas | null): boolean {
   return acesso?.conta_aberta === TODAS_AS_CONTAS;
 }
 
+/**
+ * Remover uma conta apaga a escolha do painel? Quando a removida era a aberta,
+ * e também na soma: com uma conta a menos pode não sobrar seletor, e o
+ * vendedor ficaria preso na soma, sem Custos nem Conectar.
+ */
+export function apagaEscolhaAoRemover(acesso: Contas, id: string): boolean {
+  return acesso.conta_aberta === id || acesso.conta_aberta === TODAS_AS_CONTAS;
+}
+
 export function podeAdicionarConta(acesso: Contas): boolean {
   return acesso.max_contas > 1 && acesso.contas.length < acesso.max_contas;
 }

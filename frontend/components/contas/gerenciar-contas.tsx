@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from "react";
 
-import { fraseDasContas, nomeDaConta, podeAdicionarConta, type Contas } from "@/lib/contas";
+import {
+  apagaEscolhaAoRemover,
+  fraseDasContas,
+  nomeDaConta,
+  podeAdicionarConta,
+  type Contas,
+} from "@/lib/contas";
 import { abrirConta, contasDoLogin, iniciarContaNova, removerConta } from "@/lib/ml";
 
 /**
@@ -55,9 +61,10 @@ export function PainelDeContas({ contas }: { contas: Contas }) {
     setErro(null);
     try {
       await removerConta(id);
-      // A conta removida estava aberta: sem apagar a escolha, o painel
-      // pediria uma conta que não existe mais.
-      if (contas.conta_aberta === id) abrirConta({ id: "", principal: true });
+      // A conta removida estava aberta, ou o painel estava na soma: sem apagar
+      // a escolha, ele pediria uma conta que não existe mais, ou ficaria numa
+      // soma sem seletor para sair dela.
+      if (apagaEscolhaAoRemover(contas, id)) abrirConta({ id: "", principal: true });
       window.location.reload();
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não foi possível remover a conta.");

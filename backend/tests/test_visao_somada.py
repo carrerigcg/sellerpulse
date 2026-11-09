@@ -6,10 +6,11 @@ Spec: docs/specs/2026-11-06-premium-varias-contas-design.md, "Parte B".
 from __future__ import annotations
 
 import json
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
+from backend.analytics import alertas_pg, custos_pg, metrics_pg, segmentation_pg
 from backend.analytics.alertas_pg import alertas
 from backend.analytics.segmentation_pg import abc_pareto, rfm_scores
 
@@ -71,12 +72,14 @@ async def test_todas_soma_as_contas(client, pg_pool, test_seller):
 async def test_todas_nao_soma_conta_de_outro_usuario(client, pg_pool, test_seller, outro_seller):
     user_id, sid = test_seller
     _outro, alheia = outro_seller
+    extra = await _extra(pg_pool, user_id)
     await _order(pg_pool, sid, 1, "2026-07-25T10:00:00+00:00", 100.0)
+    await _order(pg_pool, extra, 3, "2026-07-25T10:00:00+00:00", 50.0)
     await _order(pg_pool, alheia, 2, "2026-07-25T10:00:00+00:00", 999.0)
 
     resp = _fluxo(client, user_id, TODAS)
 
-    assert resp.json()[0]["receita_bruta"] == pytest.approx(100.0)
+    assert resp.json()[0]["receita_bruta"] == pytest.approx(150.0)
 
 
 async def test_todas_fora_do_premium_e_recusada(client, pg_pool, test_seller):
@@ -91,6 +94,18 @@ async def test_todas_fora_do_premium_e_recusada(client, pg_pool, test_seller):
     assert resp.json()["detail"]["codigo"] == "conta-invalida"
     resp = client.get("/conta/acesso", headers=_auth(user_id) | TODAS)
     assert resp.status_code == 403
+
+
+async def test_soma_com_uma_conta_so_e_recusada(client, pg_pool, test_seller):
+    """Sem segunda conta não há seletor no topo: aceitar a soma deixaria o vendedor
+    preso nela, com Custos e Conectar mandando escolher num seletor que sumiu. A
+    recusa faz o front apagar a escolha e voltar à principal."""
+    user_id, _sid = test_seller
+
+    assert _fluxo(client, user_id, TODAS).status_code == 403
+    resp = client.get("/conta/acesso", headers=_auth(user_id) | TODAS)
+    assert resp.status_code == 403
+    assert resp.json()["detail"]["codigo"] == "conta-invalida"
 
 
 async def test_acesso_diz_que_a_visao_e_somada(client, pg_pool, test_seller):
@@ -186,6 +201,55 @@ async def test_adicionar_e_remover_conta_funcionam_na_visao_somada(client, pg_po
 
     assert nova.status_code == 200
     assert removida.status_code == 204
+
+
+# ---------- índices ----------
+
+_DE = datetime(2026, 7, 1, tzinfo=UTC)
+_ATE = datetime(2026, 8, 1, tzinfo=UTC)
+_JANELA = (_DE, _ATE)
+
+# Cada consulta com `= ANY($1)` e os parâmetros que ela pede depois das contas.
+_CONSULTAS = {
+    "fluxo": (metrics_pg._FLUXO_QUERY, _JANELA),
+    "top produtos": (metrics_pg._TOP_PRODUTOS_QUERY, (*_JANELA, 10, "sem")),
+    "top categorias": (metrics_pg._TOP_CATEGORIAS_QUERY, (*_JANELA, 10, "sem")),
+    "abc": (segmentation_pg._ABC_PARETO_QUERY, _JANELA),
+    "cohort lancamento": (segmentation_pg._COHORT_LAUNCH_QUERY, ()),
+    "cohort receita": (segmentation_pg._COHORT_REVENUE_QUERY, _JANELA),
+    "custos": (custos_pg._UNIDADES_E_CUSTO_QUERY, _JANELA),
+    "margem": (alertas_pg._MARGEM_POR_PRODUTO, _JANELA),
+}
+_TABELAS_POR_VENDEDOR = ("orders", "items_cache", "categories_cache", "shipment_costs")
+
+
+@pytest.mark.parametrize("nome", sorted(_CONSULTAS))
+async def test_consulta_somada_nao_varre_os_outros_vendedores(pg_pool, test_seller, nome):
+    """Com `= ANY($1)` o Postgres não deduz o filtro das tabelas do JOIN, como
+    deduzia de `= $1`: sem o filtro repetido em cada uma, ele varre a tabela de
+    TODOS os vendedores, mesmo para quem tem uma conta só (`auditor-de-escala`:
+    5 a 19 vezes mais lento com 100 contas). Com o seq scan desligado, o
+    planejador troca a varredura por um index scan SEM condição, que lê a tabela
+    inteira do mesmo jeito: por isso a exigência é a condição de índice."""
+    user_id, sid = test_seller
+    extra = await _extra(pg_pool, user_id)
+    consulta, resto = _CONSULTAS[nome]
+    async with pg_pool.acquire() as conn, conn.transaction():
+        await conn.execute("SET LOCAL enable_seqscan = off")
+        bruto = await conn.fetchval(f"EXPLAIN (FORMAT JSON) {consulta}", [sid, extra], *resto)
+    plano = json.loads(bruto)[0]["Plan"]
+
+    def leituras_sem_condicao(no: dict) -> list[str]:
+        achadas = []
+        if no.get("Relation Name") in _TABELAS_POR_VENDEDOR and not (
+            no.get("Index Cond") or no.get("Recheck Cond")
+        ):
+            achadas.append(f"{no['Node Type']} on {no['Relation Name']}")
+        for filho in no.get("Plans", []):
+            achadas += leituras_sem_condicao(filho)
+        return achadas
+
+    assert leituras_sem_condicao(plano) == []
 
 
 # ---------- consultas ----------

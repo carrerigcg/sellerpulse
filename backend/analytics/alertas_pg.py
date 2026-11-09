@@ -45,7 +45,7 @@ _MARGEM_POR_PRODUTO = f"""
             oi.quantity * pc.custo_unitario AS custo_item
         FROM order_items oi
         JOIN orders o
-          ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+          ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
         LEFT JOIN LATERAL (
             SELECT c.custo_unitario
               FROM product_costs c
@@ -86,7 +86,7 @@ _MARGEM_POR_PRODUTO = f"""
         FROM vendas v
         LEFT JOIN envios e ON e.seller_id = v.seller_id AND e.shipment_id = v.shipment_id
         LEFT JOIN shipment_costs sc
-          ON sc.seller_id = v.seller_id AND sc.shipment_id = v.shipment_id
+          ON sc.seller_id = v.seller_id AND sc.shipment_id = v.shipment_id AND sc.seller_id = ANY($1::uuid[])
     )
     SELECT
         p.item_id                                       AS sku,
@@ -95,7 +95,7 @@ _MARGEM_POR_PRODUTO = f"""
         ROUND(SUM(p.receita - p.taxa - p.frete - p.custo), 2) AS margem
     FROM por_item p
     LEFT JOIN items_cache ic
-      ON ic.seller_id = p.seller_id AND ic.item_id = p.item_id
+      ON ic.seller_id = p.seller_id AND ic.item_id = p.item_id AND ic.seller_id = ANY($1::uuid[])
     GROUP BY p.item_id, ic.title
     HAVING bool_and(p.custo IS NOT NULL)
        AND bool_and(p.frete IS NOT NULL)

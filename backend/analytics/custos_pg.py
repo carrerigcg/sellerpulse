@@ -42,7 +42,7 @@ _UNIDADES_E_CUSTO_QUERY = f"""
         pc.vigente_desde
     FROM order_items oi
     JOIN orders o
-      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id
+      ON o.seller_id = oi.seller_id AND o.order_id = oi.order_id AND o.seller_id = ANY($1::uuid[])
     LEFT JOIN LATERAL (
         SELECT c.custo_unitario, c.vigente_desde
           FROM product_costs c

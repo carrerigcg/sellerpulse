@@ -72,7 +72,10 @@ contas.
 ## Parte B: visão somada
 
 1. **`X-Conta: todas`**, guardado no mesmo cookie. Só vale com um plano de
-   várias contas; fora dele é `conta-invalida`, e o front volta à principal.
+   várias contas e pelo menos duas contas; fora disso é `conta-invalida`, e o
+   front volta à principal. Com uma conta só não há seletor no topo, e aceitar
+   a soma deixaria o vendedor preso nela (`revisor-de-interface`). Remover uma
+   conta durante a soma também apaga a escolha.
 2. **Entram todas as contas que abrem no plano**, conectadas ou não. O dado
    de uma conta desconectada é real até o dia em que ela parou; o rodapé de
    "atualizado em" fica com a sincronização mais antiga, que é o que avisa.
@@ -81,9 +84,10 @@ contas.
    leituras somam: fluxo, cancelamentos, top produtos, alertas, ABC, RFM,
    cohort, a lista de custos (o Resumo a usa para a cobertura) e
    `/conta/acesso`. Gravar custo, conectar, desconectar e o status da
-   sincronização continuam por conta. Adicionar e remover conta agem sobre o
-   login, e não sobre a conta aberta: aceitam a visão somada, porque a lista
-   de contas continua em Conectar.
+   sincronização continuam por conta. Adicionar e remover conta e trocar de
+   plano agem sobre o login, e não sobre a conta aberta: aceitam a visão
+   somada (a lista de contas continua em Conectar, e a Assinatura não depende
+   de conta). Cancelar, desistir e pagar já iam direto à principal.
    - Na visão somada, `Acesso.seller_id` levanta erro: rota que optou pela
      soma e leu uma conta só mostraria a principal com o rótulo de todas.
    - Por quê: uma rota nova que esquecesse da soma, com o padrão invertido,
