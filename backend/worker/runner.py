@@ -281,13 +281,20 @@ async def _depois_do_delta(pool, seller_id) -> str:
     if await _precisa_de_backfill(pool, seller_id):
         return "backfill"
     async with pool.acquire() as conn:
-        colheu_ha_pouco = await conn.fetchval(
-            "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
-            "AND kind = 'visitas' AND status = 'done' AND finished_at > now() - $2::interval)",
-            seller_id,
-            INTERVALO_DAS_VISITAS,
-        )
+        colheu_ha_pouco = await conn.fetchval(_COLHEU_HA_POUCO, seller_id, INTERVALO_DAS_VISITAS)
     return "frete" if colheu_ha_pouco else "visitas"
+
+
+# As duas leem jobs concluidos do vendedor: o indice (seller_id, created_at)
+# da migration 0025 evita ler a fila inteira, que cresce para sempre.
+_COLHEU_HA_POUCO = (
+    "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
+    "AND kind = 'visitas' AND status = 'done' AND finished_at > now() - $2::interval)"
+)
+_BACKFILL_FALHOU_HA_POUCO = (
+    "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
+    "AND kind = 'backfill' AND status = 'failed' AND finished_at > now() - $2::interval)"
+)
 
 
 async def _precisa_de_backfill(pool, seller_id) -> bool:
@@ -314,10 +321,7 @@ async def _precisa_de_backfill(pool, seller_id) -> bool:
         return False
     async with pool.acquire() as conn:
         falhou_ha_pouco = await conn.fetchval(
-            "SELECT EXISTS (SELECT 1 FROM sync_jobs WHERE seller_id = $1 "
-            "AND kind = 'backfill' AND status = 'failed' AND finished_at > now() - $2::interval)",
-            seller_id,
-            ESPERA_APOS_BACKFILL_FALHO,
+            _BACKFILL_FALHOU_HA_POUCO, seller_id, ESPERA_APOS_BACKFILL_FALHO
         )
     return not falhou_ha_pouco
 

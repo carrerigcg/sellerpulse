@@ -178,6 +178,16 @@ def test_os_precos_da_vitrine_batem_com_os_do_backend():
     }
 
 
+def test_os_planos_a_venda_da_vitrine_batem_com_os_do_backend():
+    """Na volta do Premium à venda são dois lugares a mudar: um esquecido
+    deixa a vitrine oferecendo o que o checkout recusa, ou o contrário."""
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    plano_ts = (raiz / "frontend/lib/plano.ts").read_text(encoding="utf-8")
+    linha = next(x for x in plano_ts.splitlines() if "PLANOS_A_VENDA:" in x)
+    na_vitrine = set(re.findall(r'"(\w+)"', linha))
+    assert na_vitrine == {nome for nome, plano in PLANOS.items() if plano.a_venda}
+
+
 # ---------- contratar ----------
 
 

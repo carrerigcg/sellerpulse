@@ -82,7 +82,7 @@ function ConectarNaSoma() {
         </p>
       )}
       <EscolhaUmaConta motivo="Cada conta do Mercado Livre tem a própria conexão e a própria sincronização." />
-      <GerenciarContas />
+      <GerenciarContas avisaFalha />
     </div>
   );
 }
@@ -98,6 +98,8 @@ function ConectarConteudo() {
   const [conectando, setConectando] = useState(false);
   const [sincronizando, setSincronizando] = useState(false);
   const [desconectando, setDesconectando] = useState(false);
+  // Com até 3 contas, um toque só desconectaria a errada: pede confirmação.
+  const [confirmandoDesconexao, setConfirmandoDesconexao] = useState(false);
 
   const carregarStatus = useCallback(async () => {
     try {
@@ -204,6 +206,7 @@ function ConectarConteudo() {
       setErro("Não foi possível desconectar.");
     } finally {
       setDesconectando(false);
+      setConfirmandoDesconexao(false);
     }
   }
 
@@ -237,18 +240,18 @@ function ConectarConteudo() {
 
       {carregando ? (
         <p className="mt-8 text-sm text-muted">Carregando status da conexão…</p>
-      ) : !status?.conectado ? (
+      ) : !status ? null : !status.conectado ? (
         <section className="mt-8 rounded-xl border border-line p-5">
           <h2 className="text-sm font-semibold">Nenhuma conta conectada</h2>
           <p className="mt-2 text-sm text-muted">
-            Ao conectar, importamos os últimos {status?.meses_da_importacao ?? 6} meses de
+            Ao conectar, importamos os últimos {status.meses_da_importacao} meses de
             pedidos do Mercado Livre. Isso pode levar alguns minutos.
           </p>
           <button
             type="button"
             onClick={conectar}
             disabled={conectando}
-            className="mt-4 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
+            className="mt-4 min-h-11 rounded-lg bg-accent px-4 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
           >
             {conectando ? "Redirecionando…" : "Conectar Mercado Livre"}
           </button>
@@ -273,7 +276,7 @@ function ConectarConteudo() {
                   type="button"
                   onClick={sincronizarAgora}
                   disabled={sincronizando || jobAtivo}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
+                  className="min-h-11 rounded-lg bg-accent px-3 text-sm font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
                 >
                   {sincronizando ? "Enviando…" : "Sincronizar agora"}
                 </button>
@@ -287,14 +290,43 @@ function ConectarConteudo() {
                   Atualização diária · sincronizar na hora no Exclusive
                 </a>
               )}
-              <button
-                type="button"
-                onClick={desconectarConta}
-                disabled={desconectando}
-                className="rounded-lg border border-line px-3 py-1.5 text-sm font-medium transition hover:bg-surface disabled:opacity-50"
-              >
-                {desconectando ? "Desconectando…" : "Desconectar"}
-              </button>
+              {confirmandoDesconexao ? (
+                <span
+                  role="group"
+                  aria-label={`Desconectar ${status.apelido ?? "a conta"}`}
+                  className="flex flex-wrap items-center gap-2"
+                >
+                  <span className="text-sm text-muted">
+                    Para de sincronizar {status.apelido ?? "esta conta"}?
+                  </span>
+                  <button
+                    type="button"
+                    // O "Desconectar" que tinha o foco sumiu: o foco vem para a confirmação.
+                    autoFocus
+                    onClick={desconectarConta}
+                    disabled={desconectando}
+                    className="min-h-11 rounded-lg border border-line px-3 text-sm font-medium transition hover:bg-surface disabled:opacity-50"
+                  >
+                    {desconectando ? "Desconectando…" : "Desconectar de vez"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoDesconexao(false)}
+                    disabled={desconectando}
+                    className="min-h-11 rounded-lg px-3 text-sm text-muted transition hover:bg-surface"
+                  >
+                    Manter
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmandoDesconexao(true)}
+                  className="min-h-11 rounded-lg border border-line px-3 text-sm font-medium transition hover:bg-surface"
+                >
+                  Desconectar
+                </button>
+              )}
             </div>
           </div>
 

@@ -20,21 +20,31 @@ import { abrirConta, contasDoLogin, iniciarContaNova, removerConta } from "@/lib
  * conta extra de quando tinha (decisão 2.1: os dados ficam, e é aqui que se
  * apaga).
  */
-export function GerenciarContas() {
+export function GerenciarContas({ avisaFalha = false }: { avisaFalha?: boolean }) {
   const [contas, setContas] = useState<Contas | null>(null);
+  const [falhou, setFalhou] = useState(false);
 
   useEffect(() => {
     async function carregar() {
       try {
         setContas(await contasDoLogin());
       } catch {
-        // A seção é um extra da tela: sem ela, conectar continua funcionando.
+        // Na tela de uma conta, a seção é um extra: conectar continua
+        // funcionando sem ela. Na soma, é o que a tela tem: some calada, não.
         setContas(null);
+        setFalhou(true);
       }
     }
     void carregar();
   }, []);
 
+  if (falhou && avisaFalha) {
+    return (
+      <p role="alert" className="mt-8 rounded-lg bg-negative/10 px-4 py-3 text-sm text-negative">
+        Não foi possível carregar as contas deste login. Recarregue a página para tentar de novo.
+      </p>
+    );
+  }
   if (!contas || (contas.max_contas < 2 && contas.contas.length < 2)) return null;
   return <PainelDeContas contas={contas} />;
 }
@@ -80,7 +90,9 @@ export function PainelDeContas({ contas }: { contas: Contas }) {
       <p className="mt-1 text-xs text-muted">{fraseDasContas(contas)}</p>
 
       {erro && (
-        <p className="mt-3 rounded-lg bg-negative/10 px-3 py-2 text-sm text-negative">{erro}</p>
+        <p role="alert" className="mt-3 rounded-lg bg-negative/10 px-3 py-2 text-sm text-negative">
+          {erro}
+        </p>
       )}
 
       <ul className="mt-4 flex flex-col gap-3 text-sm">
@@ -94,7 +106,11 @@ export function PainelDeContas({ contas }: { contas: Contas }) {
             </span>
             {!conta.principal &&
               (confirmando === conta.id ? (
-                <span className="flex flex-wrap items-center gap-2">
+                <span
+                  role="group"
+                  aria-label={`Remover ${nomeDaConta(conta)}`}
+                  className="flex flex-wrap items-center gap-2"
+                >
                   <span className="text-muted">
                     Apaga do SellerPulse os dados desta conta, sem volta. Nada muda no Mercado
                     Livre.

@@ -212,6 +212,8 @@ async def test_invalid_grant_apaga_a_conexao(pg_pool, test_seller):
     """
     _u, seller_id = test_seller
     await _grava_token(pg_pool, seller_id, minutos=-5)
+    async with pg_pool.acquire() as conn:
+        await conn.execute("UPDATE sellers SET ml_seller_id = 88001 WHERE id = $1", seller_id)
 
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
@@ -224,6 +226,13 @@ async def test_invalid_grant_apaga_a_conexao(pg_pool, test_seller):
             await oauth.garante_token_valido(pg_pool, seller_id)
 
     assert await tokens_mod.PostgresTokenStore(pg_pool, seller_id).load() is None
+    # Como no "Desconectar": a tela e o agendador dizem "conectado" pelo
+    # `ml_seller_id`. Sem zerar, a conta seguia "Conectado como X" e o
+    # agendador enfileirava, 4 vezes por dia, job que só falha.
+    async with pg_pool.acquire() as conn:
+        assert (
+            await conn.fetchval("SELECT ml_seller_id FROM sellers WHERE id = $1", seller_id) is None
+        )
 
 
 async def test_falha_generica_nao_apaga_token_nem_trava_o_lock(pg_pool, test_seller, monkeypatch):

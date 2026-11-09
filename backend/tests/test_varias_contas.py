@@ -145,7 +145,8 @@ async def test_acesso_lista_as_contas_e_quais_abrem(client, pg_pool, test_seller
     corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
     assert corpo["conta_aberta"] == str(sid)
     assert corpo["max_contas"] == 3
-    assert corpo["contas"] == [
+    chaves = ("id", "apelido", "principal", "ativa")
+    assert [{k: c[k] for k in chaves} for c in corpo["contas"]] == [
         {"id": str(sid), "apelido": "PRIMEIRA", "principal": True, "ativa": True},
         {"id": str(extra), "apelido": "SEGUNDA", "principal": False, "ativa": True},
     ]
@@ -163,6 +164,34 @@ async def test_conta_desconectada_aparece_sem_o_nome_da_loja(client, pg_pool, te
     extra = await _extra(pg_pool, user_id, ml_seller_id=None, apelido="LOJA_ANTIGA")
     corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
     assert next(c for c in corpo["contas"] if c["id"] == str(extra))["apelido"] is None
+
+
+async def test_acesso_diz_quando_cada_conta_sincronizou(client, pg_pool, test_seller):
+    """Na soma, uma conta parada ou ainda importando entra com dias a menos,
+    e a tela precisa saber para avisar: ausência não pode virar queda."""
+    user_id, sid = test_seller
+    extra = await _extra(pg_pool, user_id, ml_seller_id=77003, apelido="NOVA")
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE sellers SET last_synced_at = '2026-11-08 12:00+00' WHERE id = $1", sid
+        )
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'done', now())",
+            sid,
+        )
+        # Backfill que falhou não completa a importação.
+        await conn.execute(
+            "INSERT INTO sync_jobs (seller_id, kind, status, finished_at) "
+            "VALUES ($1, 'backfill', 'failed', now())",
+            extra,
+        )
+    corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
+    por_id = {c["id"]: c for c in corpo["contas"]}
+    assert por_id[str(sid)]["sincronizada_em"].startswith("2026-11-08T12:00")
+    assert por_id[str(sid)]["importacao_completa"] is True
+    assert por_id[str(extra)]["sincronizada_em"] is None
+    assert por_id[str(extra)]["importacao_completa"] is False
 
 
 # ---------- adicionar conta ----------

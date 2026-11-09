@@ -56,7 +56,13 @@ async def enqueue(pool: asyncpg.Pool, seller_id: uuid.UUID, kind: str) -> int | 
 
 
 async def claim_next(pool: asyncpg.Pool) -> asyncpg.Record | None:
-    """Reclama o job mais antigo elegivel, ou None se a fila esta vazia."""
+    """Reclama o proximo job elegivel, ou None se a fila esta vazia.
+
+    Delta primeiro, depois por ordem de chegada. O delta leva segundos e e o
+    que mantem o dado fresco; visitas, frete e backfill levam minutos. Por
+    ordem de chegada, o delta do Premium esperava a fila inteira da rodada da
+    manha e passava da folga de 1 hora do `sync-todos`.
+    """
     async with pool.acquire() as conn:
         return await conn.fetchrow(
             f"""
@@ -68,7 +74,7 @@ async def claim_next(pool: asyncpg.Pool) -> asyncpg.Record | None:
             WHERE id = (
                 SELECT id FROM sync_jobs
                 WHERE {_CANDIDATO}
-                ORDER BY created_at
+                ORDER BY (kind = 'delta') DESC, created_at
                 LIMIT 1
                 FOR UPDATE SKIP LOCKED
             )

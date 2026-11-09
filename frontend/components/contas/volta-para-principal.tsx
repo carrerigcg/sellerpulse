@@ -19,7 +19,7 @@ export function VoltaParaPrincipal() {
   }, [router]);
 
   return (
-    <p className="mt-8 px-4 text-sm text-muted">
+    <p role="status" className="mt-8 px-4 text-sm text-muted">
       A conta do Mercado Livre que estava aberta não está mais disponível. Voltando para a conta
       principal…
     </p>

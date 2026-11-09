@@ -85,3 +85,4 @@
 0022_eventos_sem_link_de_fatura.sql	20261103131024	2026-11-03
 0023_varias_contas_por_usuario.sql	20261106204023	2026-11-06
 0024_indice_dos_backfills_concluidos.sql	20261109132517	2026-11-09
+0025_indice_da_fila_por_vendedor.sql	20261109144330	2026-11-09

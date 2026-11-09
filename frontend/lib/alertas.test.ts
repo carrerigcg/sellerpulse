@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   estadoDaMargem,
   fraseDaMargem,
+  fraseDaReferencia,
   fraseDoParado,
   fraseSemAlertaDeMargem,
   fraseSemParados,
@@ -75,6 +76,18 @@ describe("frases", () => {
     expect(fraseDoParado({ ...base, intervalo_normal: 1 })).toBe(
       "Sem vender há 28 dias; costuma vender todo dia.",
     );
+  });
+});
+
+describe("fraseDaReferencia", () => {
+  it("diz até que dia os dias parados foram contados", () => {
+    expect(fraseDaReferencia({ ...VAZIO, referencia: "2026-11-08" })).toBe(
+      "Dias contados até a última sincronização, em 08/11.",
+    );
+  });
+
+  it("sem sincronização, não diz data nenhuma", () => {
+    expect(fraseDaReferencia(VAZIO)).toBeNull();
   });
 });
 

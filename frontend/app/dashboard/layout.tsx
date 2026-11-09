@@ -4,7 +4,7 @@ import { SeletorDeConta } from "@/components/contas/seletor-de-conta";
 import { VoltaParaPrincipal } from "@/components/contas/volta-para-principal";
 import { RegistroDeAcesso } from "@/components/registro-de-acesso";
 import { ApiError, getAcesso } from "@/lib/api";
-import { opcoesDoSeletor } from "@/lib/contas";
+import { avisoDaSoma, opcoesDoSeletor } from "@/lib/contas";
 import { destinoSemAcesso } from "@/lib/plano";
 import { createClient } from "@/lib/supabase/server";
 
@@ -35,6 +35,7 @@ export default async function DashboardLayout({
   const destino = acesso && destinoSemAcesso(acesso);
   if (destino) redirect(destino);
   const opcoes = acesso ? opcoesDoSeletor(acesso) : [];
+  const aviso = acesso ? avisoDaSoma(acesso, new Date()) : null;
 
   // A sidebar é montada em `navegacao.tsx`, e não aqui, porque duas das props
   // do `<Sidebar>` são funções (`grupos` carrega os componentes de ícone,
@@ -46,6 +47,16 @@ export default async function DashboardLayout({
       <NavegacaoDashboard email={user.email ?? ""}>
         {acesso && opcoes.length > 0 && (
           <SeletorDeConta opcoes={opcoes} aberta={acesso.conta_aberta} />
+        )}
+        {aviso && (
+          // Texto em `ink`, a cor fica na borda: o mesmo cuidado de contraste
+          // do erro do Resumo.
+          <p
+            role="status"
+            className="mb-6 rounded-lg border border-accent/40 bg-accent-soft px-4 py-3 text-sm text-ink"
+          >
+            {aviso}
+          </p>
         )}
         {children}
       </NavegacaoDashboard>

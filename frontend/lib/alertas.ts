@@ -81,6 +81,17 @@ export function fraseDaMargem(alerta: AlertaDeMargem): string {
   return `Prejuízo de ${brl.format(-alerta.margem)} em ${brl.format(alerta.receita)} vendidos nos últimos 30 dias, já tirando taxa, frete e custo.`;
 }
 
+/**
+ * Até que dia os dias parados foram contados. A conta vai até a última
+ * sincronização, e não até hoje (decisão 2 da spec dos alertas): sem a data,
+ * "sem vender há 20 dias" leria como até hoje. Na soma, é a mais antiga.
+ */
+export function fraseDaReferencia(alertas: Alertas): string | null {
+  if (!alertas.referencia) return null;
+  const [, mes, dia] = alertas.referencia.split("-");
+  return `Dias contados até a última sincronização, em ${dia}/${mes}.`;
+}
+
 export function fraseDoParado(alerta: AlertaDeParado): string {
   const ritmo =
     alerta.intervalo_normal <= 1 ? "costuma vender todo dia" : `costuma vender a cada ${alerta.intervalo_normal} dias`;

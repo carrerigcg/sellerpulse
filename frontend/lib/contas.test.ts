@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cabecalhoDaConta,
   apagaEscolhaAoRemover,
+  avisoDaSoma,
   contasDoSeletor,
   ehVisaoSomada,
   opcoesDoSeletor,
@@ -13,12 +14,47 @@ import {
   type Contas,
 } from "./contas";
 
-const PRINCIPAL = { id: "a", apelido: "LOJA_A", principal: true, ativa: true };
-const EXTRA = { id: "b", apelido: "LOJA_B", principal: false, ativa: true };
+const EM_DIA = { sincronizada_em: "2026-11-09T12:00:00+00:00", importacao_completa: true };
+const PRINCIPAL = { id: "a", apelido: "LOJA_A", principal: true, ativa: true, ...EM_DIA };
+const EXTRA = { id: "b", apelido: "LOJA_B", principal: false, ativa: true, ...EM_DIA };
 
 function acesso(parcial: Partial<Contas>): Contas {
   return { contas: [PRINCIPAL], conta_aberta: "a", max_contas: 3, ...parcial };
 }
+
+describe("avisoDaSoma", () => {
+  const AGORA = new Date("2026-11-09T15:00:00Z");
+  const SOMA = { conta_aberta: "todas" };
+
+  it("com as contas em dia, não avisa nada", () => {
+    expect(avisoDaSoma(acesso({ ...SOMA, contas: [PRINCIPAL, EXTRA] }), AGORA)).toBeNull();
+  });
+
+  it("fora da soma, não avisa: a conta aberta tem a própria tela de conexão", () => {
+    const parada = { ...EXTRA, sincronizada_em: "2026-10-01T12:00:00+00:00" };
+    expect(avisoDaSoma(acesso({ contas: [PRINCIPAL, parada] }), AGORA)).toBeNull();
+  });
+
+  it("conta parada há mais de 12 horas diz desde quando, no horário de Brasília", () => {
+    const parada = { ...EXTRA, sincronizada_em: "2026-11-08T02:30:00+00:00" };
+    const aviso = avisoDaSoma(acesso({ ...SOMA, contas: [PRINCIPAL, parada] }), AGORA);
+    expect(aviso).toContain("LOJA_B não sincroniza desde 07/11");
+    expect(aviso).toContain("aparecem como dias sem venda");
+  });
+
+  it("conta sem conexão e conta importando entram no aviso", () => {
+    const sem = { ...EXTRA, apelido: null, sincronizada_em: null, importacao_completa: false };
+    const nova = { ...EXTRA, id: "c", apelido: "LOJA_C", importacao_completa: false };
+    const aviso = avisoDaSoma(acesso({ ...SOMA, contas: [PRINCIPAL, sem, nova] }), AGORA);
+    expect(aviso).toContain("uma conta está sem conexão");
+    expect(aviso).toContain("LOJA_C ainda está importando o histórico");
+  });
+
+  it("conta que não abre no plano não entra na soma, nem no aviso", () => {
+    const guardada = { ...EXTRA, ativa: false, sincronizada_em: null };
+    expect(avisoDaSoma(acesso({ ...SOMA, contas: [PRINCIPAL, guardada] }), AGORA)).toBeNull();
+  });
+});
 
 describe("cabecalhoDaConta", () => {
   it("sem escolha, não manda cabeçalho: o backend abre a principal", () => {
@@ -115,6 +151,8 @@ describe("fraseDasContas", () => {
     const frase = fraseDasContas(acesso({ contas: [PRINCIPAL, EXTRA], max_contas: 1 }));
     expect(frase).toMatch(/ficam guardadas/);
     expect(frase).not.toMatch(/2 de 1/);
+    // O Premium está fora da venda: mandar contratá-lo apontaria para nada.
+    expect(frase).not.toMatch(/Premium/);
   });
 });
 

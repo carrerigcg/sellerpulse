@@ -22,7 +22,16 @@ const ESSENCIAL: Acesso = {
   termos: { versao: "v1", aceito: true },
   vendas_abertas: true,
   assinatura: null,
-  contas: [{ id: "a", apelido: "LOJA", principal: true, ativa: true }],
+  contas: [
+    {
+      id: "a",
+      apelido: "LOJA",
+      principal: true,
+      ativa: true,
+      sincronizada_em: null,
+      importacao_completa: true,
+    },
+  ],
   conta_aberta: "a",
   max_contas: 1,
 };
