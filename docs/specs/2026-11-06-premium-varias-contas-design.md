@@ -136,7 +136,7 @@ contas.
     contas ocupa ~40 MB dos 500 MB do Supabase gratuito.
   - **A API do ML não é o limite:** o worker serial não passa de ~2 pedidos
     por segundo.
-  - Pendente antes de vender o Premium: o índice em `sync_jobs` para o
+  - Feito (migration 0024), antes de vender o Premium: o índice em `sync_jobs` para o
     `dias_ja_buscados` (já anotado na spec do histórico de 12 meses), que as
     contas extras fazem crescer mais rápido.
 - Trocar de conta recarrega a página inteira, e não só os dados: o

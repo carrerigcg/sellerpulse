@@ -104,6 +104,14 @@ async def heartbeat(
 DIAS_DO_BACKFILL_ANTIGO = 180
 
 
+# Roda a cada carga do painel, por conta. O índice parcial da migration 0024
+# evita ler a fila inteira, que cresce com cada job concluído.
+_DIAS_JA_BUSCADOS = (
+    "SELECT max(coalesce((cursor->>'dias')::int, $2)) FROM sync_jobs "
+    "WHERE seller_id = $1 AND kind = 'backfill' AND status = 'done'"
+)
+
+
 async def dias_ja_buscados(pool: asyncpg.Pool, seller_id: uuid.UUID) -> int | None:
     """Quantos dias de pedidos o vendedor já tem buscados. None se nenhum.
 
@@ -112,12 +120,7 @@ async def dias_ja_buscados(pool: asyncpg.Pool, seller_id: uuid.UUID) -> int | No
     banco mesmo quando a janela do ML anda.
     """
     async with pool.acquire() as conn:
-        return await conn.fetchval(
-            "SELECT max(coalesce((cursor->>'dias')::int, $2)) FROM sync_jobs "
-            "WHERE seller_id = $1 AND kind = 'backfill' AND status = 'done'",
-            seller_id,
-            DIAS_DO_BACKFILL_ANTIGO,
-        )
+        return await conn.fetchval(_DIAS_JA_BUSCADOS, seller_id, DIAS_DO_BACKFILL_ANTIGO)
 
 
 async def salva_cursor(pool: asyncpg.Pool, job_id: int, cursor: dict) -> None:
