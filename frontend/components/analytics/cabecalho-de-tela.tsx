@@ -32,6 +32,7 @@ export function CabecalhoDeTela({
   tela,
   temDados,
   chegouFiltrado = false,
+  semPeriodo = false,
 }: {
   titulo: string;
   subtitulo: string;
@@ -41,6 +42,8 @@ export function CabecalhoDeTela({
   temDados: boolean;
   /** Veio por um atalho que já filtra a tela — ver `deveAbrirSozinho`. */
   chegouFiltrado?: boolean;
+  /** Tela sem número para filtrar (Custos na soma): o período não mudaria nada. */
+  semPeriodo?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
@@ -52,7 +55,7 @@ export function CabecalhoDeTela({
           <TutorialDaTela tela={tela} temDados={temDados} chegouFiltrado={chegouFiltrado} />
         </div>
       </div>
-      <PeriodPicker de={de} ate={ate} />
+      {!semPeriodo && <PeriodPicker de={de} ate={ate} />}
     </div>
   );
 }

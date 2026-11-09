@@ -45,7 +45,7 @@ export function SeletorDeConta({ opcoes, aberta }: { opcoes: OpcaoDeConta[]; abe
       </select>
       {trocando && (
         <span role="status" className="text-muted">
-          Abrindo a conta…
+          Abrindo…
         </span>
       )}
     </div>

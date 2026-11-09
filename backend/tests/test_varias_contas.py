@@ -136,9 +136,11 @@ async def test_conta_extra_usa_o_plano_e_o_aceite_da_principal(client, pg_pool, 
 
 async def test_acesso_lista_as_contas_e_quais_abrem(client, pg_pool, test_seller):
     user_id, sid = test_seller
-    extra = await _extra(pg_pool, user_id, apelido="SEGUNDA")
+    extra = await _extra(pg_pool, user_id, ml_seller_id=77002, apelido="SEGUNDA")
     async with pg_pool.acquire() as conn:
-        await conn.execute("UPDATE sellers SET ml_nickname = 'PRIMEIRA' WHERE id = $1", sid)
+        await conn.execute(
+            "UPDATE sellers SET ml_seller_id = 77001, ml_nickname = 'PRIMEIRA' WHERE id = $1", sid
+        )
 
     corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
     assert corpo["conta_aberta"] == str(sid)
@@ -152,6 +154,15 @@ async def test_acesso_lista_as_contas_e_quais_abrem(client, pg_pool, test_seller
         await da_plano(conn, sid, "exclusive")
     corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
     assert [c["ativa"] for c in corpo["contas"]] == [True, False]
+
+
+async def test_conta_desconectada_aparece_sem_o_nome_da_loja(client, pg_pool, test_seller):
+    """Desconectar zera o `ml_seller_id` e guarda o apelido. Com o nome da loja,
+    o seletor mostrava como aberta uma conta que não sincroniza mais."""
+    user_id, _sid = test_seller
+    extra = await _extra(pg_pool, user_id, ml_seller_id=None, apelido="LOJA_ANTIGA")
+    corpo = client.get("/conta/acesso", headers=_auth(user_id)).json()
+    assert next(c for c in corpo["contas"] if c["id"] == str(extra))["apelido"] is None
 
 
 # ---------- adicionar conta ----------

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
+import { abrirConta } from "@/lib/ml";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -17,6 +18,9 @@ export function BotaoSair({ className = "" }: { className?: string }) {
   async function sair() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // A conta escolhida é do login que saiu: quem entrar depois, no mesmo
+    // navegador, cairia numa conta que não é dele e veria o aviso de troca.
+    abrirConta({ id: "", principal: true });
     router.push("/login");
     router.refresh();
   }
