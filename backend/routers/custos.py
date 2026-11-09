@@ -31,7 +31,7 @@ from backend.analytics.custos_pg import (
     remover_custo,
 )
 from backend.db import get_pool
-from backend.deps import Acesso, get_acesso
+from backend.deps import Acesso, get_acesso, get_acesso_somavel
 from backend.planos import Recurso
 from backend.routers._common import limita_ao_historico, marca_historico_cortado, validate_window
 
@@ -60,14 +60,18 @@ async def get_custos(
     date_from: str,
     date_to: str,
     response: Response,
-    acesso: Acesso = Depends(get_acesso),
+    acesso: Acesso = Depends(get_acesso_somavel),
 ) -> list[dict]:
-    """Produtos vendidos na janela, com classe ABC e o custo vigente hoje."""
+    """Produtos vendidos na janela, com classe ABC e o custo vigente hoje.
+
+    Soma na visão somada porque o Resumo lê esta lista para a cobertura de
+    custo. Gravar e remover continuam por conta.
+    """
     date_from, date_to = validate_window(date_from, date_to)
     date_from, date_to, cortado = limita_ao_historico(acesso.plano, date_from, date_to)
     marca_historico_cortado(response, cortado)
     pool = await get_pool()
-    df = await listar_custos(pool, acesso.seller_id, date_from, date_to)
+    df = await listar_custos(pool, acesso.contas, date_from, date_to)
     # A lista de Custos tem todos os produtos vendidos, porque é onde o custo
     # de cada um se informa. A classe A/B/C de todos eles é a curva ABC
     # inteira, que o plano sem a ABC completa não cobre: ela sai daqui.

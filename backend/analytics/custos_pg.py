@@ -13,11 +13,12 @@ divergiria da primeira no dia em que alguém mexesse numa só.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from datetime import date
 
 import pandas as pd
 
-from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary
+from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary, contas_de
 from backend.analytics.segmentation_pg import abc_pareto
 
 _COLUNAS = [
@@ -51,7 +52,7 @@ _UNIDADES_E_CUSTO_QUERY = f"""
          ORDER BY c.vigente_desde DESC
          LIMIT 1
     ) pc ON TRUE
-    WHERE oi.seller_id = $1
+    WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
@@ -130,7 +131,9 @@ def hoje_do_vendedor() -> date:
     return pd.Timestamp.now(tz=FUSO_DO_VENDEDOR).date()
 
 
-async def listar_custos(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> pd.DataFrame:
+async def listar_custos(
+    pool, seller_id: uuid.UUID | Sequence[uuid.UUID], date_from: str, date_to: str
+) -> pd.DataFrame:
     """Produtos vendidos na janela, com a classe ABC e o custo vigente hoje.
 
     Ordenado como `abc_pareto` ordena: receita decrescente. Isso já é "classe
@@ -140,13 +143,19 @@ async def listar_custos(pool, seller_id: uuid.UUID, date_from: str, date_to: str
     `custo_unitario` vem `None` para quem não tem custo informado. None é
     diferente de `0.0`, e a distinção é a feature inteira: zero é a afirmação
     "não me custa nada", ausência não afirma nada.
+
+    Aceita as contas da visão somada do Premium só para LER: o Resumo usa a
+    lista para a cobertura de custo. Gravar é sempre numa conta.
     """
     abc = await abc_pareto(pool, seller_id, date_from, date_to)
     if abc.empty:
         return pd.DataFrame(columns=_COLUNAS)
 
     rows = await pool.fetch(
-        _UNIDADES_E_CUSTO_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
+        _UNIDADES_E_CUSTO_QUERY,
+        contas_de(seller_id),
+        _parse_boundary(date_from),
+        _parse_boundary(date_to),
     )
     extras = pd.DataFrame([dict(r) for r in rows])
 

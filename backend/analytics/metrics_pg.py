@@ -12,7 +12,7 @@ Duas armadilhas de tradução de dialeto que este módulo trata explicitamente:
 
 1. Schema multi-tenant: as tabelas usam chave composta (seller_id, ...).
    Todo JOIN casa também por `seller_id`, e toda query filtra
-   `seller_id = $1` — senão dados de vendedores diferentes se misturam.
+   `seller_id = ANY($1)` (uma conta, ou as da visão somada) — senão dados de vendedores diferentes se misturam.
 2. `numeric` do Postgres volta como `decimal.Decimal` via asyncpg. Colunas
    numéricas são convertidas pra `float` explicitamente ao montar o
    DataFrame, senão o dtype vira `object` e quebra downstream (gráficos,
@@ -30,10 +30,11 @@ Duas armadilhas de tradução de dialeto que este módulo trata explicitamente:
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 
 import pandas as pd
 
-from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary
+from backend.analytics._common import FUSO_DO_VENDEDOR, _parse_boundary, contas_de
 
 # `SEM_CATEGORIA` e reexportado daqui: `src/metrics.py` passou a precisar do
 # mesmo rotulo quando levou a mesma correcao de LEFT JOIN, e duas copias da
@@ -91,7 +92,7 @@ _FLUXO_QUERY = f"""
         FROM orders o
         LEFT JOIN shipment_costs sc
           ON sc.seller_id = o.seller_id AND sc.shipment_id = o.shipment_id
-        WHERE o.seller_id = $1
+        WHERE o.seller_id = ANY($1::uuid[])
           AND o.status = 'paid'
           AND o.date_closed >= $2::timestamptz
           AND o.date_closed <  $3::timestamptz
@@ -102,13 +103,14 @@ _FLUXO_QUERY = f"""
     -- envio entra uma vez, no dia do seu primeiro pedido pago. Esse dia e
     -- calculado sobre a historia inteira, e nao so sobre a janela: senao um
     -- carrinho que atravessa a borda contaria nas duas janelas.
+    -- Por conta e envio: na visao somada do Premium, o envio e de uma conta.
     envios AS (
-        SELECT o.shipment_id, MIN(o.date_closed) AS primeiro_pedido
+        SELECT o.seller_id, o.shipment_id, MIN(o.date_closed) AS primeiro_pedido
           FROM orders o
-         WHERE o.seller_id = $1
+         WHERE o.seller_id = ANY($1::uuid[])
            AND o.status = 'paid'
            AND o.shipment_id IS NOT NULL
-         GROUP BY o.shipment_id
+         GROUP BY o.seller_id, o.shipment_id
     ),
     frete_por_dia AS (
         SELECT
@@ -116,7 +118,7 @@ _FLUXO_QUERY = f"""
             SUM(sc.custo_vendedor) AS frete
           FROM envios e
           JOIN shipment_costs sc
-            ON sc.seller_id = $1 AND sc.shipment_id = e.shipment_id
+            ON sc.seller_id = e.seller_id AND sc.shipment_id = e.shipment_id
          WHERE e.primeiro_pedido >= $2::timestamptz
            AND e.primeiro_pedido <  $3::timestamptz
          GROUP BY 1
@@ -156,7 +158,7 @@ _FLUXO_QUERY = f"""
              ORDER BY c.vigente_desde DESC
              LIMIT 1
         ) pc ON TRUE
-        WHERE oi.seller_id = $1
+        WHERE oi.seller_id = ANY($1::uuid[])
           AND o.status = 'paid'
           AND o.date_closed >= $2::timestamptz
           AND o.date_closed <  $3::timestamptz
@@ -199,7 +201,7 @@ _TOP_PRODUTOS_QUERY = """
       ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
     LEFT JOIN categories_cache cc
       ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id
-    WHERE oi.seller_id = $1
+    WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
@@ -236,7 +238,7 @@ _TOP_CATEGORIAS_QUERY = """
       ON ic.seller_id = oi.seller_id AND ic.item_id = oi.item_id
     LEFT JOIN categories_cache cc
       ON cc.seller_id = oi.seller_id AND cc.category_id = ic.category_id
-    WHERE oi.seller_id = $1
+    WHERE oi.seller_id = ANY($1::uuid[])
       AND o.status = 'paid'
       AND o.date_closed >= $2::timestamptz
       AND o.date_closed <  $3::timestamptz
@@ -249,7 +251,7 @@ _TOP_CATEGORIAS_QUERY = """
 
 
 async def fluxo_financeiro(
-    pool, seller_id: uuid.UUID, date_from: str, date_to: str
+    pool, seller_id: uuid.UUID | Sequence[uuid.UUID], date_from: str, date_to: str
 ) -> pd.DataFrame:
     """DataFrame por dia com receita, custos do ML, custo de produto e margem.
 
@@ -278,7 +280,7 @@ async def fluxo_financeiro(
 
     Args:
         pool: pool asyncpg (`backend.db.get_pool()`).
-        seller_id: UUID do seller — isola os dados desse tenant.
+        seller_id: a conta, ou a lista de contas da visão somada do Premium.
         date_from: início inclusivo (ISO 8601, ex: "2026-07-25").
         date_to: fim exclusivo (ISO 8601).
 
@@ -293,7 +295,10 @@ async def fluxo_financeiro(
         nenhum pedido no range.
     """
     rows = await pool.fetch(
-        _FLUXO_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
+        _FLUXO_QUERY,
+        contas_de(seller_id),
+        _parse_boundary(date_from),
+        _parse_boundary(date_to),
     )
 
     if not rows:
@@ -327,14 +332,16 @@ _CANCELAMENTOS_QUERY = """
     SELECT count(*)::int                         AS pedidos,
            COALESCE(SUM(total_amount), 0)        AS valor
       FROM orders
-     WHERE seller_id = $1
+     WHERE seller_id = ANY($1::uuid[])
        AND status = 'cancelled'
        AND date_closed >= $2::timestamptz
        AND date_closed <  $3::timestamptz
 """
 
 
-async def cancelamentos(pool, seller_id: uuid.UUID, date_from: str, date_to: str) -> dict:
+async def cancelamentos(
+    pool, seller_id: uuid.UUID | Sequence[uuid.UUID], date_from: str, date_to: str
+) -> dict:
     """Quantos pedidos da janela foram cancelados ou devolvidos, e quanto somam.
 
     Existe para a tela fechar a conta contra o painel do Mercado Livre. O
@@ -353,13 +360,16 @@ async def cancelamentos(pool, seller_id: uuid.UUID, date_from: str, date_to: str
         aqui zero é um fato medido, não ausência de dado.
     """
     linha = await pool.fetchrow(
-        _CANCELAMENTOS_QUERY, seller_id, _parse_boundary(date_from), _parse_boundary(date_to)
+        _CANCELAMENTOS_QUERY,
+        contas_de(seller_id),
+        _parse_boundary(date_from),
+        _parse_boundary(date_to),
     )
     return {"pedidos": linha["pedidos"], "valor": round(float(linha["valor"]), 2)}
 
 
 async def top_produtos(
-    pool, seller_id: uuid.UUID, date_from: str, date_to: str, n: int = 10
+    pool, seller_id: uuid.UUID | Sequence[uuid.UUID], date_from: str, date_to: str, n: int = 10
 ) -> dict[str, pd.DataFrame]:
     """Top N produtos e top N categorias por receita.
 
@@ -385,10 +395,10 @@ async def top_produtos(
     dt_from = _parse_boundary(date_from)
     dt_to = _parse_boundary(date_to)
     produtos_rows = await pool.fetch(
-        _TOP_PRODUTOS_QUERY, seller_id, dt_from, dt_to, n, SEM_CATEGORIA
+        _TOP_PRODUTOS_QUERY, contas_de(seller_id), dt_from, dt_to, n, SEM_CATEGORIA
     )
     categorias_rows = await pool.fetch(
-        _TOP_CATEGORIAS_QUERY, seller_id, dt_from, dt_to, n, SEM_CATEGORIA
+        _TOP_CATEGORIAS_QUERY, contas_de(seller_id), dt_from, dt_to, n, SEM_CATEGORIA
     )
 
     if produtos_rows:

@@ -69,15 +69,57 @@ contas.
    entra em `contas_excluidas`, e as checagens de assinatura viva olham a
    principal.
 
-## Parte B: visão somada (próximo PR)
+## Parte B: visão somada
 
-`X-Conta: todas` faz as consultas de Resumo, Financeiro, Produtos, Clientes
-e Alertas filtrarem por `seller_id = ANY($1)`. Custos e Conectar recusam a
-visão somada. Os detalhes ficam para a spec ser atualizada com a parte B.
+1. **`X-Conta: todas`**, guardado no mesmo cookie. Só vale com um plano de
+   várias contas; fora dele é `conta-invalida`, e o front volta à principal.
+2. **Entram todas as contas que abrem no plano**, conectadas ou não. O dado
+   de uma conta desconectada é real até o dia em que ela parou; o rodapé de
+   "atualizado em" fica com a sincronização mais antiga, que é o que avisa.
+3. **Cada rota opta pela soma; o padrão recusa.** `get_acesso` e
+   `get_contas` respondem **409 `visao-somada`** para `todas`. Só as
+   leituras somam: fluxo, cancelamentos, top produtos, alertas, ABC, RFM,
+   cohort, a lista de custos (o Resumo a usa para a cobertura) e
+   `/conta/acesso`. Gravar custo, conectar, desconectar e o status da
+   sincronização continuam por conta. Adicionar e remover conta agem sobre o
+   login, e não sobre a conta aberta: aceitam a visão somada, porque a lista
+   de contas continua em Conectar.
+   - Na visão somada, `Acesso.seller_id` levanta erro: rota que optou pela
+     soma e leu uma conta só mostraria a principal com o rótulo de todas.
+   - Por quê: uma rota nova que esquecesse da soma, com o padrão invertido,
+     gravaria na conta errada ou mostraria uma conta só com o rótulo de
+     todas.
+4. **Sincronizar ao entrar, na visão somada, não enfileira** (responde
+   `visao-somada`), e o botão manual recusa. O Premium já sincroniza cada
+   conta a cada 6 horas pela rodada agendada.
+5. **Histórico: o menor entre as contas.** Com uma conta já em 12 meses e
+   outra ainda em 6, mostrar 12 exibiria os 6 antigos da segunda como venda
+   zero. Ausência não é zero.
+6. **Consultas:** `seller_id = ANY($1::uuid[])`, e todo JOIN continua casando
+   pelo `seller_id` da própria linha. Com uma conta, a lista tem um elemento
+   e o resultado é o mesmo de antes (paridade com `src/` intacta).
+   - **Frete:** o envio é por conta: `envios` agrupa por (conta, envio).
+   - **Conversão:** o início da colheita de visitas é o de cada conta. Com o
+     da loja mais antiga, a venda de uma conta antes da colheita dela entraria
+     no numerador sem visita medida.
+7. **Alertas:** a margem negativa olha todas as contas juntas. O parado é
+   medido conta por conta, cada uma contra a própria última sincronização (com
+   a referência de outra conta, um produto pareceria parado sem estar), e as
+   listas se juntam na mesma ordem. A data mostrada é a mais antiga.
+8. **Clientes:** o id do comprador no ML é o mesmo nas duas contas, então
+   ele conta uma vez (decisão 1.1). Carrinho (`pack_id`) é de uma conta só.
+9. **Produtos:** o mesmo produto anunciado em duas contas são dois anúncios,
+   duas linhas. É o que o ML tem: o SellerPulse não sabe que são o mesmo.
+10. **Front:**
+    - o seletor ganha "Todas as contas (soma)";
+    - Custos e Conectar mostram "escolha uma conta" em vez da tela, e
+      Conectar mantém a lista de contas do login.
 
 ## Fora desta entrega
 
 - Trocar a conta principal por outra.
+- Visão somada: dizer de qual conta é cada produto ou alerta, e as tarefas
+  do Resumo que levam a Custos (lá é preciso escolher a conta).
 - Preço por conta: o Premium inclui as 3.
 - Volume (`auditor-de-escala`, medido em 2026-11-06 na loja real):
   - **Fila:** uma conta Premium ocupa ~11,5 min por dia do worker único

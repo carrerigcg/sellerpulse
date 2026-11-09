@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Response
 
 from backend.analytics.segmentation_pg import abc_pareto, cohort_produto, rfm_scores
 from backend.db import get_pool
-from backend.deps import Acesso, exige, get_acesso
+from backend.deps import Acesso, exige, get_acesso_somavel
 from backend.planos import Recurso
 from backend.routers._common import limita_ao_historico, marca_historico_cortado, validate_window
 
@@ -21,8 +21,10 @@ _COLUNAS_DE_VISITA = ("unidades_com_visita", "visitas", "conversao")
 # desfocado com esse número, sem receber os produtos.
 CABECALHO_PRODUTOS_OCULTOS = "X-Produtos-Ocultos"
 
-_EXIGE_CLIENTES = exige(Recurso.CLIENTES)
-_EXIGE_COHORT = exige(Recurso.COHORT)
+# Leituras que somam as contas na visão somada do Premium (spec
+# 2026-11-06-premium-varias-contas, parte B).
+_EXIGE_CLIENTES = exige(Recurso.CLIENTES, somavel=True)
+_EXIGE_COHORT = exige(Recurso.COHORT, somavel=True)
 
 
 @router.get("/abc")
@@ -30,13 +32,13 @@ async def get_abc(
     date_from: str,
     date_to: str,
     response: Response,
-    acesso: Acesso = Depends(get_acesso),
+    acesso: Acesso = Depends(get_acesso_somavel),
 ) -> list[dict]:
     date_from, date_to = validate_window(date_from, date_to)
     date_from, date_to, cortado = limita_ao_historico(acesso.plano, date_from, date_to)
     marca_historico_cortado(response, cortado)
     pool = await get_pool()
-    df = await abc_pareto(pool, acesso.seller_id, date_from, date_to)
+    df = await abc_pareto(pool, acesso.contas, date_from, date_to)
     # A classe, o percentual e o acumulado são calculados sobre a curva
     # INTEIRA antes do corte: o 10º produto continua sendo "A" ou "B" de
     # verdade, e não reclassificado como se a loja tivesse só dez.
@@ -60,7 +62,7 @@ async def get_rfm(
     date_from, date_to, cortado = limita_ao_historico(acesso.plano, date_from, date_to)
     marca_historico_cortado(response, cortado)
     pool = await get_pool()
-    df = await rfm_scores(pool, acesso.seller_id, date_from, date_to)
+    df = await rfm_scores(pool, acesso.contas, date_from, date_to)
     return df.to_dict(orient="records")
 
 
@@ -75,7 +77,7 @@ async def get_cohort(
     date_from, date_to, cortado = limita_ao_historico(acesso.plano, date_from, date_to)
     marca_historico_cortado(response, cortado)
     pool = await get_pool()
-    df = await cohort_produto(pool, acesso.seller_id, date_from, date_to)
+    df = await cohort_produto(pool, acesso.contas, date_from, date_to)
     # Caso vazio: cohort_produto devolve um pd.DataFrame() puro (sem index
     # nomeado) -- reset_index() nele geraria uma coluna "index" espúria em
     # vez de estourar, mas o formato correto pro cliente é lista vazia.
