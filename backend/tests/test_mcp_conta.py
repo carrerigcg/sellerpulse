@@ -135,18 +135,221 @@ async def test_sessao_vencida_nao_entra(pg_pool, test_seller):
     assert await mcp_conta.VerificadorSupabase().verify_token(_token(user_id, sessao)) is None
 
 
-async def test_quem_ativou_o_app_autenticador_precisa_do_codigo(pg_pool, test_seller):
-    user_id, _ = test_seller
-    sessao = await _sessao(pg_pool, user_id)
-    async with pg_pool.acquire() as conn:
+async def _ativa_o_autenticador(pool, user_id) -> None:
+    async with pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO auth.mfa_factors (user_id, factor_type, status) "
             "VALUES ($1, 'totp', 'verified')",
             user_id,
         )
+
+
+async def _aprovacao(pool, user_id, cliente: str, *, minutos_antes: int) -> None:
+    """Aprovação gravada `minutos_antes` da hora em que a sessão nasce (agora)."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO aprovacoes_de_ia (user_id, client_id, aprovado_em) "
+            "VALUES ($1, $2, now() - make_interval(mins => $3))",
+            user_id,
+            cliente,
+            minutos_antes,
+        )
+
+
+async def test_quem_ativou_o_app_autenticador_precisa_do_codigo(pg_pool, test_seller):
+    """Token `aal1` sem aprovação feita com o código: quem tem só a senha."""
+    user_id, _ = test_seller
+    sessao = await _sessao(pg_pool, user_id)
+    await _ativa_o_autenticador(pg_pool, user_id)
     verificador = mcp_conta.VerificadorSupabase()
     assert await verificador.verify_token(_token(user_id, sessao, aal="aal1")) is None
     assert await verificador.verify_token(_token(user_id, sessao, aal="aal2")) is not None
+
+
+async def test_aprovacao_com_o_codigo_libera_o_token_aal1(pg_pool, test_seller):
+    """O token do Supabase nasce `aal1`; a prova do código é a aprovação (decisão 7)."""
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    await _aprovacao(pg_pool, user_id, "claude", minutos_antes=14)
+    sessao = await _sessao(pg_pool, user_id)
+    token = _token(user_id, sessao, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is not None
+
+
+async def test_aprovacao_antiga_nao_serve_para_conexao_nova(pg_pool, test_seller):
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    await _aprovacao(pg_pool, user_id, "claude", minutos_antes=16)
+    sessao = await _sessao(pg_pool, user_id)
+    token = _token(user_id, sessao, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is None
+
+
+async def test_aprovacao_de_outro_cliente_nao_serve(pg_pool, test_seller):
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    await _aprovacao(pg_pool, user_id, "outro-cliente", minutos_antes=1)
+    sessao = await _sessao(pg_pool, user_id)
+    token = _token(user_id, sessao, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is None
+
+
+async def test_aprovacao_depois_da_sessao_nao_serve(pg_pool, test_seller):
+    """Aprovar agora não legitima uma sessão que já existia sem o código."""
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    async with pg_pool.acquire() as conn:
+        sessao = await conn.fetchval(
+            "INSERT INTO auth.sessions (user_id, created_at) "
+            "VALUES ($1, now() - interval '30 minutes') RETURNING id",
+            user_id,
+        )
+    await _aprovacao(pg_pool, user_id, "claude", minutos_antes=0)
+    token = _token(user_id, sessao, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is None
+
+
+async def test_folga_de_relogio_entre_aprovacao_e_sessao(pg_pool, test_seller):
+    """Relógios do Postgres e do login diferentes: a sessão "nasce" segundos antes."""
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    async with pg_pool.acquire() as conn:
+        sessao = await conn.fetchval(
+            "INSERT INTO auth.sessions (user_id, created_at) "
+            "VALUES ($1, now() - interval '5 seconds') RETURNING id",
+            user_id,
+        )
+    await _aprovacao(pg_pool, user_id, "claude", minutos_antes=0)
+    token = _token(user_id, sessao, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is not None
+
+
+async def test_sessao_sem_data_de_criacao_nao_e_aprovada(pg_pool, test_seller):
+    """Em produção `created_at` aceita nulo: sem a hora, não há como provar."""
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    await _aprovacao(pg_pool, user_id, "claude", minutos_antes=1)
+    async with pg_pool.acquire() as conn:
+        sessao = await conn.fetchval(
+            "INSERT INTO auth.sessions (user_id, created_at) VALUES ($1, NULL) RETURNING id",
+            user_id,
+        )
+    token = _token(user_id, sessao, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is None
+
+
+async def test_aprovacao_de_outro_login_nao_serve(pg_pool, test_seller, outro_seller):
+    user_id, _ = test_seller
+    outro_login, _ = outro_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    await _aprovacao(pg_pool, outro_login, "claude", minutos_antes=1)
+    sessao = await _sessao(pg_pool, user_id)
+    token = _token(user_id, sessao, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is None
+
+
+# --------------------------------------------------------------------------
+# A aprovação pelo backend
+# --------------------------------------------------------------------------
+
+
+def _site(user_id, *, aal: str = "aal1") -> dict:
+    """Cabeçalho com o token da sessão do site (sem `client_id`)."""
+    claims = {
+        "sub": str(user_id),
+        "aud": "authenticated",
+        "exp": int(time.time()) + 3600,
+        "aal": aal,
+    }
+    return {"Authorization": f"Bearer {jwt.encode(claims, SEGREDO, algorithm='HS256')}"}
+
+
+async def _aprovacoes(pool, user_id) -> list[str]:
+    async with pool.acquire() as conn:
+        linhas = await conn.fetch(
+            "SELECT client_id FROM aprovacoes_de_ia WHERE user_id = $1", user_id
+        )
+    return [linha["client_id"] for linha in linhas]
+
+
+CLIENTE = "c4dd09c3-6067-43cd-99e3-59f51ecf0289"
+
+
+async def _pedido(pool, user_id, *, vencido: bool = False) -> str:
+    """Um pedido de autorização do Supabase, como o que chega à tela de consentimento."""
+    pedido = f"pedido-{uuid.uuid4().hex}"
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO auth.oauth_authorizations "
+            "(authorization_id, client_id, user_id, expires_at) "
+            "VALUES ($1, $2, $3, now() + make_interval(mins => $4))",
+            pedido,
+            uuid.UUID(CLIENTE),
+            user_id,
+            -1 if vencido else 10,
+        )
+    return pedido
+
+
+def _aprova(pedido: str, headers: dict):
+    with TestClient(app) as c:
+        return c.post(
+            "/conta/conexoes-ia/aprovacao", json={"authorization_id": pedido}, headers=headers
+        )
+
+
+async def test_aprovar_sem_o_codigo_e_recusado(pg_pool, test_seller):
+    """Quem tem só a senha não grava a prova (é a trava da decisão 7)."""
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    resp = _aprova(await _pedido(pg_pool, user_id), _site(user_id, aal="aal1"))
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["codigo"] == "segundo-fator"
+    assert await _aprovacoes(pg_pool, user_id) == []
+
+
+async def test_aprovar_com_o_codigo_grava_o_cliente_do_pedido(pg_pool, test_seller):
+    """O cliente sai do pedido no Supabase, e não do que o navegador manda."""
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    resp = _aprova(await _pedido(pg_pool, user_id), _site(user_id, aal="aal2"))
+    assert resp.status_code == 204
+    assert await _aprovacoes(pg_pool, user_id) == [CLIENTE]
+
+
+async def test_prova_gravada_abre_a_conexao_aal1(pg_pool, test_seller):
+    """Ponta a ponta: aprovar pela rota e conectar com o token `aal1` do Supabase."""
+    user_id, _ = test_seller
+    await _ativa_o_autenticador(pg_pool, user_id)
+    assert _aprova(await _pedido(pg_pool, user_id), _site(user_id, aal="aal2")).status_code == 204
+    sessao = await _sessao(pg_pool, user_id)
+    token = _token(user_id, sessao, cliente=CLIENTE, aal="aal1")
+    assert await mcp_conta.VerificadorSupabase().verify_token(token) is not None
+
+
+async def test_pedido_de_outro_login_nao_aprova(pg_pool, test_seller, outro_seller):
+    user_id, _ = test_seller
+    outro_login, _ = outro_seller
+    resp = _aprova(await _pedido(pg_pool, outro_login), _site(user_id, aal="aal2"))
+    assert resp.status_code == 404
+    assert await _aprovacoes(pg_pool, user_id) == []
+
+
+async def test_pedido_vencido_nao_aprova(pg_pool, test_seller):
+    user_id, _ = test_seller
+    resp = _aprova(await _pedido(pg_pool, user_id, vencido=True), _site(user_id, aal="aal2"))
+    assert resp.status_code == 404
+    assert await _aprovacoes(pg_pool, user_id) == []
+
+
+async def test_token_da_ia_nao_aprova_outro_cliente(pg_pool, test_seller):
+    """Um cliente conectado não se autoriza a abrir outro."""
+    user_id, _ = test_seller
+    sessao = await _sessao(pg_pool, user_id)
+    headers = {"Authorization": f"Bearer {_token(user_id, sessao, aal='aal2')}"}
+    resp = _aprova(await _pedido(pg_pool, user_id), headers)
+    assert resp.status_code == 401
+    assert await _aprovacoes(pg_pool, user_id) == []
 
 
 async def test_token_da_ia_nao_serve_na_api_rest(pg_pool, test_seller):

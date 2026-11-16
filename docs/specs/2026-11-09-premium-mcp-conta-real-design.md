@@ -54,8 +54,28 @@ caíram quando virou função paga; o terceiro caiu com o domínio próprio
    função é do Premium e aponta para a Assinatura, em vez de um erro técnico. O plano é lido a cada chamada: rebaixar corta
    na chamada seguinte, e subir libera sem reconectar. Termos não aceitos
    recebem o mesmo tipo de resposta, apontando para o aceite.
-7. **Segundo fator:** quem ativou o app autenticador precisa de token `aal2`,
-   a mesma regra do painel (`_claims_verificadas`).
+7. **Segundo fator:** quem ativou o app autenticador só conecta a IA
+   passando por ele. O token OAuth do Supabase nasce `aal1` mesmo quando a
+   aprovação veio de uma sessão `aal2` (medido na primeira conexão real,
+   2026-11-16), e a rota de aprovação do Supabase só exige login, não o
+   segundo fator (`internal/api/api.go` do `supabase/auth`): exigir `aal2`
+   no token barrava todo mundo, e aceitar `aal1` deixava quem tem só a senha
+   aprovar direto pela API. Por isso a aprovação passa pelo nosso backend
+   (decisão do Guilherme, opção 1, 2026-11-16): antes de aprovar, a tela
+   chama `POST /conta/conexoes-ia/aprovacao` com o pedido de autorização;
+   o backend exige `aal2` como o painel, lê o cliente do próprio pedido no
+   Supabase (`auth.oauth_authorizations`, vivo e do mesmo login, e não o que
+   o navegador manda) e grava a aprovação em `aprovacoes_de_ia` (migration
+   0027). Quem já tinha autorizado antes é aprovado sozinho pelo Supabase,
+   sem passar pelos botões: a tela grava a aprovação também nesse caminho,
+   antes de redirecionar. O MCP aceita o token de quem tem autenticador se
+   ele for `aal2` ou se houver aprovação do mesmo login e do mesmo cliente
+   feita até 15 minutos antes de a sessão do token nascer (com 1 minuto de
+   folga de relógio entre o Postgres e o servidor de login). Aprovação
+   antiga não serve para conexão nova: cada conexão precisa da sua. Risco
+   aceito: dentro desses 15 minutos, a aprovação não é consumida; abrir uma
+   segunda sessão do mesmo cliente nesse intervalo ainda exigiria a senha e
+   o retorno do próprio cliente.
 8. **Várias contas:** cada ferramenta ganha o parâmetro opcional `conta`: o
    apelido da loja no Mercado Livre, ou `todas` para a soma. Sem ele, é a
    principal. A regra de quem abre e de quem soma é a do painel

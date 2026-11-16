@@ -22,7 +22,7 @@ from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.db import get_pool
 from backend.deps import (
@@ -208,6 +208,51 @@ async def post_registro_de_acesso(
             await conn.execute(
                 "DELETE FROM registros_de_acesso WHERE hora < now() - interval '6 months 1 hour'"
             )
+
+
+class AprovacaoDeIa(BaseModel):
+    # O pedido de autorização que o Supabase mandou para a tela de
+    # consentimento. Texto com teto, porque quem manda é o navegador.
+    authorization_id: str = Field(min_length=1, max_length=255)
+
+
+@router.post("/conexoes-ia/aprovacao", status_code=204)
+async def post_aprovacao_de_ia(
+    corpo: AprovacaoDeIa, user_id: uuid.UUID = Depends(get_current_user_id)
+) -> None:
+    """A prova de que o vendedor aprovou o cliente de IA com o app autenticador.
+
+    A tela de consentimento chama isto antes de aprovar no Supabase, e também
+    quando o Supabase aprova sozinho quem já tinha autorizado antes. A trava é
+    a do `get_current_user_id`: de quem ativou o segundo fator, só sessão
+    `aal2` chega aqui, e o token da IA não entra. O MCP da conta confere esta
+    linha, porque o token do Supabase nasce `aal1` (spec
+    2026-11-09-premium-mcp-conta-real, decisão 7).
+
+    O cliente sai do pedido de autorização, e não do navegador: só vale pedido
+    vivo e deste login. Uma linha por aprovação: reaprovar não apaga a prova
+    da conexão anterior.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        cliente = await conn.fetchval(
+            """
+            SELECT client_id::text FROM auth.oauth_authorizations
+             WHERE authorization_id = $1 AND expires_at > now()
+               AND (user_id IS NULL OR user_id = $2)
+            """,
+            corpo.authorization_id,
+            user_id,
+        )
+        if cliente is None:
+            raise recusa(
+                404, "autorizacao-invalida", "Pedido de autorização vencido ou de outra conta"
+            )
+        await conn.execute(
+            "INSERT INTO aprovacoes_de_ia (user_id, client_id) VALUES ($1, $2)",
+            user_id,
+            cliente,
+        )
 
 
 async def _grava_aceite(pool, seller_id: uuid.UUID, versao: str, request: Request) -> None:
