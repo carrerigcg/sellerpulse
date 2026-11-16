@@ -1,7 +1,8 @@
 # Premium: MCP com a conta real
 
-Estado: decidido em 2026-11-16 (opções 1.1, 2 e 3 abaixo); em implementação
-na branch `feat/premium-mcp-conta`. Função 4 do Premium
+Estado: no ar desde 2026-11-16 (PR #60, `7349dac`; migration 0026 aplicada).
+Falta a prova com o token real, conectado no Claude (ver "Prova esperada").
+O Premium segue fora da vitrine até o PR seguinte. Função 4 do Premium
 (`docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`, etapa 11).
 
 ## O pedido
