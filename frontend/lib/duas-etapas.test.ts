@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { codigoValido, faltaOCodigo } from "./duas-etapas";
+import { EMISSOR_DO_APP_AUTENTICADOR, codigoValido, faltaOCodigo } from "./duas-etapas";
+
+describe("EMISSOR_DO_APP_AUTENTICADOR", () => {
+  it("o app autenticador mostra o domínio próprio, nunca o da Vercel", () => {
+    expect(EMISSOR_DO_APP_AUTENTICADOR).toBe("usesellerpulse.com");
+  });
+});
 
 describe("faltaOCodigo", () => {
   it("quem ativou o app e só digitou a senha precisa do código", () => {

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { codigoValido } from "@/lib/duas-etapas";
+import { EMISSOR_DO_APP_AUTENTICADOR, codigoValido } from "@/lib/duas-etapas";
 import {
   type ContatoSalvo,
   formataTelefone,
@@ -225,6 +225,7 @@ function DuasEtapas({ fator, aoMudar }: { fator: string | null; aoMudar: () => P
     const { data, error } = await supabase.auth.mfa.enroll({
       factorType: "totp",
       friendlyName: "App autenticador",
+      issuer: EMISSOR_DO_APP_AUTENTICADOR,
     });
     setOcupado(false);
     if (error || !data) {
