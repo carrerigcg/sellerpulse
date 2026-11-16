@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { faltaOCodigo } from "@/lib/duas-etapas";
 
 /**
- * Protege /dashboard, /aceite e /assinar: sem sessão Supabase válida, redireciona para /login.
+ * Protege /dashboard, /aceite, /assinar e /oauth: sem sessão Supabase válida, redireciona para /login.
  *
  * @supabase/ssr@0.12.7 exige getAll/setAll (não get/set/remove) e o
  * `setAll` do server client recebe um segundo argumento `headers` com
@@ -73,5 +73,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/aceite", "/assinar/:path*"],
+  // `/oauth/consent`: autorizar um cliente de IA exige o login, e o
+  // `proximo` traz a pessoa de volta para a autorização depois de entrar.
+  matcher: ["/dashboard/:path*", "/aceite", "/assinar/:path*", "/oauth/:path*"],
 };

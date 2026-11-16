@@ -20,3 +20,11 @@ create table if not exists auth.mfa_factors (
     factor_type text not null,
     status      text not null
 );
+
+-- A sessão do Supabase Auth: o MCP da conta confere a cada chamada que a
+-- sessão do token ainda existe (desconectar corta na hora).
+create table if not exists auth.sessions (
+    id        uuid primary key default gen_random_uuid(),
+    user_id   uuid not null references auth.users(id) on delete cascade,
+    not_after timestamptz
+);

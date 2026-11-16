@@ -60,6 +60,11 @@ async def _claims_verificadas(pool: asyncpg.Pool, token: str) -> dict:
     docs/specs/2026-11-04-telefone-e-verificacao-em-duas-etapas-design.md).
     """
     claims = decode_supabase_jwt(token)
+    # Token emitido para um cliente de IA (OAuth do Supabase) só vale no MCP
+    # da conta, que é só leitura. Aqui ele gravaria custo e cancelaria a
+    # assinatura (spec 2026-11-09-premium-mcp-conta-real, decisão 4).
+    if claims.get("client_id"):
+        raise recusa(401, "token-de-ia", "Este acesso vale só para a conexão com a IA")
     if claims.get("aal") != "aal2":
         async with pool.acquire() as conn:
             tem_fator = await conn.fetchval(

@@ -31,4 +31,5 @@ export const FORA_DA_BUSCA = [
   "/redefinir-senha",
   "/esqueci-senha",
   "/demo/exportar",
+  "/oauth",
 ] as const;

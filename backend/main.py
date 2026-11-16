@@ -10,8 +10,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from mcp.server.auth.routes import create_protected_resource_routes
+from pydantic import AnyHttpUrl
+from starlette.routing import Route
 
-from backend import mcp_server
+from backend import mcp_conta, mcp_server
 from backend.db import close_pool, get_pool
 from backend.demo_refresh import regenera_demo_se_vencida
 from backend.logging_setup import configura_logging
@@ -130,7 +133,10 @@ async def lifespan(app: FastAPI):
     # `asyncio.all_tasks()` so lista tarefa pendente, entao o teste que confere
     # o agendamento passaria a ver zero. Subir o que serve requisicao primeiro e
     # agendar o trabalho de fundo depois tambem e a ordem mais honesta.
-    async with mcp_server.ciclo_de_vida(hosts=_MCP_HOSTS, origens=_MCP_ORIGENS):
+    async with (
+        mcp_server.ciclo_de_vida(hosts=_MCP_HOSTS, origens=_MCP_ORIGENS),
+        mcp_conta.ciclo_de_vida(hosts=_MCP_HOSTS, origens=_MCP_ORIGENS),
+    ):
         parar = asyncio.Event()
         tarefa: asyncio.Task | None = None
         if worker_habilitado():
@@ -213,4 +219,20 @@ def health() -> dict[str, str]:
 # O que e montado e um delegador estavel, nao o ASGI do MCP: o gerenciador de
 # sessao do SDK so aceita um `run()` por instancia, entao quem cria o ASGI e o
 # lifespan, uma vez por ciclo. Ver `backend/mcp_server.py`.
+#
+# O da conta real (Premium) vem ANTES: o mount de "/mcp" casaria com
+# "/mcp/conta" e o mandaria para a demo. O metadado do recurso protegido
+# (RFC 9728) mora na raiz, onde o cliente de IA o procura; dentro do mount ele
+# ficaria em /mcp/conta/.well-known e ninguem o acharia.
+app.router.routes.extend(
+    create_protected_resource_routes(
+        resource_url=AnyHttpUrl(mcp_conta.URL_DO_RECURSO),
+        authorization_servers=[AnyHttpUrl(mcp_conta.emissor())],
+        resource_name="SellerPulse",
+    )
+)
+app.router.routes.append(
+    Route("/mcp/conta", endpoint=mcp_conta.sem_barra, methods=["GET", "POST", "DELETE"])
+)
+app.mount("/mcp/conta", mcp_conta.delegador)
 app.mount("/mcp", mcp_server.delegador)

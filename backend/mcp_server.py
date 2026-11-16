@@ -157,6 +157,23 @@ async def _contexto() -> tuple[Any, uuid.UUID]:
     return pool, seller_id
 
 
+def periodo_anterior(de: str, ate: str) -> str:
+    """Inicio do periodo anterior de MESMA duracao, imediatamente antes.
+
+    E a mesma regra que `janelaAnterior` usa no frontend, entao tela e MCP
+    contam igual. `ate` e inclusivo; o fim do anterior e o proprio `de`.
+    """
+    dias = (date.fromisoformat(ate) - date.fromisoformat(de)).days + 1
+    return (date.fromisoformat(de) - timedelta(days=dias)).isoformat()
+
+
+def variacao(agora: float, antes: float) -> float | None:
+    # None, nao 0: sem base de comparacao, "0%" seria uma afirmacao falsa.
+    if antes == 0:
+        return None
+    return round((agora - antes) / antes * 100, 1)
+
+
 def _registros(df: pd.DataFrame) -> list[dict]:
     return df.to_dict(orient="records") if not df.empty else []
 
@@ -181,21 +198,11 @@ async def visao_geral(date_from: str | None = None, date_to: str | None = None) 
     pool, seller_id = await _contexto()
 
     atual = await fluxo_financeiro(pool, seller_id, de_q, ate_q)
-
-    # Periodo anterior de MESMA duracao, imediatamente antes — e a mesma regra
-    # que `janelaAnterior` usa no frontend, entao tela e MCP contam igual.
-    dias = (date.fromisoformat(ate) - date.fromisoformat(de)).days + 1
-    de_ant = (date.fromisoformat(de) - timedelta(days=dias)).isoformat()
+    de_ant = periodo_anterior(de, ate)
     anterior = await fluxo_financeiro(pool, seller_id, de_ant, de_q)
 
     def soma(df: pd.DataFrame, col: str) -> float:
         return round(float(df[col].sum()), 2) if not df.empty else 0.0
-
-    def variacao(agora: float, antes: float) -> float | None:
-        # None, nao 0: sem base de comparacao, "0%" seria uma afirmacao falsa.
-        if antes == 0:
-            return None
-        return round((agora - antes) / antes * 100, 1)
 
     campos = ("receita_bruta", "taxas_ml", "frete", "margem_contribuicao")
     agora = {c: soma(atual, c) for c in campos}

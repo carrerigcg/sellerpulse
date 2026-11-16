@@ -43,6 +43,9 @@ class Recurso(StrEnum):
     SYNC_SOB_DEMANDA = "sync-sob-demanda"
     # Margem negativa e anúncio parado, no Resumo. Só o Premium.
     ALERTAS = "alertas"
+    # Perguntar à IA sobre a própria loja, pelo MCP (`backend/mcp_conta.py`).
+    # Só o Premium.
+    MCP_CONTA = "mcp-conta"
 
 
 @dataclass(frozen=True)
@@ -90,7 +93,7 @@ PLANOS: dict[str, Plano] = {
     "exclusive": Plano(
         nome="exclusive",
         preco_mensal=Decimal("79.90"),
-        recursos=_TUDO - {Recurso.ALERTAS},
+        recursos=_TUDO - {Recurso.ALERTAS, Recurso.MCP_CONTA},
         dias_de_historico=180,
         produtos_na_abc=None,
     ),
