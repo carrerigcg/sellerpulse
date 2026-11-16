@@ -70,7 +70,7 @@ jobs:
             -w '\n%{http_code}' \
             -X POST \
             -H "X-Sync-Secret: ${SYNC_SECRET}" \
-            https://sellerpulse-049j.onrender.com/ml/sync-todos)
+            https://api.usesellerpulse.com/ml/sync-todos)
 
           corpo=$(echo "${resposta}" | head -n -1)
           status=$(echo "${resposta}" | tail -n 1)
@@ -99,6 +99,6 @@ jobs:
           for i in $(seq 1 10); do
             sleep 60
             codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
-              https://sellerpulse-049j.onrender.com/health || echo "000")
+              https://api.usesellerpulse.com/health || echo "000")
             echo "ping ${i}/10 -> ${codigo}"
           done

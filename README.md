@@ -12,7 +12,7 @@ Sem planilha, sem CSV, sem campo digitado à mão.
 ![PostgreSQL](https://img.shields.io/badge/postgres-17-336791.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-**[→ Demonstração navegável, sem cadastro](https://frontend-three-rosy-iwes33l1kk.vercel.app/demo)**
+**[→ Demonstração navegável, sem cadastro](https://usesellerpulse.com/demo)**
 
 ![SellerPulse](docs/img/web-landing.png)
 
@@ -185,7 +185,7 @@ sellerpulse/
 |---|---|
 | Conexão com conta real do Mercado Livre | ✅ em produção |
 | Importação de 6 meses + sincronização incremental | ✅ em produção |
-| Telas autenticadas e demonstração sem cadastro | ✅ [no ar](https://frontend-three-rosy-iwes33l1kk.vercel.app/demo) |
+| Telas autenticadas e demonstração sem cadastro | ✅ [no ar](https://usesellerpulse.com/demo) |
 | Custo de produto informado pelo vendedor | ✅ em produção |
 | Exportação em CSV com glossário das colunas | ✅ em produção |
 | Visitas e conversão por anúncio | ✅ em produção |

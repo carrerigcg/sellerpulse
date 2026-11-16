@@ -18,6 +18,23 @@ def test_health_check(monkeypatch):
     assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.parametrize("origem", ["https://usesellerpulse.com", "https://www.usesellerpulse.com"])
+def test_cors_aceita_o_dominio_proprio_sem_depender_da_env(monkeypatch, origem):
+    """Sem a origem no CORS, o registro de acesso do site para sem aviso.
+
+    Fica no default, e nao so no `CORS_ORIGINS` do Render: um env esquecido
+    num redeploy nao pode tirar o site do ar.
+    """
+    monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
+    monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    with TestClient(app) as client:
+        r = client.options(
+            "/health",
+            headers={"Origin": origem, "Access-Control-Request-Method": "GET"},
+        )
+    assert r.headers.get("access-control-allow-origin") == origem
+
+
 async def test_lifespan_sobe_o_worker_por_default(monkeypatch, pg_pool):
     monkeypatch.setenv("DATABASE_URL", TEST_DATABASE_URL)
     monkeypatch.setenv("TOKEN_ENCRYPTION_KEY", Fernet.generate_key().decode())

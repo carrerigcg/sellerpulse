@@ -82,7 +82,12 @@ def _lista_env(nome: str, padrao: list[str]) -> list[str]:
 # que se conserta com variavel de ambiente, sem redeploy de codigo.
 _MCP_HOSTS = _lista_env(
     "MCP_ALLOWED_HOSTS",
-    ["sellerpulse-049j.onrender.com", "localhost:*", "127.0.0.1:*"],
+    [
+        "api.usesellerpulse.com",
+        "sellerpulse-049j.onrender.com",
+        "localhost:*",
+        "127.0.0.1:*",
+    ],
 )
 _MCP_ORIGENS = _lista_env(
     "MCP_ALLOWED_ORIGINS",
@@ -171,6 +176,9 @@ app = FastAPI(title="SellerPulse API", lifespan=lifespan)
 # vem de CORS_ORIGINS (separada por virgula) somada aos defaults abaixo.
 _ORIGENS_PADRAO = [
     "http://localhost:3000",
+    "https://usesellerpulse.com",
+    "https://www.usesellerpulse.com",
+    # O endereço antigo da Vercel continua no ar: link salvo antes do domínio.
     "https://frontend-three-rosy-iwes33l1kk.vercel.app",
 ]
 _extras = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]

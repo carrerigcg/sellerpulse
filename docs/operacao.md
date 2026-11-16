@@ -336,60 +336,60 @@ código, salvo os dois arquivos marcados. Os endereços atuais
 **continuam funcionando** durante a troca: não apague nada antigo antes de
 conferir o novo.
 
-Convenção abaixo: `dominio.com.br` é o site, e `api.dominio.com.br` é o
-backend. Separar a API num subdomínio deixa o Render atrás do domínio sem
+O domínio é `usesellerpulse.com` (comprado em 2026-11-16, DNS na Vercel):
+o site fica nele, e o backend em `api.usesellerpulse.com`. Separar a API num subdomínio deixa o Render atrás do domínio sem
 mudar de hospedagem.
 
 ### 10.1 DNS e hospedagem
 
 1. **Vercel** (projeto `frontend`): Settings > Domains, adicionar
-   `dominio.com.br` e `www.dominio.com.br` (o `www` redireciona para o sem
+   `usesellerpulse.com` e `www.usesellerpulse.com` (o `www` redireciona para o sem
    `www`). Criar no registro de DNS os registros que a Vercel mostrar.
    Lembrete: o plano Hobby proíbe uso comercial; o Pro entra no dia de ligar
    `VENDAS_ABERTAS` (decisão de 2026-11-03).
 2. **Render** (serviço da API): Settings > Custom Domains, adicionar
-   `api.dominio.com.br` e criar o CNAME que ele mostrar. Esperar o
+   `api.usesellerpulse.com` e criar o CNAME que ele mostrar. Esperar o
    certificado ficar verde.
-3. Conferir: `https://api.dominio.com.br/health` devolve 200, e o site abre
-   em `https://dominio.com.br`.
+3. Conferir: `https://api.usesellerpulse.com/health` devolve 200, e o site abre
+   em `https://usesellerpulse.com`.
 
 ### 10.2 Variáveis de ambiente
 
 | Onde | Variável | Valor novo |
 | --- | --- | --- |
-| Vercel | `NEXT_PUBLIC_API_URL` | `https://api.dominio.com.br` |
-| Render | `FRONTEND_URL` | `https://dominio.com.br` (retorno do Asaas e do OAuth do ML) |
-| Render | `CORS_ORIGINS` | acrescentar `https://dominio.com.br,https://www.dominio.com.br`. **Sem isso, o registro de acesso para sem aviso** |
-| Render | `ML_REDIRECT_URI` | `https://api.dominio.com.br/ml/callback` (só depois do 10.3) |
-| Render | `MCP_ALLOWED_HOSTS` | a lista padrão mais `api.dominio.com.br` |
+| Vercel | `NEXT_PUBLIC_API_URL` | `https://api.usesellerpulse.com` |
+| Render | `FRONTEND_URL` | `https://usesellerpulse.com` (retorno do Asaas e do OAuth do ML) |
+| Render | `CORS_ORIGINS` | acrescentar `https://usesellerpulse.com,https://www.usesellerpulse.com`. **Sem isso, o registro de acesso para sem aviso** |
+| Render | `ML_REDIRECT_URI` | `https://api.usesellerpulse.com/ml/callback` (só depois do 10.3) |
+| Render | `MCP_ALLOWED_HOSTS` | a lista padrão mais `api.usesellerpulse.com` |
 
 `NEXT_PUBLIC_*` entra no build: depois de trocar, refazer o deploy da Vercel.
 
 ### 10.3 Serviços de fora
 
 1. **Mercado Livre** (developers.mercadolivre.com.br, app do SellerPulse):
-   acrescentar a URI `https://api.dominio.com.br/ml/callback` **sem tirar a
+   acrescentar a URI `https://api.usesellerpulse.com/ml/callback` **sem tirar a
    antiga**, e só então trocar o `ML_REDIRECT_URI` do Render. Conferir
    conectando uma conta.
 2. **Supabase** (Authentication > URL Configuration): `Site URL` passa a ser
-   `https://dominio.com.br`; em `Redirect URLs`, acrescentar
-   `https://dominio.com.br/**`.
+   `https://usesellerpulse.com`; em `Redirect URLs`, acrescentar
+   `https://usesellerpulse.com/**`.
 3. **Asaas**: trocar a URL do webhook para
-   `https://api.dominio.com.br/pagamentos/webhook`, com o mesmo token
+   `https://api.usesellerpulse.com/pagamentos/webhook`, com o mesmo token
    (`ASAAS_WEBHOOK_TOKEN`). Conferir no painel do Asaas que o envio de teste
    volta 200.
 4. **cron-job.org**: trocar a URL do job para
-   `https://api.dominio.com.br/ml/sync-todos`. O cabeçalho continua o mesmo.
+   `https://api.usesellerpulse.com/ml/sync-todos`. O cabeçalho continua o mesmo.
 5. **Arquivos do repositório** (por PR): a URL em
    `.github/workflows/sincronizacao-agendada.yml` e o default de
    `_ORIGENS_PADRAO`/`_MCP_HOSTS` em `backend/main.py`.
 
 ### 10.4 E-mail (Resend)
 
-1. Criar a conta no Resend e o domínio `dominio.com.br`. Criar no DNS os
+1. Criar a conta no Resend e o domínio `usesellerpulse.com`. Criar no DNS os
    registros de SPF, DKIM e DMARC que ele mostrar, e esperar "Verified".
 2. Supabase > Authentication > Emails > SMTP Settings: ligar o SMTP próprio
-   com os dados do Resend. Remetente sugerido: `nao-responda@dominio.com.br`,
+   com os dados do Resend. Remetente sugerido: `nao-responda@usesellerpulse.com`,
    nome `SellerPulse`.
 3. Trocar o modelo "Reset Password" pelo de `token_hash`, que está pronto em
    `docs/specs/2026-11-04-esqueci-a-senha-design.md`. O código já aceita os
