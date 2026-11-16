@@ -108,7 +108,11 @@ No Supabase, Authentication > OAuth Server:
   `aud: authenticated`, e se herda o `aal2` de quem tem app autenticador.
   Os testes montam o token à mão com essas claims; só a conexão real prova.
 - Na API de dados, depois da 0026: com `client_id`, zero linhas e escrita
-  recusada; sem ele, a sessão do site como antes.
+  recusada; sem ele, a sessão do site como antes. **Provado em produção em
+  2026-11-16** (transação desfeita, papel `authenticated`): antes da 0026, o
+  token com `client_id` lia 1.759 pedidos; depois, 0 pedidos, 0 custos, 0
+  lojas, update em 0 linhas e insert em `product_costs` recusado pela RLS; a
+  sessão sem `client_id` continuou com 1.759 pedidos e 1 loja.
 - Conectado de verdade no Claude do Guilherme, com os números conferidos
   contra o painel no mesmo período.
 
