@@ -223,6 +223,21 @@ export async function recursosDoLogin(): Promise<string[] | null> {
   }
 }
 
+/**
+ * Grava, antes de aprovar no Supabase, que o vendedor autorizou o cliente de IA
+ * com a sessão do site. O backend só aceita sessão que passou pelo app
+ * autenticador, e o MCP só abre a conexão com esta prova: o token do Supabase
+ * não carrega o segundo fator (spec 2026-11-09-premium-mcp-conta-real, decisão 7).
+ */
+export async function registrarAprovacaoDeIa(pedido: string): Promise<void> {
+  const resposta = await fetch(`${BASE}/conta/conexoes-ia/aprovacao`, {
+    method: "POST",
+    headers: { ...(await autorizacao()), "Content-Type": "application/json" },
+    body: JSON.stringify({ authorization_id: pedido }),
+  });
+  if (!resposta.ok) throw new Error(`aprovacao-de-ia: ${resposta.status}`);
+}
+
 /** O plano já chegou? Usado na volta do pagamento, enquanto o webhook não vem. */
 export async function temPlanoAtivo(): Promise<boolean> {
   const resposta = await fetch(`${BASE}/conta/acesso`, {

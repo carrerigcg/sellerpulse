@@ -10,12 +10,13 @@ import {
   type SituacaoDoPlano,
   situacaoDoPlano,
 } from "@/lib/conexoes-ia";
-import { recursosDoLogin } from "@/lib/ml";
+import { recursosDoLogin, registrarAprovacaoDeIa } from "@/lib/ml";
 import { createClient } from "@/lib/supabase/client";
 
 type Estado =
   | { tipo: "carregando" }
   | { tipo: "invalido" }
+  | { tipo: "falhou" }
   | {
       tipo: "pronto";
       id: string;
@@ -58,8 +59,16 @@ export default function ConsentimentoPage() {
         setEstado({ tipo: "invalido" });
         return;
       }
-      // Já autorizado antes: o Supabase devolve só para onde voltar.
+      // Já autorizado antes: o Supabase aprovou sozinho e devolve só para onde
+      // voltar. A prova do app autenticador é gravada aqui também, senão a
+      // reconexão de quem tem o autenticador cai em recusa no MCP.
       if (!("authorization_id" in data)) {
+        try {
+          await registrarAprovacaoDeIa(id);
+        } catch {
+          setEstado({ tipo: "falhou" });
+          return;
+        }
         window.location.href = data.redirect_url;
         return;
       }
@@ -78,6 +87,18 @@ export default function ConsentimentoPage() {
     if (estado.tipo !== "pronto") return;
     setErro(null);
     setDecidindo(autoriza ? "autorizar" : "recusar");
+    if (autoriza) {
+      // A prova do app autenticador fica no nosso backend, porque o token que
+      // o Supabase entrega ao cliente não a carrega. Sem ela, o MCP recusaria
+      // a conexão de quem tem o autenticador: melhor parar aqui, com aviso.
+      try {
+        await registrarAprovacaoDeIa(estado.id);
+      } catch {
+        setDecidindo(null);
+        setErro("Não foi possível autorizar agora. Recarregue a página e tente de novo.");
+        return;
+      }
+    }
     const supabase = createClient();
     const { data, error } = autoriza
       ? await supabase.auth.oauth.approveAuthorization(estado.id, { skipBrowserRedirect: true })
@@ -107,6 +128,26 @@ export default function ConsentimentoPage() {
           <p className="mt-6 text-sm">
             Volte ao aplicativo de IA e peça para conectar o SellerPulse de novo.
           </p>
+        </>
+      )}
+
+      {estado.tipo === "falhou" && (
+        <>
+          <PageTitle
+            title="Não foi possível conectar agora"
+            subtitle="A autorização não foi concluída."
+          />
+          <p className="mt-6 text-sm">
+            Recarregue esta página. Se continuar, volte ao aplicativo de IA e peça para
+            conectar o SellerPulse de novo.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className={`${BOTAO} mt-6 border border-line hover:bg-surface`}
+          >
+            Recarregar
+          </button>
         </>
       )}
 

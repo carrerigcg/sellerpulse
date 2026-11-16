@@ -26,5 +26,20 @@ create table if not exists auth.mfa_factors (
 create table if not exists auth.sessions (
     id        uuid primary key default gen_random_uuid(),
     user_id   uuid not null references auth.users(id) on delete cascade,
-    not_after timestamptz
+    not_after timestamptz,
+    -- A aprovacao com o app autenticador vale so para a sessao que nasceu
+    -- logo depois dela (`aprovacoes_de_ia`, 0027).
+    -- Como em produção: aceita nulo e o GoTrue preenche (aqui, o default).
+    created_at timestamptz default now()
+);
+
+-- O pedido de autorização do servidor OAuth do Supabase, só com as colunas
+-- que a aprovação com o app autenticador lê. Existe até o cliente trocar o
+-- código pelo token; depois o Supabase apaga.
+create table if not exists auth.oauth_authorizations (
+    id               uuid primary key default gen_random_uuid(),
+    authorization_id text not null,
+    client_id        uuid not null,
+    user_id          uuid references auth.users(id) on delete cascade,
+    expires_at       timestamptz not null default now() + interval '10 minutes'
 );

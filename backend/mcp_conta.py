@@ -28,6 +28,7 @@ import uuid
 from collections import defaultdict, deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from typing import Any
 
 import pandas as pd
@@ -54,6 +55,18 @@ URL_DO_RECURSO = os.environ.get("MCP_CONTA_URL", "https://api.usesellerpulse.com
 
 # Teto de chamadas de ferramenta por login e por hora (decisão 12 da spec).
 LIMITE_POR_HORA = 300
+
+# Quanto antes de a sessão do token nascer a aprovação com o app autenticador
+# ainda vale (decisão 7). Na conexão real, a sessão nasceu 1 s depois da
+# aprovação; a folga cobre quem demora a voltar ao Claude, e mais que isso
+# seria deixar a aprovação de um dia servir para a conexão do outro.
+JANELA_DA_APROVACAO = timedelta(minutes=15)
+
+# A aprovação é gravada pelo relógio do Postgres, e a sessão pelo do servidor
+# de login do Supabase. A folga evita barrar a conexão legítima por diferença
+# entre os dois; uma sessão que já existia antes da aprovação (minutos ou
+# horas) continua fora.
+FOLGA_DO_RELOGIO = timedelta(minutes=1)
 
 _URL_ASSINATURA = "https://usesellerpulse.com/dashboard/assinatura"
 _URL_ACEITE = "https://usesellerpulse.com/aceite"
@@ -115,16 +128,28 @@ class VerificadorSupabase:
                              WHERE id = $1 AND user_id = $2
                                AND (not_after IS NULL OR not_after > now())) AS viva,
                     EXISTS (SELECT 1 FROM auth.mfa_factors
-                             WHERE user_id = $2 AND status = 'verified') AS tem_fator
+                             WHERE user_id = $2 AND status = 'verified') AS tem_fator,
+                    EXISTS (SELECT 1 FROM aprovacoes_de_ia a
+                              JOIN auth.sessions s ON s.id = $1
+                             WHERE a.user_id = $2 AND a.client_id = $3
+                               AND a.aprovado_em <= s.created_at + $5::interval
+                               AND a.aprovado_em > s.created_at - $4::interval)
+                        AS aprovado_com_codigo
                 """,
                 uuid.UUID(str(sessao)),
                 uuid.UUID(str(sub)),
+                str(cliente),
+                JANELA_DA_APROVACAO,
+                FOLGA_DO_RELOGIO,
             )
-        # Sessão apagada é conexão desconectada (decisão 5). E quem ativou o
-        # app autenticador precisa ter passado por ele (decisão 7).
+        # Sessão apagada é conexão desconectada (decisão 5).
         if not linha["viva"]:
             return None
-        if linha["tem_fator"] and claims.get("aal") != "aal2":
+        # Quem ativou o app autenticador precisa ter passado por ele (decisão
+        # 7). O token do Supabase nasce `aal1` mesmo assim, então a prova é a
+        # aprovação que o backend gravou com sessão `aal2`, logo antes de a
+        # sessão deste token nascer.
+        if linha["tem_fator"] and claims.get("aal") != "aal2" and not linha["aprovado_com_codigo"]:
             return None
         return AccessToken(
             token=token,
