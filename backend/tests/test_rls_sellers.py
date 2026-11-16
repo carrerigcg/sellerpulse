@@ -31,7 +31,7 @@ NOME = r'(?:"(?P<nome_aspas>[^"]+)"|(?P<nome>\w+))'
 TABELA = r'(?:"?public"?\.)?"?sellers\b"?'
 
 CRIA = re.compile(
-    rf"create\s+policy\s+{NOME}\s+on\s+{TABELA}(?:\s+as\s+\w+)?(?:\s+for\s+(?P<cmd>\w+))?",
+    rf"create\s+policy\s+{NOME}\s+on\s+{TABELA}(?:\s+as\s+(?P<modo>\w+))?(?:\s+for\s+(?P<cmd>\w+))?",
     re.IGNORECASE,
 )
 APAGA = re.compile(
@@ -59,6 +59,11 @@ def policies_de_sellers(arquivos: list[tuple[str, str]]) -> dict[str, str]:
         eventos += [(m.start(), "apaga", m) for m in APAGA.finditer(sql)]
         for _, tipo, m in sorted(eventos, key=lambda e: e[0]):
             if tipo == "cria":
+                # `as restrictive` so tira acesso (entra como um E com as
+                # permissivas): nunca deixa ninguem escrever. A 0026 usa uma
+                # `for all` restritiva para fechar `sellers` ao token da IA.
+                if (m["modo"] or "").lower() == "restrictive":
+                    continue
                 vivas[_nome(m)] = (m["cmd"] or "all").lower()
             else:
                 vivas.pop(_nome(m), None)
@@ -91,6 +96,14 @@ def test_nome_com_espaco_e_tabela_qualificada_entre_aspas():
     }
     drop = 'drop policy "Enable update for users based on user_id" on "public"."sellers";'
     assert policies_de_sellers([("0002_x.sql", sql), ("0015_x.sql", drop)]) == {}
+
+
+def test_policy_restritiva_nao_concede_escrita():
+    """Restritiva so restringe; a permissiva `for all`, com ou sem `as`, conta."""
+    restritiva = "create policy r on sellers as restrictive for all using (true);"
+    permissiva = "create policy p on sellers as permissive for all using (true);"
+    assert policies_de_sellers([("0026_x.sql", restritiva)]) == {}
+    assert policies_de_sellers([("0026_x.sql", permissiva)]) == {"p": "all"}
 
 
 def test_nome_com_hifen_entre_aspas():
