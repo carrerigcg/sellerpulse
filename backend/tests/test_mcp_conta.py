@@ -335,6 +335,20 @@ async def test_pedido_de_outro_login_nao_aprova(pg_pool, test_seller, outro_sell
     assert await _aprovacoes(pg_pool, user_id) == []
 
 
+async def test_pedido_ainda_sem_dono_aprova(pg_pool, test_seller):
+    """Na primeira conexão, nossa rota roda antes de o Supabase ligar o pedido ao
+    login. A linha gravada é sempre do login do token, então isso não abre nada."""
+    user_id, _ = test_seller
+    pedido = await _pedido(pg_pool, user_id)
+    async with pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE auth.oauth_authorizations SET user_id = NULL WHERE authorization_id = $1",
+            pedido,
+        )
+    assert _aprova(pedido, _site(user_id, aal="aal2")).status_code == 204
+    assert await _aprovacoes(pg_pool, user_id) == [CLIENTE]
+
+
 async def test_pedido_vencido_nao_aprova(pg_pool, test_seller):
     user_id, _ = test_seller
     resp = _aprova(await _pedido(pg_pool, user_id, vencido=True), _site(user_id, aal="aal2"))
