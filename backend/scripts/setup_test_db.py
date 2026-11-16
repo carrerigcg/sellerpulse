@@ -17,8 +17,8 @@ e `aceites_de_termos`) `0018_cobranca.sql` (prazo do acesso, `checkouts` e
 (so dado), `0023_varias_contas_por_usuario.sql`,
 `0024_indice_dos_backfills_concluidos.sql` e
 `0025_indice_da_fila_por_vendedor.sql`. As migrations 0002, 0003,
-0005, 0009, 0011, 0013, 0015, 0017, 0020 NAO sao aplicadas:
-dependem de `auth.uid()`, funcao exclusiva do ambiente Supabase (a 0015 so
+0005, 0009, 0011, 0013, 0015, 0017, 0020, 0026 NAO sao aplicadas:
+dependem de `auth.uid()` ou `auth.jwt()`, funcoes exclusivas do ambiente Supabase (a 0015 so
 apaga uma policy da 0002, que aqui nao existe). O isolamento entre tenants que os testes exercitam e o filtro
 explicito por `seller_id` nas queries, nao a RLS.
 

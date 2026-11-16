@@ -206,6 +206,23 @@ export async function cancelarAssinatura(): Promise<void> {
   }
 }
 
+/**
+ * Os recursos do plano do login, ou `null` sem resposta (sem plano, termos
+ * pendentes, backend fora). Usado na tela de autorizar um cliente de IA.
+ */
+export async function recursosDoLogin(): Promise<string[] | null> {
+  try {
+    const resposta = await fetch(`${BASE}/conta/acesso`, {
+      headers: await autorizacao(),
+      cache: "no-store",
+    });
+    if (!resposta.ok) return null;
+    return ((await resposta.json()) as { recursos?: string[] }).recursos ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** O plano já chegou? Usado na volta do pagamento, enquanto o webhook não vem. */
 export async function temPlanoAtivo(): Promise<boolean> {
   const resposta = await fetch(`${BASE}/conta/acesso`, {

@@ -15,7 +15,8 @@ export type Recurso =
   | "cohort"
   | "exportar"
   | "sync-sob-demanda"
-  | "alertas";
+  | "alertas"
+  | "mcp-conta";
 
 export type NomeDoPlano = "essencial" | "exclusive" | "premium";
 
