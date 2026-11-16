@@ -124,6 +124,17 @@ async def test_desconectar_corta_na_chamada_seguinte(pg_pool, test_seller):
     assert await mcp_conta.VerificadorSupabase().verify_token(token) is None
 
 
+async def test_sessao_vencida_nao_entra(pg_pool, test_seller):
+    user_id, _ = test_seller
+    async with pg_pool.acquire() as conn:
+        sessao = await conn.fetchval(
+            "INSERT INTO auth.sessions (user_id, not_after) "
+            "VALUES ($1, now() - interval '1 minute') RETURNING id",
+            user_id,
+        )
+    assert await mcp_conta.VerificadorSupabase().verify_token(_token(user_id, sessao)) is None
+
+
 async def test_quem_ativou_o_app_autenticador_precisa_do_codigo(pg_pool, test_seller):
     user_id, _ = test_seller
     sessao = await _sessao(pg_pool, user_id)
@@ -210,6 +221,16 @@ async def test_fora_do_premium_a_resposta_aponta_a_assinatura(pg_pool, test_sell
     token = _token(user_id, await _sessao(pg_pool, user_id))
 
     with pytest.raises(ValueError, match="Premium"):
+        await _como(token, "visao_geral")
+
+
+async def test_termos_pendentes_apontam_o_aceite(pg_pool, test_seller):
+    user_id, seller_id = test_seller
+    async with pg_pool.acquire() as conn:
+        await conn.execute("DELETE FROM aceites_de_termos WHERE seller_id = $1", seller_id)
+    token = _token(user_id, await _sessao(pg_pool, user_id))
+
+    with pytest.raises(ValueError, match="aceite"):
         await _como(token, "visao_geral")
 
 

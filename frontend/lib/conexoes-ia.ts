@@ -10,9 +10,36 @@
 /** O endereço que o vendedor cola no Claude para conectar a própria loja. */
 export const ENDERECO_DO_MCP = "https://api.usesellerpulse.com/mcp/conta";
 
-/** O plano deixa autorizar? Sem resposta do acesso, não: o servidor recusaria. */
-export function podeConectarIa(recursos: readonly string[] | null | undefined): boolean {
-  return recursos?.includes("mcp-conta") ?? false;
+export type SituacaoDoPlano = "liberado" | "fora-do-plano" | "sem-resposta";
+
+/**
+ * O plano deixa autorizar? `null` é "o servidor não respondeu" (fora,
+ * acordando), e não "fora do plano": quem não tem plano recebe a lista vazia.
+ * Sem resposta, a tela não autoriza nem recusa: pede para tentar de novo.
+ */
+export function situacaoDoPlano(recursos: readonly string[] | null | undefined): SituacaoDoPlano {
+  if (recursos == null) return "sem-resposta";
+  return recursos.includes("mcp-conta") ? "liberado" : "fora-do-plano";
+}
+
+// Para onde o acesso vai depois de autorizar. Quem registra o cliente escolhe
+// o nome ("Claude") e o endereço de retorno; é o retorno que diz quem recebe
+// o acesso. Um aplicativo no próprio computador (Claude Desktop, Claude Code)
+// volta por localhost, que alguém de fora não recebe.
+const RETORNOS_CONHECIDOS = ["claude.ai", "claude.com", "chatgpt.com", "openai.com"];
+const LOCAIS = ["localhost", "127.0.0.1", "[::1]"];
+
+export function destinoDoRetorno(uri: string): { host: string | null; conhecido: boolean } {
+  let host: string;
+  try {
+    host = new URL(uri).hostname;
+  } catch {
+    return { host: null, conhecido: false };
+  }
+  const conhecido =
+    LOCAIS.includes(host) ||
+    RETORNOS_CONHECIDOS.some((dominio) => host === dominio || host.endsWith(`.${dominio}`));
+  return { host, conhecido };
 }
 
 /** O nome que o cliente deu ao se registrar, que pode vir vazio. */

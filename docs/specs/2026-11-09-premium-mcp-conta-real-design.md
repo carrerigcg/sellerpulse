@@ -37,15 +37,20 @@ caíram quando virou função paga; o terceiro caiu com o domínio próprio
    igual ao da sessão do site, com a claim `client_id` a mais. Sem trava, ele
    chamaria a API inteira: gravar custo, sincronizar, cancelar a assinatura.
    A API REST recusa token com `client_id` (401), e o `/mcp/conta` recusa
-   token **sem** `client_id`: a sessão do site também não serve lá.
+   token **sem** `client_id`: a sessão do site também não serve lá. A API de
+   dados do próprio Supabase (PostgREST) também aceitaria o token, com as
+   policies `for all` das tabelas da loja: a migration 0026 fecha todas as
+   tabelas de tenant para token com `client_id` (`as restrictive`, sem mexer
+   na sessão do site). O front não usa a API de dados.
 5. **Desconectar corta na hora.** O `revokeGrant` do Supabase apaga a sessão
    e o token de renovação, mas o token de acesso já emitido valeria até
    vencer (1 hora). A cada chamada, o servidor confere que a `session_id` do
    token ainda existe em `auth.sessions`; desconectada, a chamada seguinte já
    é recusada.
-6. **Só Premium** (`Recurso.MCP_CONTA`). Outro plano conecta, mas cada
-   ferramenta responde que a função é do Premium e aponta para a Assinatura,
-   em vez de um erro técnico. O plano é lido a cada chamada: rebaixar corta
+6. **Só Premium** (`Recurso.MCP_CONTA`). Fora do Premium a tela de
+   consentimento não oferece Autorizar (decisão 14). Quem conectou e depois
+   saiu do Premium continua conectado, mas cada ferramenta responde que a
+   função é do Premium e aponta para a Assinatura, em vez de um erro técnico. O plano é lido a cada chamada: rebaixar corta
    na chamada seguinte, e subir libera sem reconectar. Termos não aceitos
    recebem o mesmo tipo de resposta, apontando para o aceite.
 7. **Segundo fator:** quem ativou o app autenticador precisa de token `aal2`,
@@ -73,7 +78,13 @@ caíram quando virou função paga; o terceiro caiu com o domínio próprio
     para o login e volta), mostra o nome do cliente e o que ele vai poder
     fazer ("ler os números da sua loja, sem alterar nada"), com Autorizar e
     Recusar. Fora do Premium, a tela diz isso e só oferece Recusar e o link
-    da Assinatura.
+    da Assinatura. Sem resposta do servidor, a tela não diz "fora do plano":
+    pede para recarregar, sem recusar.
+15. **A tela mostra para onde o acesso vai.** O registro de cliente é aberto,
+    e quem registra escolhe o nome: qualquer um registra um "Claude" com
+    retorno no próprio domínio e manda o link ao vendedor. A tela mostra o
+    host do endereço de retorno e o e-mail do login, e avisa quando o retorno
+    não é do Claude, do ChatGPT ou do próprio computador (localhost).
 
 ## O que o Guilherme configura (produção, com o ok dele)
 
@@ -93,6 +104,11 @@ No Supabase, Authentication > OAuth Server:
 - Sessão apagada: a chamada seguinte recusa.
 - Plano rebaixado: a chamada seguinte responde "só no Premium".
 - Limite: a 301ª chamada da hora é recusada.
+- No token real do Supabase: que ele traz `client_id`, `session_id` e
+  `aud: authenticated`, e se herda o `aal2` de quem tem app autenticador.
+  Os testes montam o token à mão com essas claims; só a conexão real prova.
+- Na API de dados, depois da 0026: com `client_id`, zero linhas e escrita
+  recusada; sem ele, a sessão do site como antes.
 - Conectado de verdade no Claude do Guilherme, com os números conferidos
   contra o painel no mesmo período.
 

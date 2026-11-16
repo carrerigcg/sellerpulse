@@ -24,7 +24,7 @@ const BOTAO =
 export function ConexoesDeIa() {
   const [estado, setEstado] = useState<Estado>({ tipo: "carregando" });
   const [desligando, setDesligando] = useState<string | null>(null);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<{ texto: string; erro: boolean } | null>(null);
   const titulo = useRef<HTMLHeadingElement>(null);
 
   const carrega = useCallback(async () => {
@@ -57,10 +57,10 @@ export function ConexoesDeIa() {
     });
     setDesligando(null);
     if (error) {
-      setAviso(`Não foi possível desconectar ${conexao.nome}. Tente de novo.`);
+      setAviso({ texto: `Não foi possível desconectar ${conexao.nome}. Tente de novo.`, erro: true });
       return;
     }
-    setAviso(`${conexao.nome} foi desconectado.`);
+    setAviso({ texto: `${conexao.nome} foi desconectado.`, erro: false });
     await carrega();
     requestAnimationFrame(() => titulo.current?.focus());
   }
@@ -79,8 +79,8 @@ export function ConexoesDeIa() {
         Os assistentes de IA que você autorizou a ler os números da sua loja. Desconectar corta
         o acesso na hora.
       </p>
-      <p role="status" className="mt-2 text-sm">
-        {aviso}
+      <p role="status" className={`mt-2 text-sm ${aviso?.erro ? "text-negative" : ""}`}>
+        {aviso?.texto}
       </p>
 
       {estado.tipo === "carregando" && <p className="mt-3 text-sm text-muted">Carregando…</p>}

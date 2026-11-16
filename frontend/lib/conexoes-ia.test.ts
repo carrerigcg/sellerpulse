@@ -1,17 +1,57 @@
 import { describe, expect, it } from "vitest";
 
-import { dataDaAutorizacao, ENDERECO_DO_MCP, nomeDoCliente, podeConectarIa } from "./conexoes-ia";
+import {
+  dataDaAutorizacao,
+  destinoDoRetorno,
+  ENDERECO_DO_MCP,
+  nomeDoCliente,
+  situacaoDoPlano,
+} from "./conexoes-ia";
 
-describe("podeConectarIa", () => {
+describe("situacaoDoPlano", () => {
   it("só o plano com o recurso autoriza", () => {
-    expect(podeConectarIa(["alertas", "mcp-conta"])).toBe(true);
-    expect(podeConectarIa(["alertas", "clientes"])).toBe(false);
+    expect(situacaoDoPlano(["alertas", "mcp-conta"])).toBe("liberado");
+    expect(situacaoDoPlano(["alertas", "clientes"])).toBe("fora-do-plano");
+    expect(situacaoDoPlano([])).toBe("fora-do-plano");
   });
 
-  it("sem resposta do acesso, não autoriza", () => {
-    // Na dúvida, a tela de consentimento não oferece o botão: o servidor
-    // recusaria a chamada de qualquer jeito, e o vendedor ficaria sem saber.
-    expect(podeConectarIa(null)).toBe(false);
+  it("sem resposta do servidor não é o mesmo que fora do plano", () => {
+    // Backend fora ou acordando: dizer "o seu plano não inclui" a um assinante
+    // do Premium seria falso. Ausência não é negativa.
+    expect(situacaoDoPlano(null)).toBe("sem-resposta");
+  });
+});
+
+describe("destinoDoRetorno", () => {
+  it("o Claude e o ChatGPT são reconhecidos", () => {
+    expect(destinoDoRetorno("https://claude.ai/api/mcp/auth_callback")).toEqual({
+      host: "claude.ai",
+      conhecido: true,
+    });
+    expect(destinoDoRetorno("https://chatgpt.com/connector_platform_oauth_redirect").conhecido).toBe(
+      true,
+    );
+  });
+
+  it("um aplicativo neste computador é reconhecido", () => {
+    expect(destinoDoRetorno("http://localhost:33418/callback")).toEqual({
+      host: "localhost",
+      conhecido: true,
+    });
+  });
+
+  it("um nome parecido não engana", () => {
+    // Quem registra o cliente escolhe o nome ("Claude") e o retorno. É o
+    // retorno que diz para quem vai o acesso.
+    expect(destinoDoRetorno("https://claude.ai.golpe.dev/cb")).toEqual({
+      host: "claude.ai.golpe.dev",
+      conhecido: false,
+    });
+    expect(destinoDoRetorno("https://naoclaude.ai/cb").conhecido).toBe(false);
+  });
+
+  it("retorno inválido não é reconhecido", () => {
+    expect(destinoDoRetorno("nada")).toEqual({ host: null, conhecido: false });
   });
 });
 
