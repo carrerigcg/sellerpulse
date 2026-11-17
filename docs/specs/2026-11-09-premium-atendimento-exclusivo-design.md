@@ -2,7 +2,7 @@
 
 Estado: decidido o conteúdo e o horário (2026-11-09) e os dias (segunda a
 sábado, 2026-11-17). Entra na vitrine e nos Termos junto com a volta do
-Premium à venda. Era a "decisão D" do plano
+Premium à venda (spec `2026-11-17-premium-de-volta-a-venda`). Era a "decisão D" do plano
 `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## O que é
@@ -40,8 +40,6 @@ Linha de apoio (abaixo dos itens, ou no "o que vem no Premium"):
 
 ## Pendências
 
-- O número do WhatsApp: o site e os Termos (seção 16) já mostram
-  (11) 99234-4633 desde 2026-10-30; falta o Guilherme confirmar que o
-  atendimento do Premium é nesse mesmo número.
-- Texto nos Termos: o que o atendimento cobre e o que não cobre, sem prazo de
-  resposta prometido enquanto ele não for medido.
+Nenhuma. O número é o da seção 16 dos Termos, (11) 99234-4633 (confirmado
+em 2026-11-17), e a cláusula entrou na seção 9 dos Termos `2026-11-v2`
+(spec `2026-11-17-premium-de-volta-a-venda`).

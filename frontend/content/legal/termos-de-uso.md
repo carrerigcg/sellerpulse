@@ -105,7 +105,7 @@ como "em construção" **não fazem parte do plano contratado** até serem liber
 ### 7.2 Preço de lançamento
 
 Os preços acima são de lançamento. O preço informado como "depois do
-lançamento" (R$ 59,90 no Essencial e R$ 109,90 no Exclusive, por mês) é o que pretendemos
+lançamento" (R$ 59,90 no Essencial, R$ 109,90 no Exclusive e R$ 169,90 no Premium, por mês) é o que pretendemos
 praticar para novas contratações quando a promoção acabar. Avisaremos o fim da
 promoção na página de planos, com pelo menos 30 dias de antecedência.
 

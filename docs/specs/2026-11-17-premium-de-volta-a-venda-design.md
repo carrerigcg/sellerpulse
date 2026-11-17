@@ -35,7 +35,9 @@ não existiam. Elas estão no ar desde então, e o Guilherme mandou seguir
    (11) 99234-4633 (confirmado pelo Guilherme em 2026-11-17).
 5. **Termos `2026-11-v2`** (decisão do Guilherme, 2026-11-17): o Premium na
    tabela de preços (7.1) e a cláusula do atendimento do Premium (9), com o
-   que cobre e o que não cobre, sem prazo de resposta. A Política sobe junto
+   que cobre e o que não cobre, sem prazo de resposta; e o preço de depois
+   do lançamento do Premium (R$ 169,90) na 7.2, que sustenta o riscado do
+   cartão. A Política sobe junto
    só no número, porque o teste exige a mesma versão nos dois textos. Quem
    tem assinatura aceita de novo ao entrar: hoje, uma só (a do Guilherme).
    A seção 14 pede aviso de 30 dias para mudança relevante; esta não tira
@@ -45,9 +47,9 @@ não existiam. Elas estão no ar desde então, e o Guilherme mandou seguir
 
 ## Fora desta entrega
 
-- Cadeado ou convite para o Premium nos outros planos (alertas, IA): a
-  decisão 3 da spec dos alertas era não mostrar enquanto o Premium estivesse
-  fora de venda.
+- Cadeado ou convite para o Premium nos outros planos (alertas, IA, a frase
+  das contas extras em `fraseDasContas`): a decisão 3 da spec dos alertas era
+  não mostrar enquanto o Premium estivesse fora de venda.
 - Abrir as vendas (`VENDAS_ABERTAS`), que espera o Vercel Pro e a revisão
   do advogado.
 - Provas que seguem abertas nas specs de origem: o card de alertas visto

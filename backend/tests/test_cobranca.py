@@ -168,6 +168,24 @@ def test_os_textos_publicados_trazem_a_versao_que_o_aceite_grava(arquivo):
     assert f"**Versão:** {VERSAO_DOS_TERMOS}" in texto
 
 
+def test_os_termos_dizem_o_preco_de_depois_do_lancamento_de_cada_plano():
+    """O riscado do cartão só se sustenta (CDC, art. 37) se os Termos disserem
+    que aquele é o preço de depois do lançamento. Na v2 o Premium quase saiu
+    sem ele na 7.2."""
+    raiz = pathlib.Path(__file__).resolve().parents[2]
+    precos = (raiz / "frontend/lib/precos.ts").read_text(encoding="utf-8")
+    inicio = precos.index("PRECOS_DEPOIS_DO_LANCAMENTO")
+    bloco = precos[inicio : precos.index("};", inicio)]
+    depois = dict(re.findall(r"(\w+): ([\d.]+),", bloco))
+    assert set(depois) == set(PLANOS)
+    termos = (raiz / "frontend/content/legal/termos-de-uso.md").read_text(encoding="utf-8")
+    secao = termos[termos.index("### 7.2") : termos.index("### 7.3")]
+    secao = " ".join(secao.split())
+    for nome, valor in depois.items():
+        reais = f"R$ {Decimal(valor):.2f}".replace(".", ",")
+        assert f"{reais} no {nome.capitalize()}" in secao, nome
+
+
 def test_os_precos_da_vitrine_batem_com_os_do_backend():
     """A vitrine mostra um número; o checkout cobra outro. Isso não pode divergir."""
     raiz = pathlib.Path(__file__).resolve().parents[2]
@@ -292,11 +310,10 @@ async def test_plano_fora_de_venda_nao_abre_checkout_nem_grava_aceite(
     assert aceites == 0
 
 
-async def test_so_o_exclusive_mensal_tem_teste(client, sem_plano, asaas_falso):
+@pytest.mark.parametrize("plano", ["essencial", "premium"])
+async def test_so_o_exclusive_mensal_tem_teste(client, sem_plano, asaas_falso, plano):
     user_id, _ = sem_plano
-    resp = client.post(
-        "/conta/checkout", json=_contratacao(plano="essencial"), headers=_auth(user_id)
-    )
+    resp = client.post("/conta/checkout", json=_contratacao(plano=plano), headers=_auth(user_id))
     assert resp.json()["teste"] is False
     assert (
         asaas_falso.pedidos[0][2]["subscription"]["nextDueDate"] == hoje_do_vendedor().isoformat()
