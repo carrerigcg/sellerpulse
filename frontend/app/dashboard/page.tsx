@@ -48,8 +48,8 @@ export default async function ResumoPage() {
       ? getRfmScores(periodoClientes.de, periodoClientes.ate)
       : Promise.resolve([]),
     // Só o Premium. Sem acesso conhecido não pede: o card some, e o resto do
-    // Resumo não depende dele. Sem cadeado nos outros planos enquanto o
-    // Premium estiver fora de venda (decisão 3 da spec dos alertas).
+    // Resumo não depende dele. Sem cadeado nos outros planos (decisão 3 da
+    // spec dos alertas); com o Premium à venda, o cadeado é uma pendência.
     acesso && libera(acesso, "alertas") ? getAlertas() : Promise.resolve(null),
   ]);
 

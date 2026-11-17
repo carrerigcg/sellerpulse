@@ -18,7 +18,7 @@ from enum import StrEnum
 # valor obriga todo mundo a aceitar de novo: é o que se quer quando o texto
 # muda. A mesma versão está escrita nos textos de `frontend/content/legal/`, e
 # um teste falha se divergirem.
-VERSAO_DOS_TERMOS = "2026-11-v1"
+VERSAO_DOS_TERMOS = "2026-11-v2"
 
 # Decisões da spec de cobrança (docs/specs/2026-10-29-cobranca-asaas-design.md).
 MESES_PAGOS_NO_ANUAL = 10
@@ -86,9 +86,9 @@ PLANOS: dict[str, Plano] = {
         dias_de_historico=90,
         produtos_na_abc=10,
     ),
-    # O Exclusive libera tudo, menos o que é só do Premium (os alertas). O que
-    # mais vai diferenciá-los (MCP com a conta real, várias contas) entra com
-    # cada feature (decisão 8 da spec). Sem corte no Exclusive, ele entregaria
+    # O Exclusive libera tudo, menos o que é só do Premium (os alertas e a IA
+    # com a conta real). Várias contas, 12 meses e a sincronização de 6 horas
+    # o Premium ganha pelos campos abaixo. Sem corte no Exclusive, ele entregaria
     # com o tempo o histórico longo que o Premium vai vender.
     "exclusive": Plano(
         nome="exclusive",
@@ -106,8 +106,8 @@ PLANOS: dict[str, Plano] = {
         # cresceria além do que se vende.
         dias_de_historico=365,
         produtos_na_abc=None,
-        # Volta à venda quando as funções que o diferenciam existirem.
-        a_venda=False,
+        # De volta à venda em 2026-11-17, com as cinco funções que o
+        # diferenciam no ar (spec 2026-11-17-premium-de-volta-a-venda).
         horas_entre_syncs=6,
         max_contas=3,
     ),

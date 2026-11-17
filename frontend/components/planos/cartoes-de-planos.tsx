@@ -44,6 +44,8 @@ type Plano = {
   nome: string;
   chamada: string;
   itens: string[];
+  /** Uma frase abaixo dos itens, para o que não cabe num item. */
+  apoio?: string;
   destaque?: boolean;
 };
 
@@ -79,6 +81,25 @@ const PLANOS: Plano[] = [
       "Suporte prioritário",
     ],
   },
+  {
+    // Cada item é uma função no ar e provada (spec
+    // docs/specs/2026-11-17-premium-de-volta-a-venda-design.md). O ChatGPT
+    // fica fora do item: lá o conector só existe nos planos empresariais.
+    chave: "premium",
+    nome: "Premium",
+    chamada: "Para quem tem mais de uma loja ou quer perguntar à IA.",
+    itens: [
+      "Tudo do Exclusive",
+      "Pergunte ao Claude sobre a sua loja",
+      "Alertas no Resumo",
+      "Até 3 contas do Mercado Livre, com a soma",
+      "Histórico de 12 meses",
+      "Atualização a cada 6 horas",
+      "Atendimento exclusivo no WhatsApp",
+    ],
+    apoio:
+      "Fale direto com quem conhece o SellerPulse por dentro. Pelo WhatsApp, de segunda a sábado, das 8h às 18h, a gente resolve erros, mostra como usar cada tela e explica o que os números da sua loja estão dizendo.",
+  },
 ];
 
 export function CartoesDePlanos() {
@@ -100,7 +121,7 @@ export function CartoesDePlanos() {
         {vendasAbertas ? " para quem assina agora" : " para quem assinar na abertura"}. No plano
         mensal, você mantém este preço enquanto continuar no mesmo plano.
       </div>
-      <div className="grid gap-6 md:grid-cols-2 md:items-stretch">
+      <div className="grid gap-6 lg:grid-cols-3 lg:items-stretch">
         {PLANOS.map((plano) => (
           <CartaoDoPlano key={plano.nome} plano={plano} vendasAbertas={vendasAbertas} />
         ))}
@@ -116,7 +137,7 @@ function CartaoDoPlano({ plano, vendasAbertas }: { plano: Plano; vendasAbertas: 
     <section
       className={`relative flex flex-col rounded-2xl border p-6 ${
         plano.destaque
-          ? "order-first border-accent bg-accent-soft shadow-lg md:order-none md:-my-3 md:py-9"
+          ? "order-first border-accent bg-accent-soft shadow-lg lg:order-none lg:-my-3 lg:py-9"
           : "border-line bg-bg"
       }`}
     >
@@ -165,6 +186,7 @@ function CartaoDoPlano({ plano, vendasAbertas }: { plano: Plano; vendasAbertas: 
           </li>
         ))}
       </ul>
+      {plano.apoio && <p className="mt-4 text-xs leading-relaxed text-muted">{plano.apoio}</p>}
 
       <div className="mt-6 flex flex-col gap-2">
         {vendasAbertas ? (

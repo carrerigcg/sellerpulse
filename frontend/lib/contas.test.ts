@@ -151,7 +151,8 @@ describe("fraseDasContas", () => {
     const frase = fraseDasContas(acesso({ contas: [PRINCIPAL, EXTRA], max_contas: 1 }));
     expect(frase).toMatch(/ficam guardadas/);
     expect(frase).not.toMatch(/2 de 1/);
-    // O Premium está fora da venda: mandar contratá-lo apontaria para nada.
+    // Escrito com o Premium fora da venda. Convidar para ele aqui é pendência
+    // da spec 2026-11-17-premium-de-volta-a-venda.
     expect(frase).not.toMatch(/Premium/);
   });
 });

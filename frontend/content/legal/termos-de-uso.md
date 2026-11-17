@@ -1,8 +1,8 @@
 # Termos de Uso do SellerPulse
 
-**Versão:** 2026-11-v1
+**Versão:** 2026-11-v2
 
-**Última atualização:** 30 de outubro de 2026
+**Última atualização:** 17 de novembro de 2026
 
 ## 1. Quem somos e o que é o serviço
 
@@ -92,11 +92,11 @@ Você concorda em não:
 
 ### 7.1 Planos
 
-| Condição | Essencial | Exclusive |
-| --- | --- | --- |
-| Preço mensal | R$ 49,90 | R$ 79,90 |
-| Preço anual, em pagamento único | R$ 499,00 | R$ 799,00 |
-| Teste grátis | não | 7 dias, só no mensal |
+| Condição | Essencial | Exclusive | Premium |
+| --- | --- | --- | --- |
+| Preço mensal | R$ 49,90 | R$ 79,90 | R$ 139,90 |
+| Preço anual, em pagamento único | R$ 499,00 | R$ 799,00 | R$ 1.399,00 |
+| Teste grátis | não | 7 dias, só no mensal | não |
 
 O que cada plano inclui está descrito na [página de planos](/planos), na versão
 vigente na data da contratação, e faz parte destes Termos. Itens indicados ali
@@ -105,7 +105,7 @@ como "em construção" **não fazem parte do plano contratado** até serem liber
 ### 7.2 Preço de lançamento
 
 Os preços acima são de lançamento. O preço informado como "depois do
-lançamento" (R$ 59,90 no Essencial e R$ 109,90 no Exclusive, por mês) é o que pretendemos
+lançamento" (R$ 59,90 no Essencial, R$ 109,90 no Exclusive e R$ 169,90 no Premium, por mês) é o que pretendemos
 praticar para novas contratações quando a promoção acabar. Avisaremos o fim da
 promoção na página de planos, com pelo menos 30 dias de antecedência.
 
@@ -181,6 +181,13 @@ O documento fiscal da assinatura segue a legislação aplicável. Se precisar de
 - O suporte é prestado pelos canais e com a prioridade indicados no plano, em
   dias úteis, em horário comercial. Não há garantia contratual de tempo de
   resposta ou de disponibilidade (SLA).
+- **No Premium**, o atendimento é exclusivo dos clientes desse plano, pelo
+  WhatsApp da seção 16, de segunda a sábado, das 8h às 18h (horário de
+  Brasília). Ele cobre erros e problemas no SellerPulse, dúvidas de como usar
+  cada tela e de como ler o que ela mostra, e ajuda para conectar contas e
+  informar custos. Ele **não cobre** decisões do seu negócio, como preço,
+  estoque ou anúncio: o SellerPulse mostra e explica os números, e não presta
+  consultoria. Também aqui não há prazo de resposta garantido.
 
 ## 10. Seus dados
 

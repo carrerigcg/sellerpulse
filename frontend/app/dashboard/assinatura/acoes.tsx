@@ -69,7 +69,7 @@ export function AcoesDaAssinatura({
         </section>
       )}
 
-      {/* Exclusive com downgrade agendado: não sobra plano, e "Manter" já está acima. */}
+      {/* Sem opção quando todo plano à venda já é o atual ou o agendado; "Manter" fica acima. */}
       {opcoes.length > 0 && (
       <section className="mt-6 rounded-xl border border-line p-5">
         <h2 className="text-sm font-semibold">Trocar de plano</h2>
