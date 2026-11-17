@@ -1,8 +1,9 @@
 # Premium: alertas no painel
 
 Estado: no ar desde 2026-11-06 (#54, `0c82f8d`, conferido no Render e na
-Vercel). Item 4 das funções do Premium. Falta ver o card logado com os dados
-reais. O envio por e-mail fica para depois (decisão 4.1).
+Vercel). Item 4 das funções do Premium. Card visto logado com os dados reais
+em 2026-11-17: 3 alertas (produtos com prejuízo "ainda não dá para medir",
+sem custo informado; 3 anúncios parados). O envio por e-mail fica para depois (decisão 4.1).
 
 ## O pedido
 
