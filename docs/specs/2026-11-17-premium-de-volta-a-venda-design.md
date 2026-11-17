@@ -1,6 +1,8 @@
 # Premium de volta à venda
 
-Estado: em PR (2026-11-17). Fecha a etapa 11 (funções do Premium) de
+Estado: no ar desde 2026-11-17 (#62, `5c2200c`; Render live e Vercel com
+`/termos` servindo a v2 e o cartão do Premium em `/planos`). Vendas seguem
+fechadas. Fecha a etapa 11 (funções do Premium) de
 `docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`.
 
 ## O pedido
