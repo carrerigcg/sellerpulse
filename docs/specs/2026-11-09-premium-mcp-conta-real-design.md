@@ -1,8 +1,10 @@
 # Premium: MCP com a conta real
 
-Estado: no ar desde 2026-11-16 (PR #60, `7349dac`; migration 0026 aplicada).
-Falta a prova com o token real, conectado no Claude (ver "Prova esperada").
-O Premium segue fora da vitrine até o PR seguinte. Função 4 do Premium
+Estado: no ar desde 2026-11-16 (PR #60, `7349dac`; PR #61, `ac76ae2`;
+migrations 0026 e 0027 aplicadas). Provado com o token real no ChatGPT
+(2026-11-16) e no Claude (2026-11-17), com os números conferidos contra o
+banco. Passo a passo de conexão na tela Segurança (`1478d76`). O Premium
+segue fora da vitrine até o PR seguinte. Função 4 do Premium
 (`docs/plans/2026-10-30-pendencias-juridicas-do-produto.md`, etapa 11).
 
 ## O pedido
@@ -135,7 +137,18 @@ No Supabase, Authentication > OAuth Server:
   lojas, update em 0 linhas e insert em `product_costs` recusado pela RLS; a
   sessão sem `client_id` continuou com 1.759 pedidos e 1 loja.
 - Conectado de verdade no Claude do Guilherme, com os números conferidos
-  contra o painel no mesmo período.
+  contra o painel no mesmo período. **Provado:** no ChatGPT em 2026-11-16
+  (aprovação gravada às 18:07:34, sessão às 18:07:39, chamadas 200) e no
+  Claude em 2026-11-17 (aprovação às 14:01:48, sessão às 14:01:49, sessão
+  `aal1` com app autenticador ativo, chamadas 200). `visao_geral` de
+  03/11 a 17/11 pelo Claude: receita R$ 16.880,98, taxas R$ 1.967,73, frete
+  R$ 1.344,95, 14 dias com venda; a mesma conta em SQL direto no banco (95
+  pedidos pagos, dia do vendedor, frete por envio) deu os mesmos valores ao
+  centavo. O conector antigo do Claude, criado antes do PR #61 e sem
+  aprovação, continuou recusado (401), como a decisão 7 manda.
+- ChatGPT: o fluxo padrão funcionou sem código específico. Pela ajuda da
+  OpenAI, conector personalizado só existe nos planos Business, Enterprise
+  e Edu.
 
 ## Fora desta entrega
 
@@ -143,7 +156,7 @@ No Supabase, Authentication > OAuth Server:
   (próximo PR).
 - Ferramentas novas (alertas, custos, conversão): primeiro as seis, com dado
   real.
-- ChatGPT e outros clientes: entram se o fluxo padrão funcionar neles, sem
-  código específico.
+- Outros clientes além do Claude e do ChatGPT: entram se o fluxo padrão
+  funcionar neles, sem código específico.
 - Limite de uso persistente (no banco): só se o limite em memória se mostrar
   insuficiente.
