@@ -11,6 +11,7 @@ import json
 import pathlib
 import re
 import uuid
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
@@ -249,8 +250,34 @@ async def test_contratar_o_anual_e_pagamento_unico_por_pix_ou_cartao(
     assert "subscription" not in corpo
 
 
-async def test_premium_fora_de_venda_nao_abre_checkout_nem_grava_aceite(
-    client, pg_pool, sem_plano, asaas_falso
+@pytest.fixture
+def premium_fora_de_venda(monkeypatch):
+    """Todos os planos estão à venda desde 2026-11-17. A trava `a_venda`
+    continua para o próximo plano que nascer fora da vitrine."""
+    monkeypatch.setitem(PLANOS, "premium", replace(PLANOS["premium"], a_venda=False))
+
+
+def test_todos_os_planos_estao_a_venda():
+    # A volta do Premium (spec 2026-11-17-premium-de-volta-a-venda).
+    assert all(plano.a_venda for plano in PLANOS.values())
+
+
+async def test_contratar_o_premium_anual_abre_o_checkout(client, pg_pool, sem_plano, asaas_falso):
+    user_id, seller_id = sem_plano
+    resp = client.post(
+        "/conta/checkout",
+        json=_contratacao(plano="premium", ciclo="anual"),
+        headers=_auth(user_id),
+    )
+    assert resp.status_code == 201
+    assert asaas_falso.pedidos[0][2]["items"][0]["value"] == 1399.0
+    async with pg_pool.acquire() as conn:
+        checkout = await conn.fetchrow("SELECT * FROM checkouts WHERE seller_id = $1", seller_id)
+    assert (checkout["plano"], checkout["ciclo"]) == ("premium", "anual")
+
+
+async def test_plano_fora_de_venda_nao_abre_checkout_nem_grava_aceite(
+    client, pg_pool, sem_plano, asaas_falso, premium_fora_de_venda
 ):
     user_id, seller_id = sem_plano
     resp = client.post(
@@ -720,7 +747,18 @@ async def test_troca_na_visao_somada_vale_para_a_principal(
     assert linha["plano_no_proximo_ciclo"] == "essencial"
 
 
-async def test_nao_troca_para_plano_fora_de_venda(client, pg_pool, test_seller, asaas_falso):
+async def test_sobe_do_exclusive_para_o_premium(client, pg_pool, test_seller, asaas_falso):
+    user_id, seller_id = test_seller
+    await _assinante(pg_pool, seller_id, "exclusive")
+    resp = client.post("/conta/plano", json={"plano": "premium"}, headers=_auth(user_id))
+    assert resp.status_code == 200
+    assert asaas_falso.pedidos == [("PUT", "/v3/subscriptions/sub_9", {"value": 139.9})]
+    assert (await _assinatura(pg_pool, seller_id))["plano"] == "premium"
+
+
+async def test_nao_troca_para_plano_fora_de_venda(
+    client, pg_pool, test_seller, asaas_falso, premium_fora_de_venda
+):
     user_id, seller_id = test_seller
     await _assinante(pg_pool, seller_id, "exclusive")
     resp = client.post("/conta/plano", json={"plano": "premium"}, headers=_auth(user_id))

@@ -63,8 +63,8 @@ describe("destinoSemAcesso", () => {
 });
 
 describe("histórico do plano", () => {
-  it("o Premium fica fora do que se vende", () => {
-    expect(PLANOS_A_VENDA).toEqual(["essencial", "exclusive"]);
+  it("os três planos estão à venda", () => {
+    expect(PLANOS_A_VENDA).toEqual(["essencial", "exclusive", "premium"]);
   });
 
   it("diz o histórico do plano de quem vê o aviso", () => {

@@ -18,7 +18,7 @@ from enum import StrEnum
 # valor obriga todo mundo a aceitar de novo: é o que se quer quando o texto
 # muda. A mesma versão está escrita nos textos de `frontend/content/legal/`, e
 # um teste falha se divergirem.
-VERSAO_DOS_TERMOS = "2026-11-v1"
+VERSAO_DOS_TERMOS = "2026-11-v2"
 
 # Decisões da spec de cobrança (docs/specs/2026-10-29-cobranca-asaas-design.md).
 MESES_PAGOS_NO_ANUAL = 10
@@ -106,8 +106,8 @@ PLANOS: dict[str, Plano] = {
         # cresceria além do que se vende.
         dias_de_historico=365,
         produtos_na_abc=None,
-        # Volta à venda quando as funções que o diferenciam existirem.
-        a_venda=False,
+        # De volta à venda em 2026-11-17, com as cinco funções que o
+        # diferenciam no ar (spec 2026-11-17-premium-de-volta-a-venda).
         horas_entre_syncs=6,
         max_contas=3,
     ),

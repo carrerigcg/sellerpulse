@@ -21,7 +21,7 @@ export type Recurso =
 export type NomeDoPlano = "essencial" | "exclusive" | "premium";
 
 /** O que se pode contratar ou escolher numa troca. O backend recusa os demais. */
-export const PLANOS_A_VENDA: NomeDoPlano[] = ["essencial", "exclusive"];
+export const PLANOS_A_VENDA: NomeDoPlano[] = ["essencial", "exclusive", "premium"];
 
 export type Acesso = Contas & {
   plano: NomeDoPlano | null;

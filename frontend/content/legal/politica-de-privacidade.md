@@ -1,8 +1,8 @@
 # Política de Privacidade do SellerPulse
 
-**Versão:** 2026-11-v1
+**Versão:** 2026-11-v2
 
-**Última atualização:** 4 de novembro de 2026
+**Última atualização:** 17 de novembro de 2026
 
 ## 1. Quem somos
 
