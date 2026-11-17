@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { dataDaAutorizacao, ENDERECO_DO_MCP, nomeDoCliente } from "@/lib/conexoes-ia";
+import { dataDaAutorizacao, nomeDoCliente } from "@/lib/conexoes-ia";
 import { createClient } from "@/lib/supabase/client";
+
+import { ComoConectarIa } from "./como-conectar-ia";
 
 type Conexao = { clienteId: string; nome: string; desde: string };
 type Estado =
@@ -90,12 +92,7 @@ export function ConexoesDeIa() {
         </p>
       )}
       {estado.tipo === "pronto" && estado.conexoes.length === 0 && (
-        <p className="mt-3 text-sm">
-          Nenhuma conexão. No plano Premium, adicione o SellerPulse como conector no Claude com
-          o endereço{" "}
-          <code className="break-all rounded bg-surface px-1 py-0.5 text-xs">{ENDERECO_DO_MCP}</code>
-          .
-        </p>
+        <p className="mt-3 text-sm">Nenhum assistente conectado ainda.</p>
       )}
       {estado.tipo === "pronto" && estado.conexoes.length > 0 && (
         <ul className="mt-3 divide-y divide-line">
@@ -120,6 +117,10 @@ export function ConexoesDeIa() {
             </li>
           ))}
         </ul>
+      )}
+
+      {estado.tipo !== "carregando" && (
+        <ComoConectarIa aberto={estado.tipo === "pronto" && estado.conexoes.length === 0} />
       )}
     </section>
   );
