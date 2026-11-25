@@ -1,9 +1,9 @@
 # Resumo com cartões: o dinheiro e os alertas
 
 Estado: em produção desde 2026-11-25 (PR #63, commit `765e285`), conferido no
-ar no Render e na Vercel (a demo mostra os cartões). Não visto ainda: o
-painel logado com alertas reais e a faixa de frete numa conta com frete
-sendo buscado.
+ar no Render e na Vercel (a demo mostra os cartões). O Guilherme conferiu o
+painel logado, com alertas reais, no mesmo dia. Não visto ainda: a faixa de
+frete numa conta com frete sendo buscado (só provada nos testes).
 
 ## O pedido
 
