@@ -87,6 +87,7 @@ async def test_margem_tira_taxa_frete_e_custo(pg_pool, test_seller):
     r = await alertas(pg_pool, sid, hoje=HOJE)
 
     assert r["produtos_avaliados"] == 2
+    assert r["produtos_vendidos"] == 2
     assert [(a["sku"], a["titulo"]) for a in r["margem_negativa"]] == [("MLB1", "Fone")]
     assert r["margem_negativa"][0]["margem"] == pytest.approx(-10.0)
     assert r["margem_negativa"][0]["receita"] == pytest.approx(100.0)
@@ -166,6 +167,8 @@ async def test_produto_com_venda_sem_custo_nao_e_avaliado(pg_pool, test_seller):
     r = await alertas(pg_pool, sid, hoje=HOJE)
 
     assert r["produtos_avaliados"] == 0
+    # Vendeu, só não foi medido: entra no denominador da cobertura.
+    assert r["produtos_vendidos"] == 1
     assert r["margem_negativa"] == []
 
 
@@ -177,6 +180,7 @@ async def test_produto_com_frete_nao_colhido_nao_e_avaliado(pg_pool, test_seller
     r = await alertas(pg_pool, sid, hoje=HOJE)
 
     assert r["produtos_avaliados"] == 0
+    assert r["produtos_vendidos"] == 1
 
 
 async def test_venda_fora_dos_30_dias_nao_entra(pg_pool, test_seller):
@@ -187,6 +191,7 @@ async def test_venda_fora_dos_30_dias_nao_entra(pg_pool, test_seller):
     r = await alertas(pg_pool, sid, hoje=HOJE)
 
     assert r["produtos_avaliados"] == 0
+    assert r["produtos_vendidos"] == 0
 
 
 # ---------- anúncio parado ----------

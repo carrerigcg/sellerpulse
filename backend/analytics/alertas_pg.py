@@ -27,9 +27,10 @@ MIN_DIAS_PARADO = 7
 # frete inteiro em cada pedido do carrinho inventaria prejuízo.
 #
 # `custo` e `frete` ficam NULL quando não se sabem: custo não informado na
-# data da venda, ou envio sem frete colhido. O HAVING tira o produto inteiro
-# da conta nesse caso. Pedido sem envio tem frete zero conhecido, como no
-# fluxo financeiro.
+# data da venda, ou envio sem frete colhido. A coluna `avaliado` marca o
+# produto que tem os três em toda venda; o produto incompleto continua na
+# lista (para contar quantos venderam), mas a margem dele não vale nada.
+# Pedido sem envio tem frete zero conhecido, como no fluxo financeiro.
 _MARGEM_POR_PRODUTO = f"""
     WITH vendas AS (
         SELECT
@@ -92,14 +93,14 @@ _MARGEM_POR_PRODUTO = f"""
         p.item_id                                       AS sku,
         COALESCE(ic.title, p.item_id)                   AS titulo,
         ROUND(SUM(p.receita), 2)                        AS receita,
-        ROUND(SUM(p.receita - p.taxa - p.frete - p.custo), 2) AS margem
+        ROUND(SUM(p.receita - p.taxa - p.frete - p.custo), 2) AS margem,
+        (bool_and(p.custo IS NOT NULL)
+         AND bool_and(p.frete IS NOT NULL)
+         AND bool_and(p.taxa IS NOT NULL))              AS avaliado
     FROM por_item p
     LEFT JOIN items_cache ic
       ON ic.seller_id = p.seller_id AND ic.item_id = p.item_id AND ic.seller_id = ANY($1::uuid[])
     GROUP BY p.item_id, ic.title
-    HAVING bool_and(p.custo IS NOT NULL)
-       AND bool_and(p.frete IS NOT NULL)
-       AND bool_and(p.taxa IS NOT NULL)
     ORDER BY margem, sku
 """
 
@@ -168,7 +169,10 @@ async def alertas(pool, seller_id: uuid.UUID | Sequence[uuid.UUID], *, hoje: dat
     contas = contas_de(seller_id)
     de = _parse_boundary((hoje - timedelta(days=DIAS_DA_MARGEM)).isoformat())
     ate = _parse_boundary(hoje.isoformat())
-    avaliados = await pool.fetch(_MARGEM_POR_PRODUTO, contas, de, ate)
+    vendidos = await pool.fetch(_MARGEM_POR_PRODUTO, contas, de, ate)
+    # A margem de quem não foi avaliado é soma com NULL (ou parcial): nunca
+    # entra em conta nenhuma, só no denominador `produtos_vendidos`.
+    avaliados = [r for r in vendidos if r["avaliado"]]
 
     # (gravidade, sku, alerta): a mesma ordem do SQL, agora entre contas.
     parados: list[tuple[float, str, dict]] = []
@@ -209,6 +213,9 @@ async def alertas(pool, seller_id: uuid.UUID | Sequence[uuid.UUID], *, hoje: dat
 
     return {
         "produtos_avaliados": len(avaliados),
+        # É o denominador que deixa a tela distinguir "nenhum prejuízo entre
+        # quase todos" de "entre poucos".
+        "produtos_vendidos": len(vendidos),
         "margem_negativa": [
             {
                 "sku": r["sku"],
