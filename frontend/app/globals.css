@@ -32,6 +32,13 @@
   /* variação de KPI */
   --sp-positive: #16a34a;
   --sp-negative: #dc2626;
+
+  /* Texto sobre o fundo tingido das caixas e dos selos. O positive e o
+     negative passam como borda e como fundo de contador, mas não como texto
+     pequeno: o negative sobre negative/10 fica perto de 4,1:1. Estes passam
+     de 5,5:1 nos fundos claros das próprias cores. */
+  --sp-positive-strong: #166534;
+  --sp-negative-strong: #b91c1c;
 }
 
 /* Expõe os tokens como utilitários do Tailwind (bg-accent, text-muted, ...). */
@@ -49,6 +56,8 @@
   --color-highlight-soft: var(--sp-highlight-soft);
   --color-positive: var(--sp-positive);
   --color-negative: var(--sp-negative);
+  --color-positive-strong: var(--sp-positive-strong);
+  --color-negative-strong: var(--sp-negative-strong);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
