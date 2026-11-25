@@ -1,9 +1,9 @@
 # Resumo com cartões: o dinheiro e os alertas
 
-Estado: implementado em 2026-11-25 na branch `feat/resumo-com-cartoes`, com a
-tela vista (demo, três estados dos alertas, celular) e os revisores sem
-bloqueio. O Guilherme testou no localhost e aprovou; vai por PR (toca o
-back-end), com merge só depois do CI verde e do ok dele.
+Estado: em produção desde 2026-11-25 (PR #63, commit `765e285`), conferido no
+ar no Render e na Vercel (a demo mostra os cartões). Não visto ainda: o
+painel logado com alertas reais e a faixa de frete numa conta com frete
+sendo buscado.
 
 ## O pedido
 
