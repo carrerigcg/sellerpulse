@@ -45,8 +45,9 @@ export type Veredito = {
    * está nas palavras ("Faltaram"), e a tela anima só o número.
    */
   destaque: { valor: number; acima: string | null; abaixo: string };
-  /** O que a sobra ainda não descontou e nunca vai descontar. */
+  /** As despesas que a sobra não desconta: elas saem do que sobrou. */
   lembrete: string;
+  partes: ParteDaConta[];
   comparacao: string;
   /** Para a cor da linha de comparação — sempre junto do texto, nunca no lugar dele. */
   direcao: "mais" | "menos" | "igual" | "sem-comparacao";
@@ -55,6 +56,36 @@ export type Veredito = {
   avisoComparacao: string | null;
   avisoCobertura: string | null;
 };
+
+export type ParteDaConta = {
+  rotulo: "Vendas" | "Comissão do ML" | "Frete" | "Custo dos produtos";
+  /** `null` = não se sabe. A tela mostra "—": R$ 0 afirmaria que nada foi pago. */
+  valor: number | null;
+  nota: string | null;
+};
+
+/**
+ * As quatro partes da sobra, para os cartõezinhos do Resumo. Com cobertura
+ * zero o número existe (é 0) mas não é verdade; com cobertura parcial ele é
+ * menor que o real, e a nota diz isso.
+ */
+export function partesDaConta(atual: Totais, custo: Cobertura): ParteDaConta[] {
+  const frete = coberturaDoFrete(atual);
+  return [
+    { rotulo: "Vendas", valor: atual.receita, nota: null },
+    { rotulo: "Comissão do ML", valor: atual.custo, nota: null },
+    frete.semReceita || frete.completa
+      ? { rotulo: "Frete", valor: atual.frete, nota: null }
+      : frete.vazia
+        ? { rotulo: "Frete", valor: null, nota: "ainda buscando" }
+        : { rotulo: "Frete", valor: atual.frete, nota: "parcial" },
+    custo.semReceita || custo.completa
+      ? { rotulo: "Custo dos produtos", valor: atual.custoProdutos, nota: null }
+      : custo.vazia
+        ? { rotulo: "Custo dos produtos", valor: null, nota: "não informado" }
+        : { rotulo: "Custo dos produtos", valor: atual.custoProdutos, nota: "parcial" },
+  ];
+}
 
 export function montaVeredito(entrada: {
   atual: Totais;
@@ -66,19 +97,21 @@ export function montaVeredito(entrada: {
   const { atual, anterior, coberturaAtual, coberturaAnterior } = entrada;
   const sobra = arredonda(atual.margem);
   const valor = Math.abs(sobra);
+  const falta = sobra < 0;
   const comum = {
     sobra:
-      sobra >= 0
-        ? `Sobraram ${reais(sobra)} das suas vendas.`
-        : `As vendas não cobriram os custos: faltaram ${reais(sobra)}.`,
+      falta
+        ? `As vendas não cobriram os custos: faltaram ${reais(sobra)}.`
+        : `Sobraram ${reais(sobra)} das suas vendas.`,
     destaque:
-      sobra >= 0
-        ? { valor, acima: null, abaixo: "sobraram das suas vendas" }
-        : { valor, acima: "Faltaram", abaixo: "as vendas não cobriram os custos" },
+      falta
+        ? { valor, acima: "Faltaram", abaixo: "as vendas não cobriram os custos" }
+        : { valor, acima: null, abaixo: "sobraram das suas vendas" },
     lembrete:
-      sobra >= 0
-        ? "Aluguel, salários e outras despesas também saem daí."
-        : "Aluguel, salários e outras despesas vêm depois.",
+      falta
+        ? "Aluguel, salários e outras despesas vêm depois."
+        : "Aluguel, salários e outras despesas também saem daí.",
+    partes: partesDaConta(atual, coberturaAtual),
     avisoCobertura: avisoDeCobertura(coberturaAtual),
   };
 
@@ -110,7 +143,7 @@ export function montaVeredito(entrada: {
   // e se leria ao contrário ("faltaram R$ 600 a mais" para uma falta que
   // diminuiu). Nesse caso a frase ganha sujeito próprio.
   const comparacao =
-    sobra < 0 || sobraAnterior < 0
+    falta || sobraAnterior < 0
       ? `O resultado foi ${reais(diferenca)} ${diferenca > 0 ? "melhor" : "pior"} que nos 30 dias anteriores.`
       : `${reais(diferenca)} a ${diferenca > 0 ? "mais" : "menos"} do que sobrou nos 30 dias anteriores.`;
 
