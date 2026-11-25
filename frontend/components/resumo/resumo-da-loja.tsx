@@ -59,16 +59,14 @@ export function ResumoDaLoja({
         vazio
       ) : null}
 
-      {/* Fora do ramo de vendas: sem venda nos 30 dias é justamente quando
-          "anúncios parados" explica o vazio, e o card tem fonte própria. */}
+      {!erro && !semVendas && <BlocoDinheiro veredito={veredito} hrefFinanceiro={hrefFinanceiro} />}
+
+      {/* Depois do dinheiro: primeiro "estou ganhando?", depois "o que está
+          errado?". Fora do ramo de vendas: sem venda nos 30 dias é justamente
+          quando "anúncios parados" explica o vazio, e o card tem fonte própria. */}
       {alertas}
 
-      {!erro && !semVendas && (
-        <>
-          <BlocoDinheiro veredito={veredito} hrefFinanceiro={hrefFinanceiro} />
-          <ListaDeTarefas tarefas={tarefas} rodape={rodape} />
-        </>
-      )}
+      {!erro && !semVendas && <ListaDeTarefas tarefas={tarefas} rodape={rodape} />}
     </div>
   );
 }

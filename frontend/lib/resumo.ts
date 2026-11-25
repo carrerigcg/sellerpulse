@@ -41,20 +41,57 @@ export type Totais = ReturnType<typeof totalizarFluxo>;
 export type Veredito = {
   sobra: string;
   /**
-   * A mesma frase de `sobra`, partida em volta do valor, para a tela poder
-   * animar só o número. `valor` é absoluto e já arredondado: o sinal está nas
-   * palavras ("faltaram").
+   * A sobra para o número grande. `valor` é absoluto e arredondado: o sinal
+   * está nas palavras ("Faltaram"), e a tela anima só o número.
    */
-  sobraEmPartes: { antes: string; valor: number; depois: string };
+  destaque: { valor: number; acima: string | null; abaixo: string };
+  /** As despesas que a sobra não desconta: elas saem do que sobrou. */
+  lembrete: string;
+  partes: ParteDaConta[];
   comparacao: string;
   /** Para a cor da linha de comparação — sempre junto do texto, nunca no lugar dele. */
   direcao: "mais" | "menos" | "igual" | "sem-comparacao";
-  explicacao: string;
   maiorPeso: string | null;
   /** A comparação mistura coberturas de custo que puxam no mesmo sentido do custo. */
   avisoComparacao: string | null;
   avisoCobertura: string | null;
+  /**
+   * O frete que ainda não foi buscado no ML não foi descontado, então a sobra
+   * mostrada é maior que a real. Mesma regra de honestidade da faixa de custo,
+   * decidida pelo dono em 2026-11-25.
+   */
+  avisoFrete: string | null;
 };
+
+export type ParteDaConta = {
+  rotulo: "Vendas" | "Comissão do ML" | "Frete" | "Custo dos produtos";
+  /** `null` = não se sabe. A tela mostra "—": R$ 0 afirmaria que nada foi pago. */
+  valor: number | null;
+  nota: string | null;
+};
+
+/**
+ * As quatro partes da sobra, para os cartõezinhos do Resumo. Com cobertura
+ * zero o número existe (é 0) mas não é verdade; com cobertura parcial ele é
+ * menor que o real, e a nota diz isso.
+ */
+export function partesDaConta(atual: Totais, custo: Cobertura): ParteDaConta[] {
+  const frete = coberturaDoFrete(atual);
+  return [
+    { rotulo: "Vendas", valor: atual.receita, nota: null },
+    { rotulo: "Comissão do ML", valor: atual.custo, nota: null },
+    frete.semReceita || frete.completa
+      ? { rotulo: "Frete", valor: atual.frete, nota: null }
+      : frete.vazia
+        ? { rotulo: "Frete", valor: null, nota: "ainda buscando" }
+        : { rotulo: "Frete", valor: atual.frete, nota: "parcial" },
+    custo.semReceita || custo.completa
+      ? { rotulo: "Custo dos produtos", valor: atual.custoProdutos, nota: null }
+      : custo.vazia
+        ? { rotulo: "Custo dos produtos", valor: null, nota: "não informado" }
+        : { rotulo: "Custo dos produtos", valor: atual.custoProdutos, nota: "parcial" },
+  ];
+}
 
 export function montaVeredito(entrada: {
   atual: Totais;
@@ -65,19 +102,24 @@ export function montaVeredito(entrada: {
 }): Veredito {
   const { atual, anterior, coberturaAtual, coberturaAnterior } = entrada;
   const sobra = arredonda(atual.margem);
-  const sobraEmPartes =
-    sobra >= 0
-      ? { antes: "Sobraram ", valor: Math.abs(sobra), depois: " das suas vendas." }
-      : {
-          antes: "As vendas não cobriram os custos: faltaram ",
-          valor: Math.abs(sobra),
-          depois: ".",
-        };
+  const valor = Math.abs(sobra);
+  const falta = sobra < 0;
   const comum = {
-    sobra: `${sobraEmPartes.antes}${reais(sobraEmPartes.valor)}${sobraEmPartes.depois}`,
-    sobraEmPartes,
-    explicacao: explicacao(sobra, coberturaAtual, coberturaDoFrete(atual)),
+    sobra:
+      falta
+        ? `As vendas não cobriram os custos: faltaram ${reais(sobra)}.`
+        : `Sobraram ${reais(sobra)} das suas vendas.`,
+    destaque:
+      falta
+        ? { valor, acima: "Faltaram", abaixo: "as vendas não cobriram os custos" }
+        : { valor, acima: null, abaixo: "sobraram das suas vendas" },
+    lembrete:
+      falta
+        ? "Aluguel, salários e outras despesas vêm depois."
+        : "Aluguel, salários e outras despesas também saem daí.",
+    partes: partesDaConta(atual, coberturaAtual),
     avisoCobertura: avisoDeCobertura(coberturaAtual),
+    avisoFrete: avisoDeFrete(coberturaDoFrete(atual)),
   };
 
   if (anterior === null) {
@@ -108,7 +150,7 @@ export function montaVeredito(entrada: {
   // e se leria ao contrário ("faltaram R$ 600 a mais" para uma falta que
   // diminuiu). Nesse caso a frase ganha sujeito próprio.
   const comparacao =
-    sobra < 0 || sobraAnterior < 0
+    falta || sobraAnterior < 0
       ? `O resultado foi ${reais(diferenca)} ${diferenca > 0 ? "melhor" : "pior"} que nos 30 dias anteriores.`
       : `${reais(diferenca)} a ${diferenca > 0 ? "mais" : "menos"} do que sobrou nos 30 dias anteriores.`;
 
@@ -119,38 +161,6 @@ export function montaVeredito(entrada: {
     maiorPeso: oQueMaisPesou(atual, anterior, diferenca),
     avisoComparacao: avisoDeComparacao(atual, anterior, coberturaAtual, coberturaAnterior),
   };
-}
-
-/**
- * O que a sobra já descontou — e o que não. Com cobertura zero, dizer "depois
- * de pagar os produtos" seria afirmar um desconto que não aconteceu, na frase
- * que vem antes do aviso que o desmente.
- *
- * O frete segue a mesma regra, com uma terceira situação: buscado só em
- * parte. A colheita é por envio e roda depois de cada sincronização, então
- * logo após conectar a conta o frete pode estar pela metade — e dizer "depois
- * de pagar o frete" ali afirmaria um desconto que ainda não aconteceu inteiro.
- */
-function explicacao(sobra: number, cobertura: Cobertura, frete: Cobertura): string {
-  const pagos = ["a comissão do Mercado Livre"];
-  const faltando: string[] = [];
-
-  if (frete.semReceita || frete.completa) pagos.push("o frete");
-  else if (frete.vazia) faltando.push("o frete ainda está sendo buscado no Mercado Livre");
-  else faltando.push("o frete de parte das vendas ainda está sendo buscado no Mercado Livre");
-
-  if (cobertura.vazia && !cobertura.semReceita) {
-    faltando.push("o custo dos produtos ainda não foi descontado");
-  } else {
-    pagos.push("os produtos");
-  }
-
-  const lista = pagos.length === 1 ? pagos[0] : `${pagos.slice(0, -1).join(", ")} e ${pagos.at(-1)}`;
-  const ressalva = faltando.length > 0 ? ` — ${faltando.join(", e ")}` : "";
-
-  return sobra < 0
-    ? `Na conta ${pagos.length === 1 ? "entra" : "entram"} ${lista}${ressalva}. Aluguel, salários e outras despesas vêm depois.`
-    : `É o que fica depois de pagar ${lista}${ressalva}. Aluguel, salários e outras despesas também saem daí.`;
 }
 
 /**
@@ -225,6 +235,19 @@ function avisoDeCobertura(c: Cobertura): string | null {
   if (c.semReceita || c.completa) return null;
   if (c.vazia) return "Nenhuma venda deste período saiu com custo informado.";
   return `${100 - c.pct}% do valor vendido neste período saiu sem custo informado — a sobra verdadeira é menor que essa.`;
+}
+
+/**
+ * Aqui a parte que falta é a do frete, e ele faltando deixa a sobra MAIOR que a
+ * real (nada foi subtraído). Por isso a frase mede o que ainda não veio
+ * (100 - cobertura), e não o que já foi buscado.
+ */
+function avisoDeFrete(f: Cobertura): string | null {
+  if (f.semReceita || f.completa) return null;
+  if (f.vazia) {
+    return "O frete deste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.";
+  }
+  return `O frete de ${100 - f.pct}% do valor vendido neste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.`;
 }
 
 export type ChaveDaTarefa = "custos" | "visto-e-rejeitado" | "clientes-em-risco";

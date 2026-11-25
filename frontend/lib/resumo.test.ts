@@ -10,6 +10,7 @@ import {
   montaResumo,
   montaTarefas,
   montaVeredito,
+  partesDaConta,
   rodapeDasTarefas,
   type LinksDoResumo,
   type Totais,
@@ -61,18 +62,12 @@ describe("montaVeredito — a sobra", () => {
       coberturaAnterior: COMPLETA,
     });
     expect(t(v.sobra)).toBe("Sobraram R$ 52.300 das suas vendas.");
-    expect(v.sobraEmPartes).toEqual({
-      antes: "Sobraram ",
-      valor: 52_300,
-      depois: " das suas vendas.",
-    });
+    expect(v.destaque).toEqual({ valor: 52_300, acima: null, abaixo: "sobraram das suas vendas" });
+    expect(v.lembrete).toBe("Aluguel, salários e outras despesas também saem daí.");
     expect(t(v.comparacao)).toBe("R$ 3.300 a menos do que sobrou nos 30 dias anteriores.");
     expect(v.direcao).toBe("menos");
     expect(t(v.maiorPeso)).toBe(
       "Principal motivo: as vendas caíram R$ 10.000 — de R$ 128.000 para R$ 118.000.",
-    );
-    expect(v.explicacao).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas também saem daí.",
     );
   });
 
@@ -105,15 +100,13 @@ describe("montaVeredito — a sobra", () => {
       coberturaAnterior: null,
     });
     expect(t(v.sobra)).toBe("As vendas não cobriram os custos: faltaram R$ 2.000.");
-    // A tela anima só o número: o valor vai sem sinal, o "faltaram" é que diz.
-    expect(v.sobraEmPartes).toEqual({
-      antes: "As vendas não cobriram os custos: faltaram ",
+    // O número vai sem sinal: quem diz o sentido é o "Faltaram".
+    expect(v.destaque).toEqual({
       valor: 2000,
-      depois: ".",
+      acima: "Faltaram",
+      abaixo: "as vendas não cobriram os custos",
     });
-    expect(v.explicacao).toBe(
-      "Na conta entram a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas vêm depois.",
-    );
+    expect(v.lembrete).toBe("Aluguel, salários e outras despesas vêm depois.");
   });
 
   it("com mês negativo, a comparação tem sujeito próprio — falta que diminuiu é melhora", () => {
@@ -249,7 +242,7 @@ describe("montaVeredito — aviso de comparação", () => {
   });
 });
 
-describe("montaVeredito — aviso de cobertura e explicação", () => {
+describe("montaVeredito — aviso de cobertura", () => {
   const base = { atual: totais(100, 10, 10), anterior: null, coberturaAnterior: null };
 
   it("parcial", () => {
@@ -259,16 +252,42 @@ describe("montaVeredito — aviso de cobertura e explicação", () => {
     );
   });
 
-  it("nenhum custo: a explicação não afirma um desconto que não aconteceu", () => {
+  it("nenhum custo: avisa", () => {
     const v = montaVeredito({ ...base, coberturaAtual: calculaCobertura(100, 100) });
     expect(v.avisoCobertura).toBe("Nenhuma venda deste período saiu com custo informado.");
-    expect(v.explicacao).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas também saem daí.",
-    );
   });
 
   it("completa: sem aviso", () => {
     expect(montaVeredito({ ...base, coberturaAtual: COMPLETA }).avisoCobertura).toBeNull();
+  });
+});
+
+describe("montaVeredito — aviso de frete incompleto", () => {
+  const veredito = (atual: Totais, coberturaAtual = COMPLETA) =>
+    montaVeredito({ atual, anterior: null, coberturaAtual, coberturaAnterior: null });
+
+  it("frete todo buscado: sem aviso", () => {
+    const v = veredito(totais(1000, 120, 400, { valor: 80, receitaSemFrete: 0 }));
+    expect(v.avisoFrete).toBeNull();
+  });
+
+  it("sem venda: sem aviso", () => {
+    expect(veredito(totais(0, 0, 0), calculaCobertura(0, 0)).avisoFrete).toBeNull();
+  });
+
+  it("nada buscado ainda: avisa que a sobra verdadeira é menor", () => {
+    const v = veredito(totais(1000, 120, 400, { valor: 0, receitaSemFrete: 1000 }));
+    expect(v.avisoFrete).toBe(
+      "O frete deste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.",
+    );
+  });
+
+  it("parcial: diz a parte que falta, não a que já veio", () => {
+    expect(calculaCobertura(1000, 300).pct).toBe(70);
+    const v = veredito(totais(1000, 120, 400, { valor: 50, receitaSemFrete: 300 }));
+    expect(v.avisoFrete).toBe(
+      "O frete de 30% do valor vendido neste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.",
+    );
   });
 });
 
@@ -493,50 +512,7 @@ describe("montaResumo", () => {
   });
 });
 
-describe("o frete na explicação da sobra", () => {
-  /**
-   * O que carrega peso: a frase nunca diz "depois de pagar o frete" enquanto
-   * o frete não foi buscado inteiro. Logo depois de conectar a conta a
-   * colheita está pela metade, e a sobra ainda não descontou tudo.
-   */
-  const explica = (atual: Totais, cobertura = COMPLETA) =>
-    montaVeredito({ atual, anterior: null, coberturaAtual: cobertura, coberturaAnterior: null })
-      .explicacao;
-
-  it("frete todo buscado: entra na lista do que foi pago", () => {
-    expect(explica(totais(1_000, 100, 300, { valor: 50, receitaSemFrete: 0 }))).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas também saem daí.",
-    );
-  });
-
-  it("frete pela metade: avisa que parte ainda está sendo buscada", () => {
-    expect(explica(totais(1_000, 100, 300, { valor: 20, receitaSemFrete: 400 }))).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre e os produtos — o frete de parte das vendas ainda está sendo buscado no Mercado Livre. Aluguel, salários e outras despesas também saem daí.",
-    );
-  });
-
-  it("nada de frete e nada de custo: as duas ressalvas, e só a comissão paga", () => {
-    const semCusto = calculaCobertura(1_000, 1_000);
-    expect(explica(totais(1_000, 1_200, 0, { valor: 0, receitaSemFrete: 1_000 }), semCusto)).toBe(
-      "Na conta entra a comissão do Mercado Livre — o frete ainda está sendo buscado no Mercado Livre, e o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas vêm depois.",
-    );
-  });
-
-  it("nenhuma variante incompleta afirma o frete como pago", () => {
-    const semCusto = calculaCobertura(1_000, 1_000);
-    for (const receitaSemFrete of [1_000, 400]) {
-      for (const [custoProdutos, cobertura] of [
-        [300, COMPLETA],
-        [0, semCusto],
-        [1_500, COMPLETA],
-      ] as const) {
-        const texto = explica(totais(1_000, 100, custoProdutos, { valor: 0, receitaSemFrete }), cobertura);
-        expect(texto).not.toMatch(/pagar[^—]*o frete/);
-        expect(texto).toMatch(/frete .*sendo buscado/);
-      }
-    }
-  });
-
+describe("o frete como principal motivo", () => {
   it("o frete pode ser o principal motivo da mudança", () => {
     const v = montaVeredito({
       atual: totais(10_000, 1_000, 0, { valor: 3_000, receitaSemFrete: 0 }),
@@ -545,5 +521,54 @@ describe("o frete na explicação da sobra", () => {
       coberturaAnterior: COMPLETA,
     });
     expect(t(v.maiorPeso)).toBe("Principal motivo: o frete que você pagou subiu R$ 2.500.");
+  });
+});
+
+describe("partesDaConta — ausência não é zero", () => {
+  const nomes = ["Vendas", "Comissão do ML", "Frete", "Custo dos produtos"];
+
+  it("tudo conhecido: os quatro valores, sem nota", () => {
+    const p = partesDaConta(totais(1000, 120, 400, { valor: 80, receitaSemFrete: 0 }), COMPLETA);
+    expect(p.map((x) => x.rotulo)).toEqual(nomes);
+    expect(p.map((x) => x.valor)).toEqual([1000, 120, 80, 400]);
+    expect(p.map((x) => x.nota)).toEqual([null, null, null, null]);
+  });
+
+  it("frete nada buscado: traço, nunca R$ 0", () => {
+    const p = partesDaConta(totais(1000, 120, 400, { valor: 0, receitaSemFrete: 1000 }), COMPLETA);
+    expect(p[2]).toEqual({ rotulo: "Frete", valor: null, nota: "ainda buscando" });
+  });
+
+  it("frete buscado em parte: valor com nota", () => {
+    const p = partesDaConta(totais(1000, 120, 400, { valor: 50, receitaSemFrete: 300 }), COMPLETA);
+    expect(p[2]).toEqual({ rotulo: "Frete", valor: 50, nota: "parcial" });
+  });
+
+  it("custo não informado em nada: traço, nunca R$ 0", () => {
+    const p = partesDaConta(totais(1000, 120, 0), calculaCobertura(1000, 1000));
+    expect(p[3]).toEqual({ rotulo: "Custo dos produtos", valor: null, nota: "não informado" });
+  });
+
+  it("custo informado em parte: valor com nota", () => {
+    const p = partesDaConta(totais(1000, 120, 300), calculaCobertura(1000, 400));
+    expect(p[3]).toEqual({ rotulo: "Custo dos produtos", valor: 300, nota: "parcial" });
+  });
+
+  it("sem venda no período: zero de verdade, sem traço", () => {
+    const p = partesDaConta(totais(0, 0, 0), calculaCobertura(0, 0));
+    expect(p[2]).toEqual({ rotulo: "Frete", valor: 0, nota: null });
+    expect(p[3]).toEqual({ rotulo: "Custo dos produtos", valor: 0, nota: null });
+  });
+
+  it("vai no veredito, com a cobertura do período atual e não a do anterior", () => {
+    const atual = totais(1000, 120, 400);
+    const v = montaVeredito({
+      atual,
+      anterior: totais(900, 100, 300),
+      coberturaAtual: COMPLETA,
+      coberturaAnterior: calculaCobertura(1000, 1000),
+    });
+    expect(v.partes).toHaveLength(4);
+    expect(v.partes).toEqual(partesDaConta(atual, COMPLETA));
   });
 });
