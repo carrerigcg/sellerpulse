@@ -54,14 +54,27 @@ export function BlocoDinheiro({
         </p>
       </div>
 
-      <ul className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* role="list" de propósito: o Safari tira a semântica de lista de um ul sem marcador. */}
+      <ul role="list" className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {veredito.partes.map((parte) => (
-          <li key={parte.rotulo} className="rounded-lg border border-line bg-surface px-3 py-2.5">
+          <li key={parte.rotulo} className="min-w-0 rounded-lg border border-line bg-surface px-3 py-2.5">
             <p className="text-sm text-muted">{parte.rotulo}</p>
-            <p className="tabular mt-0.5 text-lg font-semibold">
-              {parte.valor === null ? "—" : <NumeroAnimado valor={parte.valor} />}
+            <p className="tabular mt-0.5 break-words text-lg font-semibold">
+              {parte.valor === null ? (
+                <>
+                  <span aria-hidden="true">—</span>
+                  <span className="sr-only">{parte.nota ?? "não informado"}</span>
+                </>
+              ) : (
+                <NumeroAnimado valor={parte.valor} />
+              )}
             </p>
-            {parte.nota && <p className="text-sm text-muted">{parte.nota}</p>}
+            {/* Com valor nulo o sr-only acima já lê a nota; aqui ela só vale para quem vê. */}
+            {parte.nota && (
+              <p className="text-sm text-muted" aria-hidden={parte.valor === null ? "true" : undefined}>
+                {parte.nota}
+              </p>
+            )}
           </li>
         ))}
       </ul>
