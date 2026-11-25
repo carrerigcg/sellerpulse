@@ -36,6 +36,8 @@ const CAIXA: Record<Tom, Record<EstadoDaCaixa, string>> = {
   },
 };
 const CONTADOR: Record<Tom, string> = { negativo: "bg-negative", laranja: "bg-accent" };
+// `text-muted` (#64748b) fica em 4,40 a 4,49:1 sobre os fundos tingidos, abaixo do 4,5
+// mínimo; dentro das caixas o texto secundário usa `slate-600`, que passa folgado.
 const DESTAQUE: Record<Tom, string> = { negativo: "text-negative-strong", laranja: "text-accent-hover" };
 
 /**
@@ -69,7 +71,7 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
                         <span aria-hidden="true">−</span>
                         {p.prejuizo}
                       </p>
-                      <p className="text-sm text-muted">{p.contexto}</p>
+                      <p className="text-sm text-slate-600">{p.contexto}</p>
                     </li>
                   );
                 })}
@@ -106,7 +108,7 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
                       <p className="break-words font-medium">{a.titulo}</p>
                     )}
                     <p className={`tabular text-lg font-bold ${DESTAQUE.laranja}`}>{p.dias}</p>
-                    <p className="text-sm text-muted">{p.contexto}</p>
+                    <p className="text-sm text-slate-600">{p.contexto}</p>
                   </li>
                 );
               })}
@@ -114,7 +116,7 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
           ) : (
             <p className="leading-relaxed">{fraseSemParados(alertas)}</p>
           )}
-          {parados === "alerta" && referencia && <p className="mt-3 text-sm text-muted">{referencia}</p>}
+          {parados === "alerta" && referencia && <p className="mt-3 text-sm text-slate-600">{referencia}</p>}
         </Caixa>
       </div>
     </section>
@@ -139,13 +141,13 @@ function Caixa({
       <div className="flex items-center justify-between gap-3">
         <h3 className="font-semibold">{titulo}</h3>
         {estado === "alerta" && (
-          <span className={`tabular rounded-full px-2.5 py-0.5 text-sm font-bold text-white ${CONTADOR[tom]}`}>
+          <span className={`shrink-0 whitespace-nowrap tabular rounded-full px-2.5 py-0.5 text-sm font-bold text-white ${CONTADOR[tom]}`}>
             <span className="sr-only">Quantidade: </span>
             {total}
           </span>
         )}
         {estado === "tudo-certo" && (
-          <span className="rounded-full bg-positive/10 px-2.5 py-0.5 text-sm font-bold text-positive-strong">
+          <span className="shrink-0 whitespace-nowrap rounded-full bg-positive/10 px-2.5 py-0.5 text-sm font-bold text-positive-strong">
             ✓ tudo certo
           </span>
         )}
@@ -163,7 +165,7 @@ function Lista({ total, children }: { total: number; children: ReactNode }) {
         {children}
       </ul>
       {total > MAX_POR_TIPO && (
-        <p className="mt-3 text-sm text-muted">
+        <p className="mt-3 text-sm text-slate-600">
           E mais {total - MAX_POR_TIPO}. Os {MAX_POR_TIPO} de cima são os mais graves.
         </p>
       )}
