@@ -262,6 +262,35 @@ describe("montaVeredito — aviso de cobertura", () => {
   });
 });
 
+describe("montaVeredito — aviso de frete incompleto", () => {
+  const veredito = (atual: Totais, coberturaAtual = COMPLETA) =>
+    montaVeredito({ atual, anterior: null, coberturaAtual, coberturaAnterior: null });
+
+  it("frete todo buscado: sem aviso", () => {
+    const v = veredito(totais(1000, 120, 400, { valor: 80, receitaSemFrete: 0 }));
+    expect(v.avisoFrete).toBeNull();
+  });
+
+  it("sem venda: sem aviso", () => {
+    expect(veredito(totais(0, 0, 0), calculaCobertura(0, 0)).avisoFrete).toBeNull();
+  });
+
+  it("nada buscado ainda: avisa que a sobra verdadeira é menor", () => {
+    const v = veredito(totais(1000, 120, 400, { valor: 0, receitaSemFrete: 1000 }));
+    expect(v.avisoFrete).toBe(
+      "O frete deste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.",
+    );
+  });
+
+  it("parcial: diz a parte que falta, não a que já veio", () => {
+    expect(calculaCobertura(1000, 300).pct).toBe(70);
+    const v = veredito(totais(1000, 120, 400, { valor: 50, receitaSemFrete: 300 }));
+    expect(v.avisoFrete).toBe(
+      "O frete de 30% do valor vendido neste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.",
+    );
+  });
+});
+
 const LINKS: LinksDoResumo = {
   base: "/dashboard",
   periodo: { de: "2026-09-23", ate: "2026-10-23" },

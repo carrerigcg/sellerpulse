@@ -55,6 +55,12 @@ export type Veredito = {
   /** A comparação mistura coberturas de custo que puxam no mesmo sentido do custo. */
   avisoComparacao: string | null;
   avisoCobertura: string | null;
+  /**
+   * O frete que ainda não foi buscado no ML não foi descontado, então a sobra
+   * mostrada é maior que a real. Mesma regra de honestidade da faixa de custo,
+   * decidida pelo dono em 2026-11-25.
+   */
+  avisoFrete: string | null;
 };
 
 export type ParteDaConta = {
@@ -113,6 +119,7 @@ export function montaVeredito(entrada: {
         : "Aluguel, salários e outras despesas também saem daí.",
     partes: partesDaConta(atual, coberturaAtual),
     avisoCobertura: avisoDeCobertura(coberturaAtual),
+    avisoFrete: avisoDeFrete(coberturaDoFrete(atual)),
   };
 
   if (anterior === null) {
@@ -228,6 +235,19 @@ function avisoDeCobertura(c: Cobertura): string | null {
   if (c.semReceita || c.completa) return null;
   if (c.vazia) return "Nenhuma venda deste período saiu com custo informado.";
   return `${100 - c.pct}% do valor vendido neste período saiu sem custo informado — a sobra verdadeira é menor que essa.`;
+}
+
+/**
+ * Aqui a parte que falta é a do frete, e ele faltando deixa a sobra MAIOR que a
+ * real (nada foi subtraído). Por isso a frase mede o que ainda não veio
+ * (100 - cobertura), e não o que já foi buscado.
+ */
+function avisoDeFrete(f: Cobertura): string | null {
+  if (f.semReceita || f.completa) return null;
+  if (f.vazia) {
+    return "O frete deste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.";
+  }
+  return `O frete de ${100 - f.pct}% do valor vendido neste período ainda está sendo buscado no Mercado Livre — a sobra verdadeira é menor que essa.`;
 }
 
 export type ChaveDaTarefa = "custos" | "visto-e-rejeitado" | "clientes-em-risco";

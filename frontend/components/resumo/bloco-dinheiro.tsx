@@ -89,6 +89,13 @@ export function BlocoDinheiro({
           {veredito.avisoCobertura}
         </p>
       )}
+      {veredito.avisoFrete && (
+        <p
+          className={`${veredito.avisoCobertura ? "mt-2" : "mt-4"} rounded-lg bg-highlight-soft px-4 py-3 leading-relaxed text-ink`}
+        >
+          {veredito.avisoFrete}
+        </p>
+      )}
       <Link
         href={hrefFinanceiro}
         className="mt-4 inline-flex min-h-11 items-center font-medium text-accent underline-offset-4 hover:underline"
