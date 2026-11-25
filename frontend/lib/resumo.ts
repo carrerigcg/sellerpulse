@@ -41,15 +41,15 @@ export type Totais = ReturnType<typeof totalizarFluxo>;
 export type Veredito = {
   sobra: string;
   /**
-   * A mesma frase de `sobra`, partida em volta do valor, para a tela poder
-   * animar só o número. `valor` é absoluto e já arredondado: o sinal está nas
-   * palavras ("faltaram").
+   * A sobra para o número grande. `valor` é absoluto e arredondado: o sinal
+   * está nas palavras ("Faltaram"), e a tela anima só o número.
    */
-  sobraEmPartes: { antes: string; valor: number; depois: string };
+  destaque: { valor: number; acima: string | null; abaixo: string };
+  /** O que a sobra ainda não descontou e nunca vai descontar. */
+  lembrete: string;
   comparacao: string;
   /** Para a cor da linha de comparação — sempre junto do texto, nunca no lugar dele. */
   direcao: "mais" | "menos" | "igual" | "sem-comparacao";
-  explicacao: string;
   maiorPeso: string | null;
   /** A comparação mistura coberturas de custo que puxam no mesmo sentido do custo. */
   avisoComparacao: string | null;
@@ -65,18 +65,20 @@ export function montaVeredito(entrada: {
 }): Veredito {
   const { atual, anterior, coberturaAtual, coberturaAnterior } = entrada;
   const sobra = arredonda(atual.margem);
-  const sobraEmPartes =
-    sobra >= 0
-      ? { antes: "Sobraram ", valor: Math.abs(sobra), depois: " das suas vendas." }
-      : {
-          antes: "As vendas não cobriram os custos: faltaram ",
-          valor: Math.abs(sobra),
-          depois: ".",
-        };
+  const valor = Math.abs(sobra);
   const comum = {
-    sobra: `${sobraEmPartes.antes}${reais(sobraEmPartes.valor)}${sobraEmPartes.depois}`,
-    sobraEmPartes,
-    explicacao: explicacao(sobra, coberturaAtual, coberturaDoFrete(atual)),
+    sobra:
+      sobra >= 0
+        ? `Sobraram ${reais(sobra)} das suas vendas.`
+        : `As vendas não cobriram os custos: faltaram ${reais(sobra)}.`,
+    destaque:
+      sobra >= 0
+        ? { valor, acima: null, abaixo: "sobraram das suas vendas" }
+        : { valor, acima: "Faltaram", abaixo: "as vendas não cobriram os custos" },
+    lembrete:
+      sobra >= 0
+        ? "Aluguel, salários e outras despesas também saem daí."
+        : "Aluguel, salários e outras despesas vêm depois.",
     avisoCobertura: avisoDeCobertura(coberturaAtual),
   };
 
@@ -119,38 +121,6 @@ export function montaVeredito(entrada: {
     maiorPeso: oQueMaisPesou(atual, anterior, diferenca),
     avisoComparacao: avisoDeComparacao(atual, anterior, coberturaAtual, coberturaAnterior),
   };
-}
-
-/**
- * O que a sobra já descontou — e o que não. Com cobertura zero, dizer "depois
- * de pagar os produtos" seria afirmar um desconto que não aconteceu, na frase
- * que vem antes do aviso que o desmente.
- *
- * O frete segue a mesma regra, com uma terceira situação: buscado só em
- * parte. A colheita é por envio e roda depois de cada sincronização, então
- * logo após conectar a conta o frete pode estar pela metade — e dizer "depois
- * de pagar o frete" ali afirmaria um desconto que ainda não aconteceu inteiro.
- */
-function explicacao(sobra: number, cobertura: Cobertura, frete: Cobertura): string {
-  const pagos = ["a comissão do Mercado Livre"];
-  const faltando: string[] = [];
-
-  if (frete.semReceita || frete.completa) pagos.push("o frete");
-  else if (frete.vazia) faltando.push("o frete ainda está sendo buscado no Mercado Livre");
-  else faltando.push("o frete de parte das vendas ainda está sendo buscado no Mercado Livre");
-
-  if (cobertura.vazia && !cobertura.semReceita) {
-    faltando.push("o custo dos produtos ainda não foi descontado");
-  } else {
-    pagos.push("os produtos");
-  }
-
-  const lista = pagos.length === 1 ? pagos[0] : `${pagos.slice(0, -1).join(", ")} e ${pagos.at(-1)}`;
-  const ressalva = faltando.length > 0 ? ` — ${faltando.join(", e ")}` : "";
-
-  return sobra < 0
-    ? `Na conta ${pagos.length === 1 ? "entra" : "entram"} ${lista}${ressalva}. Aluguel, salários e outras despesas vêm depois.`
-    : `É o que fica depois de pagar ${lista}${ressalva}. Aluguel, salários e outras despesas também saem daí.`;
 }
 
 /**

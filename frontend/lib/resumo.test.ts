@@ -61,18 +61,12 @@ describe("montaVeredito — a sobra", () => {
       coberturaAnterior: COMPLETA,
     });
     expect(t(v.sobra)).toBe("Sobraram R$ 52.300 das suas vendas.");
-    expect(v.sobraEmPartes).toEqual({
-      antes: "Sobraram ",
-      valor: 52_300,
-      depois: " das suas vendas.",
-    });
+    expect(v.destaque).toEqual({ valor: 52_300, acima: null, abaixo: "sobraram das suas vendas" });
+    expect(v.lembrete).toBe("Aluguel, salários e outras despesas também saem daí.");
     expect(t(v.comparacao)).toBe("R$ 3.300 a menos do que sobrou nos 30 dias anteriores.");
     expect(v.direcao).toBe("menos");
     expect(t(v.maiorPeso)).toBe(
       "Principal motivo: as vendas caíram R$ 10.000 — de R$ 128.000 para R$ 118.000.",
-    );
-    expect(v.explicacao).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas também saem daí.",
     );
   });
 
@@ -105,15 +99,13 @@ describe("montaVeredito — a sobra", () => {
       coberturaAnterior: null,
     });
     expect(t(v.sobra)).toBe("As vendas não cobriram os custos: faltaram R$ 2.000.");
-    // A tela anima só o número: o valor vai sem sinal, o "faltaram" é que diz.
-    expect(v.sobraEmPartes).toEqual({
-      antes: "As vendas não cobriram os custos: faltaram ",
+    // O número vai sem sinal: quem diz o sentido é o "Faltaram".
+    expect(v.destaque).toEqual({
       valor: 2000,
-      depois: ".",
+      acima: "Faltaram",
+      abaixo: "as vendas não cobriram os custos",
     });
-    expect(v.explicacao).toBe(
-      "Na conta entram a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas vêm depois.",
-    );
+    expect(v.lembrete).toBe("Aluguel, salários e outras despesas vêm depois.");
   });
 
   it("com mês negativo, a comparação tem sujeito próprio — falta que diminuiu é melhora", () => {
@@ -249,7 +241,7 @@ describe("montaVeredito — aviso de comparação", () => {
   });
 });
 
-describe("montaVeredito — aviso de cobertura e explicação", () => {
+describe("montaVeredito — aviso de cobertura", () => {
   const base = { atual: totais(100, 10, 10), anterior: null, coberturaAnterior: null };
 
   it("parcial", () => {
@@ -259,12 +251,9 @@ describe("montaVeredito — aviso de cobertura e explicação", () => {
     );
   });
 
-  it("nenhum custo: a explicação não afirma um desconto que não aconteceu", () => {
+  it("nenhum custo: avisa", () => {
     const v = montaVeredito({ ...base, coberturaAtual: calculaCobertura(100, 100) });
     expect(v.avisoCobertura).toBe("Nenhuma venda deste período saiu com custo informado.");
-    expect(v.explicacao).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre e o frete — o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas também saem daí.",
-    );
   });
 
   it("completa: sem aviso", () => {
@@ -501,40 +490,25 @@ describe("o frete na explicação da sobra", () => {
    */
   const explica = (atual: Totais, cobertura = COMPLETA) =>
     montaVeredito({ atual, anterior: null, coberturaAtual: cobertura, coberturaAnterior: null })
-      .explicacao;
+      .lembrete;
 
-  it("frete todo buscado: entra na lista do que foi pago", () => {
+  it("frete todo buscado: sobra positiva", () => {
     expect(explica(totais(1_000, 100, 300, { valor: 50, receitaSemFrete: 0 }))).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas também saem daí.",
+      "Aluguel, salários e outras despesas também saem daí.",
     );
   });
 
-  it("frete pela metade: avisa que parte ainda está sendo buscada", () => {
+  it("frete pela metade: sobra positiva", () => {
     expect(explica(totais(1_000, 100, 300, { valor: 20, receitaSemFrete: 400 }))).toBe(
-      "É o que fica depois de pagar a comissão do Mercado Livre e os produtos — o frete de parte das vendas ainda está sendo buscado no Mercado Livre. Aluguel, salários e outras despesas também saem daí.",
+      "Aluguel, salários e outras despesas também saem daí.",
     );
   });
 
-  it("nada de frete e nada de custo: as duas ressalvas, e só a comissão paga", () => {
+  it("nada de frete e nada de custo, com a comissão maior que a venda: falta", () => {
     const semCusto = calculaCobertura(1_000, 1_000);
     expect(explica(totais(1_000, 1_200, 0, { valor: 0, receitaSemFrete: 1_000 }), semCusto)).toBe(
-      "Na conta entra a comissão do Mercado Livre — o frete ainda está sendo buscado no Mercado Livre, e o custo dos produtos ainda não foi descontado. Aluguel, salários e outras despesas vêm depois.",
+      "Aluguel, salários e outras despesas vêm depois.",
     );
-  });
-
-  it("nenhuma variante incompleta afirma o frete como pago", () => {
-    const semCusto = calculaCobertura(1_000, 1_000);
-    for (const receitaSemFrete of [1_000, 400]) {
-      for (const [custoProdutos, cobertura] of [
-        [300, COMPLETA],
-        [0, semCusto],
-        [1_500, COMPLETA],
-      ] as const) {
-        const texto = explica(totais(1_000, 100, custoProdutos, { valor: 0, receitaSemFrete }), cobertura);
-        expect(texto).not.toMatch(/pagar[^—]*o frete/);
-        expect(texto).toMatch(/frete .*sendo buscado/);
-      }
-    }
   });
 
   it("o frete pode ser o principal motivo da mudança", () => {
