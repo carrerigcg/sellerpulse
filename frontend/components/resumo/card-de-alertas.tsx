@@ -56,7 +56,7 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
       <h2 id="resumo-alertas" className="text-lg font-semibold">
         Alertas{total > 0 && ` · ${total}`}
       </h2>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-3 grid items-start gap-3 sm:grid-cols-2">
         <Caixa tom="negativo" estado={prejuizo} titulo="Produtos com prejuízo" total={alertas.margem_negativa.length}>
           {prejuizo === "alerta" ? (
             <>
@@ -81,7 +81,9 @@ export function CardDeAlertas({ alertas, hrefCustos }: { alertas: Alertas; hrefC
           ) : (
             <>
               <p className="leading-relaxed">{fraseSemAlertaDeMargem(alertas)}</p>
-              {prejuizo === "nao-medido" && <BotaoDeCustos href={hrefCustos}>Informar custos</BotaoDeCustos>}
+              {/* "Conferir", não "Informar": a caixa também fica sem medida com
+                  todo custo informado e o frete ainda sendo buscado. */}
+              {prejuizo === "nao-medido" && <BotaoDeCustos href={hrefCustos}>Conferir custos</BotaoDeCustos>}
             </>
           )}
         </Caixa>

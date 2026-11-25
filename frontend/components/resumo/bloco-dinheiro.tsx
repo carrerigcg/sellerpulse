@@ -48,7 +48,7 @@ export function BlocoDinheiro({
           </p>
           <p className="font-semibold">{destaque.abaixo}</p>
         </div>
-        <p className={`rounded-full px-3 py-1 text-sm font-semibold ${SELO[veredito.direcao]}`}>
+        <p className={`rounded-lg px-3 py-1 text-sm font-semibold ${SELO[veredito.direcao]}`}>
           <span aria-hidden="true">{SETA[veredito.direcao]}</span>
           {veredito.comparacao}
         </p>
