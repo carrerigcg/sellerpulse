@@ -61,6 +61,11 @@ describe("montaVeredito — a sobra", () => {
       coberturaAnterior: COMPLETA,
     });
     expect(t(v.sobra)).toBe("Sobraram R$ 52.300 das suas vendas.");
+    expect(v.sobraEmPartes).toEqual({
+      antes: "Sobraram ",
+      valor: 52_300,
+      depois: " das suas vendas.",
+    });
     expect(t(v.comparacao)).toBe("R$ 3.300 a menos do que sobrou nos 30 dias anteriores.");
     expect(v.direcao).toBe("menos");
     expect(t(v.maiorPeso)).toBe(
@@ -100,6 +105,12 @@ describe("montaVeredito — a sobra", () => {
       coberturaAnterior: null,
     });
     expect(t(v.sobra)).toBe("As vendas não cobriram os custos: faltaram R$ 2.000.");
+    // A tela anima só o número: o valor vai sem sinal, o "faltaram" é que diz.
+    expect(v.sobraEmPartes).toEqual({
+      antes: "As vendas não cobriram os custos: faltaram ",
+      valor: 2000,
+      depois: ".",
+    });
     expect(v.explicacao).toBe(
       "Na conta entram a comissão do Mercado Livre, o frete e os produtos. Aluguel, salários e outras despesas vêm depois.",
     );

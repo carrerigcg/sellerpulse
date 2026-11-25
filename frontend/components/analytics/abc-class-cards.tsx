@@ -1,12 +1,7 @@
 import type { AbcLinha, ClasseAbc } from "@/lib/api";
 
 import { abcClassBadgeClass } from "./abc-class-badge";
-
-const brl = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 0,
-});
+import { NumeroAnimado } from "./numero-animado";
 
 const pct = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 
@@ -34,7 +29,9 @@ export function AbcClassCards({ abc }: { abc: AbcLinha[] }) {
                 {linhas.length} {linhas.length === 1 ? "produto" : "produtos"}
               </span>
             </div>
-            <p className="tabular mt-2 text-3xl font-semibold">{brl.format(receita)}</p>
+            <p className="tabular mt-2 text-3xl font-semibold">
+              <NumeroAnimado valor={receita} />
+            </p>
             <p className="tabular mt-1 text-xs text-muted">
               {pct.format(participacao)}% da receita do período
             </p>

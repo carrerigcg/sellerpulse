@@ -84,6 +84,33 @@ body {
   }
 }
 
+/* Contagem dos números (`components/analytics/numero-animado.tsx`). O valor
+   final vem do servidor escondido, para não piscar antes de a contagem
+   começar. Se o JavaScript não montar em 1,2 s, ele aparece assim mesmo:
+   número escondido para sempre seria pior que número sem animação. */
+.contador {
+  opacity: 0;
+  animation: contador-aparece 0s linear 1.2s forwards;
+}
+
+.contador[data-pronto] {
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes contador-aparece {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .contador {
+    opacity: 1;
+    animation: none;
+  }
+}
+
 /* Entrada de cada slide do tutorial (`components/analytics/tutorial-da-tela.tsx`).
    Só roda sob `motion-safe:` — com movimento reduzido, a troca é instantânea. */
 @keyframes tutorial-entra {

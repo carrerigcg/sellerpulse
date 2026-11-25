@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { NumeroAnimado } from "@/components/analytics/numero-animado";
 import type { Veredito } from "@/lib/resumo";
 
 /**
@@ -29,7 +30,13 @@ export function BlocoDinheiro({
       <h2 id="resumo-dinheiro" className="text-sm font-medium text-muted">
         O dinheiro
       </h2>
-      <p className="mt-2 text-2xl font-semibold leading-snug tracking-tight">{veredito.sobra}</p>
+      <p className="mt-2 text-2xl font-semibold leading-snug tracking-tight">
+        {veredito.sobraEmPartes.antes}
+        <span className="tabular">
+          <NumeroAnimado valor={veredito.sobraEmPartes.valor} />
+        </span>
+        {veredito.sobraEmPartes.depois}
+      </p>
       <p className={`mt-1 text-xl font-bold ${corDaComparacao}`}>{veredito.comparacao}</p>
       <p className="mt-4 leading-relaxed text-muted">{veredito.explicacao}</p>
       {veredito.maiorPeso && <p className="mt-3 leading-relaxed">{veredito.maiorPeso}</p>}

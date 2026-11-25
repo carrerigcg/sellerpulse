@@ -1,12 +1,7 @@
 import type { RfmLinha } from "@/lib/api";
 
+import { NumeroAnimado } from "./numero-animado";
 import { SEGMENTOS } from "./segmentos";
-
-const brl = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 0,
-});
 
 /** Faixa de segmentos — contagem e receita por Champions/Loyal/At Risk/... */
 export function SegmentBand({ rfm }: { rfm: RfmLinha[] }) {
@@ -26,7 +21,9 @@ export function SegmentBand({ rfm }: { rfm: RfmLinha[] }) {
                 {linhas.length} {linhas.length === 1 ? "comprador" : "compradores"}
               </span>
             </div>
-            <p className="tabular mt-2 text-2xl font-semibold">{brl.format(receita)}</p>
+            <p className="tabular mt-2 text-2xl font-semibold">
+              <NumeroAnimado valor={receita} />
+            </p>
             <p className="mt-2 text-xs text-muted">{def.descricao}</p>
           </div>
         );

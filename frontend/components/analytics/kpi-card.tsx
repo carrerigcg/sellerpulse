@@ -1,10 +1,6 @@
 import { formatarVariacao } from "@/lib/variacao";
 
-const brl = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  maximumFractionDigits: 0,
-});
+import { NumeroAnimado } from "./numero-animado";
 
 /**
  * Cartão de KPI com variação sobre o período anterior.
@@ -39,7 +35,9 @@ export function KpiCard({
   return (
     <div className="rounded-xl border border-line p-5">
       <span className="text-xs font-medium uppercase tracking-wide text-muted">{rotulo}</span>
-      <p className="tabular mt-2 text-3xl font-semibold">{brl.format(valor)}</p>
+      <p className="tabular mt-2 text-3xl font-semibold">
+        <NumeroAnimado valor={valor} />
+      </p>
       {nota && <p className="mt-1 text-xs text-muted">{nota}</p>}
       {temBase && (
         <span

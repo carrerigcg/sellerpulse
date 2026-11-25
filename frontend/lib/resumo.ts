@@ -40,6 +40,12 @@ export type Totais = ReturnType<typeof totalizarFluxo>;
 
 export type Veredito = {
   sobra: string;
+  /**
+   * A mesma frase de `sobra`, partida em volta do valor, para a tela poder
+   * animar só o número. `valor` é absoluto e já arredondado: o sinal está nas
+   * palavras ("faltaram").
+   */
+  sobraEmPartes: { antes: string; valor: number; depois: string };
   comparacao: string;
   /** Para a cor da linha de comparação — sempre junto do texto, nunca no lugar dele. */
   direcao: "mais" | "menos" | "igual" | "sem-comparacao";
@@ -59,11 +65,17 @@ export function montaVeredito(entrada: {
 }): Veredito {
   const { atual, anterior, coberturaAtual, coberturaAnterior } = entrada;
   const sobra = arredonda(atual.margem);
+  const sobraEmPartes =
+    sobra >= 0
+      ? { antes: "Sobraram ", valor: Math.abs(sobra), depois: " das suas vendas." }
+      : {
+          antes: "As vendas não cobriram os custos: faltaram ",
+          valor: Math.abs(sobra),
+          depois: ".",
+        };
   const comum = {
-    sobra:
-      sobra >= 0
-        ? `Sobraram ${reais(sobra)} das suas vendas.`
-        : `As vendas não cobriram os custos: faltaram ${reais(sobra)}.`,
+    sobra: `${sobraEmPartes.antes}${reais(sobraEmPartes.valor)}${sobraEmPartes.depois}`,
+    sobraEmPartes,
     explicacao: explicacao(sobra, coberturaAtual, coberturaDoFrete(atual)),
     avisoCobertura: avisoDeCobertura(coberturaAtual),
   };
