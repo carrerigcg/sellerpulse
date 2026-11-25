@@ -35,6 +35,21 @@ describe("frases sem alerta", () => {
     expect(fraseSemAlertaDeMargem({ ...VAZIO, produtos_avaliados: 1 })).not.toMatch(/os 1/);
   });
 
+  it("com poucos produtos medidos, diz quantos de quantos e não promete que está tudo bem", () => {
+    expect(fraseSemAlertaDeMargem({ ...VAZIO, produtos_avaliados: 5, produtos_vendidos: 50 })).toBe(
+      "Nenhum entre os 5 produtos com custo e frete conhecidos, de 50 vendidos nos últimos 30 dias. Com tão poucos medidos, ainda não dá para dizer que está tudo bem.",
+    );
+    expect(fraseSemAlertaDeMargem({ ...VAZIO, produtos_avaliados: 1, produtos_vendidos: 50 })).toBe(
+      "Nenhum: só 1 produto, de 50 vendidos nos últimos 30 dias, tem custo e frete conhecidos. Com tão poucos medidos, ainda não dá para dizer que está tudo bem.",
+    );
+  });
+
+  it("com a maior parte medida, mantém a frase de sempre", () => {
+    expect(fraseSemAlertaDeMargem({ ...VAZIO, produtos_avaliados: 3, produtos_vendidos: 4 })).toBe(
+      "Nenhum, entre os 3 produtos com custo e frete conhecidos em todas as vendas.",
+    );
+  });
+
   it("nenhum parado diz sobre quantos produtos vale", () => {
     expect(fraseSemParados({ ...VAZIO, produtos_com_ritmo: 7 })).toBe(
       "Nenhum dos 7 produtos que vendem com frequência parou.",
@@ -90,8 +105,21 @@ describe("estado das caixas — não medido nunca é verde", () => {
 
   it("prejuízo", () => {
     expect(estadoDoPrejuizo(VAZIO)).toBe("nao-medido");
+    // Resposta de backend antigo, sem `produtos_vendidos`: vale o que já valia.
     expect(estadoDoPrejuizo({ ...VAZIO, produtos_avaliados: 3 })).toBe("tudo-certo");
     expect(estadoDoPrejuizo({ ...VAZIO, produtos_avaliados: 3, margem_negativa: [prejuizo] })).toBe("alerta");
+  });
+
+  it("prejuízo: verde só com a maior parte dos vendidos medida", () => {
+    expect(estadoDoPrejuizo({ ...VAZIO, produtos_avaliados: 3, produtos_vendidos: 4 })).toBe("tudo-certo");
+    expect(estadoDoPrejuizo({ ...VAZIO, produtos_avaliados: 5, produtos_vendidos: 50 })).toBe("nao-medido");
+    // Exatamente a metade não é "a maior parte".
+    expect(estadoDoPrejuizo({ ...VAZIO, produtos_avaliados: 2, produtos_vendidos: 4 })).toBe("nao-medido");
+  });
+
+  it("prejuízo real é alerta mesmo com pouca cobertura", () => {
+    const alertas = { ...VAZIO, produtos_avaliados: 1, produtos_vendidos: 50, margem_negativa: [prejuizo] };
+    expect(estadoDoPrejuizo(alertas)).toBe("alerta");
   });
 
   it("parados", () => {
