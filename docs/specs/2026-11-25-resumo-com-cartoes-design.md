@@ -2,7 +2,8 @@
 
 Estado: implementado em 2026-11-25 na branch `feat/resumo-com-cartoes`, com a
 tela vista (demo, três estados dos alertas, celular) e os revisores sem
-bloqueio. Fica fora da `main` até o Guilherme testar no localhost.
+bloqueio. O Guilherme testou no localhost e aprovou; vai por PR (toca o
+back-end), com merge só depois do CI verde e do ok dele.
 
 ## O pedido
 
@@ -101,6 +102,18 @@ da outra. O que vale para as duas:
 - **Pé da caixa:** "Dias contados até DD/MM".
 - **Sem sincronização** (`produtos_com_ritmo` nulo) ou sem produto com ritmo
   medido: cinza, com a frase atual de `fraseSemParados`.
+
+### 3b. Decididas no meio da implementação (1.1 e 2.1)
+
+- **Frete ainda sendo buscado (1.1):** além do "parcial" no cartão, uma faixa
+  amarela embaixo diz quanto do valor vendido ainda está sem frete e que a
+  sobra verdadeira é menor. Sem ela, a sobra parecia maior do que é.
+- **Verde só com a maior parte medida (2.1):** a caixa de prejuízo só fica
+  verde quando mais da metade dos produtos vendidos nos 30 dias tem custo e
+  frete conhecidos. Com menos, fica cinza e diz quantos foram medidos de
+  quantos venderam. Para isso o back-end passou a devolver
+  `produtos_vendidos` em `/alertas`. Sem o campo (back-end antigo), a regra
+  cai para os avaliados e a caixa se comporta como antes.
 
 ### 4. As frases
 
