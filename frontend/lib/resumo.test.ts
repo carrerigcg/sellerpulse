@@ -525,13 +525,21 @@ describe("partesDaConta — ausência não é zero", () => {
     expect(p[3]).toEqual({ rotulo: "Custo dos produtos", valor: 300, nota: "parcial" });
   });
 
-  it("vai no veredito", () => {
+  it("sem venda no período: zero de verdade, sem traço", () => {
+    const p = partesDaConta(totais(0, 0, 0), calculaCobertura(0, 0));
+    expect(p[2]).toEqual({ rotulo: "Frete", valor: 0, nota: null });
+    expect(p[3]).toEqual({ rotulo: "Custo dos produtos", valor: 0, nota: null });
+  });
+
+  it("vai no veredito, com a cobertura do período atual e não a do anterior", () => {
+    const atual = totais(1000, 120, 400);
     const v = montaVeredito({
-      atual: totais(1000, 120, 400),
-      anterior: null,
+      atual,
+      anterior: totais(900, 100, 300),
       coberturaAtual: COMPLETA,
-      coberturaAnterior: null,
+      coberturaAnterior: calculaCobertura(1000, 1000),
     });
     expect(v.partes).toHaveLength(4);
+    expect(v.partes).toEqual(partesDaConta(atual, COMPLETA));
   });
 });
