@@ -77,8 +77,28 @@ export function fraseSemParados(alertas: Alertas): string {
     : `Nenhum dos ${n} produtos que vendem com frequência parou.`;
 }
 
-export function fraseDaMargem(alerta: AlertaDeMargem): string {
-  return `Prejuízo de ${brl.format(-alerta.margem)} em ${brl.format(alerta.receita)} vendidos nos últimos 30 dias, já tirando taxa, frete e custo.`;
+/**
+ * A cor da caixa. "Não medido" é estado próprio, e nunca verde: sem custo,
+ * ou sem produto com ritmo, não se sabe se está tudo bem.
+ */
+export type EstadoDaCaixa = "alerta" | "tudo-certo" | "nao-medido";
+
+export function estadoDoPrejuizo(alertas: Alertas): EstadoDaCaixa {
+  const margem = estadoDaMargem(alertas);
+  return margem === "alertas" ? "alerta" : margem === "nenhum" ? "tudo-certo" : "nao-medido";
+}
+
+export function estadoDosParados(alertas: Alertas): EstadoDaCaixa {
+  if (alertas.parados.length > 0) return "alerta";
+  return alertas.produtos_com_ritmo ? "tudo-certo" : "nao-medido";
+}
+
+/** O prejuízo vai sem sinal: a tela escreve o "−" e o "Prejuízo de" do leitor de tela. */
+export function partesDaMargem(alerta: AlertaDeMargem): { prejuizo: string; contexto: string } {
+  return {
+    prejuizo: brl.format(-alerta.margem),
+    contexto: `em ${brl.format(alerta.receita)} vendidos nos últimos 30 dias, já tirando taxa, frete e custo.`,
+  };
 }
 
 /**
@@ -92,8 +112,8 @@ export function fraseDaReferencia(alertas: Alertas): string | null {
   return `Dias contados até a última sincronização, em ${dia}/${mes}.`;
 }
 
-export function fraseDoParado(alerta: AlertaDeParado): string {
+export function partesDoParado(alerta: AlertaDeParado): { dias: string; contexto: string } {
   const ritmo =
     alerta.intervalo_normal <= 1 ? "costuma vender todo dia" : `costuma vender a cada ${alerta.intervalo_normal} dias`;
-  return `Sem vender há ${alerta.dias_sem_vender} dias; ${ritmo}.`;
+  return { dias: `${alerta.dias_sem_vender} dias`, contexto: `sem vender; ${ritmo}.` };
 }

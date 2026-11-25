@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   estadoDaMargem,
-  fraseDaMargem,
+  estadoDoPrejuizo,
+  estadoDosParados,
   fraseDaReferencia,
-  fraseDoParado,
   fraseSemAlertaDeMargem,
   fraseSemParados,
   linkDoAnuncio,
+  partesDaMargem,
+  partesDoParado,
   type Alertas,
 } from "./alertas";
 
@@ -61,21 +63,42 @@ describe("estadoDaMargem", () => {
   });
 });
 
-describe("frases", () => {
-  it("o prejuízo sai positivo na frase, com a receita ao lado", () => {
-    const frase = fraseDaMargem({ sku: "MLB1", titulo: "Fone", receita: 100, margem: -10 });
-    expect(frase).toContain("Prejuízo de R$ 10,00");
-    expect(frase).toContain("R$ 100,00");
+const nbsp = (s: string) => s.replace(/\u00a0/g, " ");
+
+describe("partes de cada alerta", () => {
+  it("o prejuízo sai sem sinal no destaque, com a receita no contexto", () => {
+    const p = partesDaMargem({ sku: "MLB1", titulo: "Fone", receita: 100, margem: -10 });
+    expect(nbsp(p.prejuizo)).toBe("R$ 10,00");
+    expect(nbsp(p.contexto)).toBe("em R$ 100,00 vendidos nos últimos 30 dias, já tirando taxa, frete e custo.");
   });
 
-  it("o parado diz o ritmo normal do produto", () => {
+  it("o parado destaca os dias e diz o ritmo normal", () => {
     const base = { sku: "MLB1", titulo: "Fone", dias_sem_vender: 28, ultima_venda: "2026-09-22" };
-    expect(fraseDoParado({ ...base, intervalo_normal: 8 })).toBe(
-      "Sem vender há 28 dias; costuma vender a cada 8 dias.",
+    expect(partesDoParado({ ...base, intervalo_normal: 8 })).toEqual({
+      dias: "28 dias",
+      contexto: "sem vender; costuma vender a cada 8 dias.",
+    });
+    expect(partesDoParado({ ...base, intervalo_normal: 1 }).contexto).toBe(
+      "sem vender; costuma vender todo dia.",
     );
-    expect(fraseDoParado({ ...base, intervalo_normal: 1 })).toBe(
-      "Sem vender há 28 dias; costuma vender todo dia.",
-    );
+  });
+});
+
+describe("estado das caixas — não medido nunca é verde", () => {
+  const prejuizo = { sku: "MLB1", titulo: "Fone", receita: 100, margem: -10 };
+  const parado = { sku: "MLB2", titulo: "Capa", dias_sem_vender: 9, intervalo_normal: 2, ultima_venda: "2026-11-01" };
+
+  it("prejuízo", () => {
+    expect(estadoDoPrejuizo(VAZIO)).toBe("nao-medido");
+    expect(estadoDoPrejuizo({ ...VAZIO, produtos_avaliados: 3 })).toBe("tudo-certo");
+    expect(estadoDoPrejuizo({ ...VAZIO, produtos_avaliados: 3, margem_negativa: [prejuizo] })).toBe("alerta");
+  });
+
+  it("parados", () => {
+    expect(estadoDosParados(VAZIO)).toBe("nao-medido"); // nunca sincronizou
+    expect(estadoDosParados({ ...VAZIO, produtos_com_ritmo: 0 })).toBe("nao-medido");
+    expect(estadoDosParados({ ...VAZIO, produtos_com_ritmo: 14 })).toBe("tudo-certo");
+    expect(estadoDosParados({ ...VAZIO, produtos_com_ritmo: 14, parados: [parado] })).toBe("alerta");
   });
 });
 
