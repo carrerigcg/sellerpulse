@@ -1,7 +1,8 @@
 # Resumo com cartões: o dinheiro e os alertas
 
-Estado: desenhado em 2026-11-25, na branch `feat/resumo-com-cartoes`. Fica
-fora da `main` até o Guilherme testar no localhost.
+Estado: implementado em 2026-11-25 na branch `feat/resumo-com-cartoes`, com a
+tela vista (demo, três estados dos alertas, celular) e os revisores sem
+bloqueio. Fica fora da `main` até o Guilherme testar no localhost.
 
 ## O pedido
 
