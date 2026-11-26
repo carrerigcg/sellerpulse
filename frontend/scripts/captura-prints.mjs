@@ -79,6 +79,8 @@ const CAMINHOS_DO_CHROME = [
  * componente precisa ler a dimensao real depois de gerar.
  */
 const ALVOS = [
+  { arquivo: "demo-resumo.png", rota: "/demo", largura: 1440, altura: 900 },
+  { arquivo: "demo-resumo-mobile.png", rota: "/demo", largura: 602, altura: 1100 },
   { arquivo: "demo-executive.png", rota: "/demo/financeiro", largura: 1440, altura: 900 },
   { arquivo: "demo-executive-mobile.png", rota: "/demo/financeiro", largura: 602, altura: 1100 },
   { arquivo: "demo-produtos.png", rota: "/demo/produtos", largura: 1440, altura: 900 },
@@ -244,6 +246,24 @@ async function captura(sessao, sessionId, alvo) {
     // Abaixo de 768px o Tailwind serve o layout de celular. Sem marcar como
     // movel, o Chrome entrega a versao estreita do layout de desktop.
       mobile: alvo.largura < 768,
+    },
+    sessionId,
+  );
+
+  // O tutorial de cada tela abre sozinho na primeira visita (perfil limpo) e
+  // saia no print por cima da tela, borrando tudo. Responder "ja vi" para
+  // qualquer chave de tutorial, antes de a pagina rodar, fotografa a tela
+  // como quem volta a ela. Nao depende da versao de cada tutorial.
+  await sessao.manda(
+    "Page.addScriptToEvaluateOnNewDocument",
+    {
+      source: `(() => {
+        const original = Storage.prototype.getItem;
+        Storage.prototype.getItem = function (chave) {
+          if (String(chave).startsWith("sellerpulse:tutorial:")) return "1";
+          return original.call(this, chave);
+        };
+      })();`,
     },
     sessionId,
   );

@@ -5,8 +5,8 @@ import { vitrineComVendasAbertas } from "@/lib/vendas";
 import { BrowserFrame } from "./browser-frame";
 
 /**
- * Seção 3 — as três análises, com prints reais de `/demo/financeiro`, `/demo/produtos`
- * e `/demo/clientes`, capturados da própria demonstração por
+ * Seção 3 — as quatro telas, com prints reais de `/demo` (o Resumo, a porta de
+ * entrada), `/demo/financeiro`, `/demo/produtos` e `/demo/clientes`, capturados da própria demonstração por
  * `scripts/captura-prints.mjs`. Nenhum número aqui é fabricado.
  *
  * Mas eles NÃO são os mesmos números que o visitante vê ao clicar em "ver
@@ -25,6 +25,13 @@ import { BrowserFrame } from "./browser-frame";
  */
 
 const TELAS = [
+  {
+    titulo: "Resumo",
+    pergunta: "Estou ganhando dinheiro? E o que eu faço agora?",
+    desktop: { src: "/landing/demo-resumo.png", width: 1440, height: 900 },
+    mobile: { src: "/landing/demo-resumo-mobile.png", width: 602, height: 1100 },
+    href: "/demo",
+  },
   {
     titulo: "Financeiro",
     pergunta: "Quanto sobrou de verdade este mês, depois da comissão do Mercado Livre?",
@@ -54,7 +61,7 @@ export function Showcase() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="max-w-2xl">
           <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Três telas, três perguntas respondidas.
+            Quatro telas, quatro perguntas respondidas.
           </h2>
           <p className="mt-4 text-lg text-muted">
             Nada aqui é maquete — são as telas reais, com dados de demonstração
