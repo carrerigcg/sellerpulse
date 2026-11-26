@@ -86,8 +86,10 @@ export function TextoDoHeroi() {
         data-revelar={revelar || undefined}
         data-montado={montado || undefined}
       >
+        {/* Uma frase só para o leitor de tela; sem isso o VoiceOver anda palavra por palavra. */}
+        <span className="sr-only">{SUBTITULO_DO_HEROI}</span>
         {PALAVRAS.map((p, i) => (
-          <span key={i}>
+          <span key={i} aria-hidden="true">
             <span className="palavra-revelada" style={{ transitionDelay: `${i * POR_PALAVRA}ms` }}>
               {p}
             </span>{" "}

@@ -5,7 +5,7 @@ import { totalizarFluxo } from "../components/analytics/executive-totals";
 import type { FluxoDia } from "./api";
 import { coberturaDoFluxo } from "./cobertura";
 import { PERGUNTA_DA_CONVERSA, SEM_NUMEROS, respostaDaConversa } from "./conversa-da-demo";
-import { montaVeredito } from "./resumo";
+import { montaVeredito, vereditoDoFluxo } from "./resumo";
 
 /** O Intl usa espaço não separável em "R$ 1.000"; os textos esperados, não. */
 const t = (s: string) => s.replace(/ /g, " ");
@@ -34,12 +34,7 @@ describe("resposta da conversa", () => {
   });
 
   it("usa os mesmos números do Resumo da demo", () => {
-    const veredito = montaVeredito({
-      atual: totalizarFluxo(atual),
-      anterior: totalizarFluxo(anterior),
-      coberturaAtual: coberturaDoFluxo(atual),
-      coberturaAnterior: coberturaDoFluxo(anterior),
-    });
+    const veredito = vereditoDoFluxo(atual, anterior);
     const r = respostaDaConversa(atual, anterior);
     expect(r.frase).toBe(veredito.sobra);
     expect(r.linhas?.map((l) => l.rotulo)).toEqual([
@@ -48,8 +43,35 @@ describe("resposta da conversa", () => {
       "Frete",
       "Custo dos produtos",
     ]);
-    expect(r.linhas?.map((l) => l.valor)).toEqual(veredito.partes.map((p) => p.valor));
+    expect(r.linhas).toEqual(veredito.partes);
     expect(r.fecho).toBe(veredito.lembrete);
+  });
+
+  it("o Resumo e a conversa saem da mesma conta", () => {
+    const veredito = vereditoDoFluxo(atual, anterior);
+    const aMao = montaVeredito({
+      atual: totalizarFluxo(atual),
+      anterior: totalizarFluxo(anterior),
+      coberturaAtual: coberturaDoFluxo(atual),
+      coberturaAnterior: coberturaDoFluxo(anterior),
+    });
+    expect(veredito).toEqual(aMao);
+  });
+
+  it("com custo faltando, avisa como o Resumo e marca o custo como parcial", () => {
+    // 30.000 das vendas sem custo informado: a sobra mostrada é maior que a real.
+    const parcial = [{ ...dia("2026-11-01", 100000, 30000), receita_sem_custo: 30000 }];
+    const veredito = vereditoDoFluxo(parcial, anterior);
+    expect(veredito.avisoCobertura).not.toBeNull();
+
+    const r = respostaDaConversa(parcial, anterior);
+    expect(r.avisos).toContain(veredito.avisoCobertura);
+    expect(r.linhas).toEqual(veredito.partes);
+    expect(r.linhas?.find((l) => l.rotulo === "Custo dos produtos")?.nota).toBeTruthy();
+  });
+
+  it("com custo completo, nenhum aviso de cobertura", () => {
+    expect(respostaDaConversa(atual, anterior).avisos).toEqual([]);
   });
 
   it("sobra de R$ 47.000 aparece na frase", () => {
@@ -65,6 +87,7 @@ describe("resposta da conversa", () => {
   it("sem dado da demo, nenhuma tabela e nenhum número", () => {
     const r = respostaDaConversa(null, null);
     expect(r.linhas).toBeNull();
+    expect(r.avisos).toEqual([]);
     expect(r.frase).toBe(SEM_NUMEROS);
     expect(r.frase).not.toMatch(/\d/);
   });

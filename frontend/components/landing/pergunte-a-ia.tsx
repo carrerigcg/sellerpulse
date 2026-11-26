@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { janelaAnterior } from "@/lib/api";
-import { PERGUNTA_DA_CONVERSA, respostaDaConversa } from "@/lib/conversa-da-demo";
+import { PERGUNTA_DA_CONVERSA, SEM_NUMEROS, respostaDaConversa } from "@/lib/conversa-da-demo";
 import { getDemoFluxoFinanceiro } from "@/lib/demo";
 import { periodoDoResumo } from "@/lib/periodo";
 
@@ -78,7 +78,15 @@ export function PergunteAIa() {
               <code className="rounded bg-line/60 px-1.5 py-0.5 text-slate-600">visao_geral</code> no
               SellerPulse
             </p>
-            <Suspense fallback={<p className="mt-3 text-muted">Consultando a loja de demonstração…</p>}>
+            {/* O fallback é a resposta sem números, na mesma etapa da conversa: sem
+                JavaScript ele nunca é trocado, e uma espera eterna mentiria. */}
+            <Suspense
+              fallback={
+                <p className="etapa-da-conversa mt-3 leading-relaxed text-ink [transition-delay:1200ms]">
+                  {SEM_NUMEROS}
+                </p>
+              }
+            >
               <RespostaDaDemo />
             </Suspense>
             <p className="etapa-da-conversa mt-4 text-xs text-muted [transition-delay:1800ms]">
@@ -143,6 +151,11 @@ async function RespostaDaDemo() {
           </tbody>
         </table>
       )}
+      {r.avisos.map((a) => (
+        <p key={a} className="mt-2">
+          {a}
+        </p>
+      ))}
       {r.fecho && <p className="mt-2">{r.fecho}</p>}
     </div>
   );

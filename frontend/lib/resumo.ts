@@ -431,6 +431,24 @@ function valorOuNulo<T>(resultado: PromiseSettledResult<T>): T | null {
  * mentiria por omissão. Fluxo anterior que volta VAZIO (sem erro) é outra
  * coisa: não houve venda para comparar, e a frase diz isso.
  */
+/**
+ * O veredito a partir dos dias de cada período. Um lugar só para a conta: o
+ * Resumo e a conversa de exemplo da vitrine (`conversa-da-demo.ts`) chamam
+ * daqui, e por isso nunca mostram números ou avisos diferentes.
+ */
+export function vereditoDoFluxo(
+  dias: readonly FluxoDia[],
+  anteriores: readonly FluxoDia[],
+): Veredito {
+  const temAnterior = anteriores.length > 0;
+  return montaVeredito({
+    atual: totalizarFluxo([...dias]),
+    anterior: temAnterior ? totalizarFluxo([...anteriores]) : null,
+    coberturaAtual: coberturaDoFluxo([...dias]),
+    coberturaAnterior: temAnterior ? coberturaDoFluxo([...anteriores]) : null,
+  });
+}
+
 export function montaResumo(entrada: {
   fluxo: PromiseSettledResult<FluxoDia[]>;
   anterior: PromiseSettledResult<FluxoDia[]>;
@@ -462,12 +480,7 @@ export function montaResumo(entrada: {
   return {
     erroNoFluxo: falha ? { motivo: falha.reason } : null,
     semVendas: dias.length === 0,
-    veredito: montaVeredito({
-      atual: totalizarFluxo(dias),
-      anterior: diasAnteriores.length > 0 ? totalizarFluxo(diasAnteriores) : null,
-      coberturaAtual: coberturaDoFluxo(dias),
-      coberturaAnterior: diasAnteriores.length > 0 ? coberturaDoFluxo(diasAnteriores) : null,
-    }),
+    veredito: vereditoDoFluxo(dias, diasAnteriores),
     tarefas: resultado.tarefas,
     rodape: rodapeDasTarefas(resultado),
     hrefFinanceiro: hrefDoFinanceiro(entrada.links),
