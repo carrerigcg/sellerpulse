@@ -5,6 +5,7 @@ import { LandingHeader } from "@/components/landing/header";
 import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { MlFocus } from "@/components/landing/ml-focus";
+import { PergunteAIa } from "@/components/landing/pergunte-a-ia";
 import { Precos } from "@/components/landing/precos";
 import { Problem } from "@/components/landing/problem";
 import { Showcase } from "@/components/landing/showcase";
@@ -16,14 +17,14 @@ import { createClient } from "@/lib/supabase/server";
  *
  * Antes da Sprint 3, `/` só checava sessão e mandava pra `/dashboard` ou
  * `/login` — não havia produto pra mostrar. Hoje são cinco telas e uma
- * demonstração pública navegável sem cadastro, e a raiz é a landing: oito
+ * demonstração pública navegável sem cadastro, e a raiz é a landing: nove
  * seções, quatro pontos de cadastro na rolagem (herói, depois das análises,
  * depois do foco em Mercado Livre, e a faixa final).
  *
  * A ordem das seções conta uma história, e mexer nela quebra a história:
  * dor (`Problem`) → o que você vê (`Showcase`) → o que você FAZ com o que
- * viu (`Acoes`) → como começar (`HowItWorks`) → por que só Mercado Livre
- * (`MlFocus`) → e se eu não confiar (`YourData`) → quanto custa (`Precos`) →
+ * viu (`Acoes`) → pergunte à IA (`PergunteAIa`, o Premium) → como começar
+ * (`HowItWorks`) → por que só Mercado Livre (`MlFocus`) → e se eu não confiar (`YourData`) → quanto custa (`Precos`) →
  * o empurrão (`FinalCta`).
  *
  * Ainda é assíncrona e ainda chama `getUser()`, mas não pra redirecionar —
@@ -45,6 +46,7 @@ export default async function Home() {
         <Problem />
         <Showcase />
         <Acoes />
+        <PergunteAIa />
         <HowItWorks />
         <MlFocus />
         <YourData />

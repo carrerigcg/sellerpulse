@@ -199,6 +199,36 @@ body {
   }
 }
 
+/* Etapas da conversa de exemplo da vitrine: escondidas até a seção entrar na
+   tela (`data-visivel`, em `aparece-ao-rolar.tsx`). Sem JavaScript, aparecem
+   em 1,2 s, como o resto. */
+.etapa-da-conversa {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+  animation: palavra-aparece 0s linear 1.2s forwards;
+}
+
+[data-montado] .etapa-da-conversa {
+  animation: none;
+}
+
+[data-visivel] .etapa-da-conversa {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .etapa-da-conversa {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    animation: none;
+  }
+}
+
 /* Entrada de cada slide do tutorial (`components/analytics/tutorial-da-tela.tsx`).
    Só roda sob `motion-safe:` — com movimento reduzido, a troca é instantânea. */
 @keyframes tutorial-entra {
