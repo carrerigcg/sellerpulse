@@ -120,6 +120,85 @@ body {
   }
 }
 
+/* Escrita do herói (`components/landing/texto-do-heroi.tsx`). Mesmo trato do
+   `.contador`: o texto final vem do servidor escondido; se o JavaScript não
+   montar em 1,2 s, ele aparece pronto. Frase de destaque vazia para sempre
+   seria pior que frase sem animação. */
+.escrita {
+  opacity: 0;
+  animation: contador-aparece 0s linear 1.2s forwards;
+}
+
+.escrita[data-pronto] {
+  opacity: 1;
+  animation: none;
+}
+
+.cursor-da-escrita {
+  display: inline-block;
+  width: 0.08em;
+  height: 0.9em;
+  margin-left: 0.06em;
+  vertical-align: -0.08em;
+  border-radius: 2px;
+  background: var(--color-accent-on-dark);
+  animation: cursor-pisca 1s steps(1) infinite;
+}
+
+@keyframes cursor-pisca {
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes palavra-aparece {
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+/* Palavras do subtítulo: desfocadas até o contêiner ganhar `data-revelar`;
+   cada uma carrega o próprio `transition-delay`, então a cascata é só CSS.
+   Sem JavaScript, aparecem prontas em 1,2 s. */
+.subtitulo-do-heroi:not([data-revelar]):not([data-montado]) .palavra-revelada {
+  animation: palavra-aparece 0s linear 1.2s forwards;
+}
+
+.palavra-revelada {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(4px);
+  transition:
+    opacity 0.5s ease,
+    filter 0.5s ease,
+    transform 0.5s ease;
+}
+
+[data-revelar] .palavra-revelada {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .escrita {
+    opacity: 1;
+    animation: none;
+  }
+  .cursor-da-escrita {
+    display: none;
+  }
+  .palavra-revelada {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* Entrada de cada slide do tutorial (`components/analytics/tutorial-da-tela.tsx`).
    Só roda sob `motion-safe:` — com movimento reduzido, a troca é instantânea. */
 @keyframes tutorial-entra {

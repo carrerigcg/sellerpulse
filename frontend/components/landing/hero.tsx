@@ -4,6 +4,7 @@ import { ChamadaPrincipal } from "@/components/landing/chamada-principal";
 import { vitrineComVendasAbertas } from "@/lib/vendas";
 
 import { HeroVideo } from "./hero-video";
+import { TextoDoHeroi } from "./texto-do-heroi";
 
 /**
  * Seção 1 — herói. Fundo escuro de propósito: a cor da marca (laranja e
@@ -50,26 +51,10 @@ export function Hero() {
             Feito para o Mercado Livre
           </p>
 
-          <h1 className="mt-4 text-4xl font-semibold leading-[1.1] tracking-tight text-white sm:text-5xl lg:text-6xl">
-            Todo vendedor tem os números. Poucos têm as{" "}
-            <span className="text-accent-on-dark">respostas</span>.
-          </h1>
-
-          {/* A H1 nomeia QUATRO capacidades no subtítulo, nunca uma. A versão
-              anterior desta vitrine liderava só com a margem, e uma proposta
-              que liderava só com o funil foi recusada pelo mesmo motivo: o
-              produto não é uma função.
-
-              E o subtítulo põe a lacuna no MERCADO LIVRE ("te mostra o que
-              entrou"), não em quem está lendo. A headline já insinua que o
-              visitante pode não estar entre os que têm resposta; se o
-              subtítulo repetir a cobrança, a primeira tela vira acusação. */}
-          <p className="mt-6 text-lg text-white/80">
-            O Mercado Livre te mostra o que entrou. O SellerPulse mostra o que
-            sobrou, qual produto puxa o faturamento, qual anúncio queima visita sem
-            vender e qual cliente valia reconquistar — tudo calculado a partir dos
-            seus pedidos reais.
-          </p>
+          {/* A H1 nomeia QUATRO capacidades no subtítulo, nunca uma; e o
+              subtítulo põe a lacuna no Mercado Livre, não em quem lê. O texto
+              mora em `lib/escrita.ts` (motivo completo na spec de 2026-10-20). */}
+          <TextoDoHeroi />
 
           <div className="mt-8 flex flex-wrap gap-4">
             <ChamadaPrincipal className="rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-accent/30 transition hover:bg-accent-hover" />
