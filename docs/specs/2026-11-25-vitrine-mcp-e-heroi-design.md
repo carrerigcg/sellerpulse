@@ -1,8 +1,15 @@
 # Vitrine: herói animado, MCP e telas novas
 
-Estado: desenhado em 2026-11-25 e aprovado pelo Guilherme. Implementação na
-branch `feat/vitrine-mcp-e-heroi`, fora da `main` até ele testar no
-localhost.
+Estado: desenhado em 2026-11-25 e aprovado pelo Guilherme. Implementado em
+2026-11-26 na branch `feat/vitrine-mcp-e-heroi`: tela vista com movimento,
+sem movimento, sem JavaScript e a 375 px; LCP de 740 ms; revisores de código
+e de interface sem bloqueio, achados corrigidos. Fora da `main` até ele
+testar no localhost.
+
+Pendências opcionais dos revisores: no celular, o canvas fica quase todo
+atrás do painel e ainda anima (daria para usar o quadro parado em tela
+estreita); a conversa diz "Consultou `visao_geral`", mas `fluxo_financeiro`
+seria a ferramenta mais fiel.
 
 ## O pedido
 
