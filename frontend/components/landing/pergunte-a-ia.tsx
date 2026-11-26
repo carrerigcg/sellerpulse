@@ -75,7 +75,7 @@ export function PergunteAIa() {
             <p className="etapa-da-conversa mt-4 text-sm text-muted [transition-delay:600ms]">
               Consultou{" "}
               {/* Fundo tingido: o muted cai abaixo de 4,5:1 aqui, o slate-600 não. */}
-              <code className="rounded bg-line/60 px-1.5 py-0.5 text-slate-600">visao_geral</code> no
+              <code className="rounded bg-line/60 px-1.5 py-0.5 text-slate-600">fluxo_financeiro</code> no
               SellerPulse
             </p>
             {/* O fallback é a resposta sem números, na mesma etapa da conversa: sem

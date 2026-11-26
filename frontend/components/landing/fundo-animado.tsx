@@ -14,7 +14,8 @@ const ALTURAS = alturasDasBarras();
  *
  * - Nítido em qualquer tela: desenha em `devicePixelRatio`.
  * - Para fora da tela (`IntersectionObserver`) e com a aba oculta.
- * - Movimento reduzido ou economia de dados: um quadro parado, o estado final.
+ * - Movimento reduzido, economia de dados ou tela estreita: um quadro parado,
+ *   o estado final.
  * - Sem JavaScript, fica o degradê da `<section>` (hero.tsx).
  */
 export function FundoAnimado() {
@@ -26,8 +27,12 @@ export function FundoAnimado() {
     if (!canvas || !ctx) return;
 
     const conexao = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    // Em tela estreita o painel do herói cobre quase todo o canvas: animar ali
+    // gasta bateria de celular com um fundo que mal aparece.
     const parado =
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches || conexao?.saveData === true;
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      window.matchMedia("(max-width: 767px)").matches ||
+      conexao?.saveData === true;
 
     let largura = 0;
     let altura = 0;

@@ -8,10 +8,10 @@ localhost e em produção desde 2026-11-26 (`6523ded`, conferido em
 usesellerpulse.com: conversa com os números da demo e o aviso de custo,
 foto do Resumo, rodapé centrado).
 
-Pendências opcionais dos revisores: no celular, o canvas fica quase todo
-atrás do painel e ainda anima (daria para usar o quadro parado em tela
-estreita); a conversa diz "Consultou `visao_geral`", mas `fluxo_financeiro`
-seria a ferramenta mais fiel.
+As duas pendências opcionais dos revisores entraram depois, a pedido dele:
+abaixo de 768 px o canvas desenha só o quadro parado (o painel o cobre
+quase todo), e a conversa cita `fluxo_financeiro`, a ferramenta que de fato
+devolve a sobra e o custo, no lugar de `visao_geral`.
 
 ## O pedido
 
@@ -113,7 +113,7 @@ Nas maquetes, escolheu:
 - **Direita:** uma conversa de exemplo, que aparece em etapas quando entra na
   tela:
   1. a pergunta: "Quanto sobrou das minhas vendas nos últimos 30 dias?";
-  2. a linha "consultou `visao_geral`";
+  2. a linha "consultou `fluxo_financeiro`";
   3. a resposta, com a sobra e as quatro partes;
   4. o rodapé "Exemplo com a loja de demonstração".
 - **Os números da resposta vêm da demo, pela mesma conta do Resumo da demo**
