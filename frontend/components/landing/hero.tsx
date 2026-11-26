@@ -1,47 +1,38 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ChamadaPrincipal } from "@/components/landing/chamada-principal";
 import { vitrineComVendasAbertas } from "@/lib/vendas";
 
-import { HeroVideo } from "./hero-video";
+import { FundoAnimado } from "./fundo-animado";
 import { TextoDoHeroi } from "./texto-do-heroi";
 
 /**
  * Seção 1 — herói. Fundo escuro de propósito: a cor da marca (laranja e
- * amarelo) é literalmente a cor do gráfico do vídeo, e o resto do site é de
+ * amarelo) é literalmente a cor do gráfico do fundo, e o resto do site é de
  * base branca — o contraste entre os dois é o que faz o herói parecer um
  * recorte, não um erro de tema. Ver `frontend/app/globals.css` para os
  * tokens; nenhum deles ganha variante escura, então o escuro aqui é
  * local a esta seção, não um modo.
  *
- * Três camadas de fundo, nessa ordem: `--sp-bg` como cor de fallback no
- * `<section>`, o poster (`next/image`, sempre presente, com `priority`
- * porque é o maior elemento acima da dobra) e o vídeo (`HeroVideo`, opt-in
- * no cliente). Página correta em qualquer ponto dessa cadeia.
+ * Duas camadas de fundo (spec `2026-11-25-vitrine-mcp-e-heroi`, seção 1): o
+ * degradê radial do `<section>`, em CSS, que é o que fica sem JavaScript, e
+ * por cima o canvas (`FundoAnimado`), que desenha a grade, as barras e a
+ * linha da sobra. Página correta em qualquer ponto dessa cadeia.
  *
  * O painel atrás do texto usa `bg-ink/80` com `backdrop-blur` em vez de só
- * um gradiente por cima do vídeo inteiro: a imagem é "visualmente barulhenta"
+ * um gradiente por cima do fundo inteiro: o desenho é "visualmente barulhento"
  * (barras e linhas laranja/amarelo num grid quase preto), e texto branco
  * direto sobre uma barra clara do gráfico não bate contraste. Um painel
- * escuro sólido atrás do bloco de texto garante leitura em qualquer frame
- * do vídeo, não só no frame do poster — `ink` (#0f172a) a 80% sobre a cor
- * mais clara do vídeo (o amarelo `#facc15`) ainda fecha acima de 4.5:1 pra
- * texto branco, o pior caso realista.
+ * escuro sólido atrás do bloco de texto garante leitura em qualquer quadro
+ * da animação — `ink` (#0f172a) a 80% sobre a cor mais clara do desenho (o
+ * amarelo `#facc15`) ainda fecha acima de 4.5:1 pra texto branco, o pior
+ * caso realista.
  */
 export function Hero() {
   return (
-    <section className="relative isolate overflow-hidden bg-ink">
+    <section className="relative isolate overflow-hidden bg-[radial-gradient(ellipse_at_72%_35%,#3a1a08,#0b0f1a_70%)]">
       <div className="absolute inset-0 -z-10">
-        <Image
-          src="/hero/heroi.jpg"
-          alt=""
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover opacity-90"
-        />
-        <HeroVideo />
-        <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/60 to-ink/20" />
+        <FundoAnimado />
+        <div className="absolute inset-0 bg-gradient-to-r from-ink/60 to-transparent" />
       </div>
 
       <div className="mx-auto flex min-h-[85vh] max-w-6xl flex-col justify-center px-4 py-20 sm:px-6 sm:py-28">
