@@ -82,8 +82,8 @@ Nas maquetes, escolheu:
 - **Se o JavaScript falhar:** o texto aparece pronto em cerca de 1,2 s, por
   CSS, o mesmo padrão de `NumeroAnimado`. Nunca fica uma frase vazia.
 - **Movimento reduzido:** frase pronta, sem animação.
-- **Ritmo:** a H1 termina em **cerca de 2 s**, de 40 a 60 ms por letra, mais
-  a pausa do ponto.
+- **Ritmo:** a H1 termina em **cerca de 2 s**, de 30 a 40 ms por letra, mais
+  a pausa do ponto. São 54 caracteres: a 40–60 ms, passariam de 2,5 s.
   - O porquê: a H1 é o maior texto da primeira tela, e o LCP só conta quando
     ela termina de aparecer.
   - A maquete levava uns 3 s na H1. Ficou mais ágil de propósito.
