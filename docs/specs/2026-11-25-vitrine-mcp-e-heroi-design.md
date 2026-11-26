@@ -3,8 +3,10 @@
 Estado: desenhado em 2026-11-25 e aprovado pelo Guilherme. Implementado em
 2026-11-26 na branch `feat/vitrine-mcp-e-heroi`: tela vista com movimento,
 sem movimento, sem JavaScript e a 375 px; LCP de 740 ms; revisores de código
-e de interface sem bloqueio, achados corrigidos. Fora da `main` até ele
-testar no localhost.
+e de interface sem bloqueio, achados corrigidos. Testado por ele no
+localhost e em produção desde 2026-11-26 (`6523ded`, conferido em
+usesellerpulse.com: conversa com os números da demo e o aviso de custo,
+foto do Resumo, rodapé centrado).
 
 Pendências opcionais dos revisores: no celular, o canvas fica quase todo
 atrás do painel e ainda anima (daria para usar o quadro parado em tela
